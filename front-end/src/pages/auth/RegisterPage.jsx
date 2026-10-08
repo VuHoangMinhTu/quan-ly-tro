@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -21,8 +22,10 @@ const fields = [
 export default function RegisterPage() {
   const navigate = useNavigate()
   const form = useForm({ resolver: zodResolver(schema) })
+  const [generalError, setGeneralError] = useState('')
   const mutation = useMutation({
     mutationFn: register,
+    onMutate: () => setGeneralError(''),
     onSuccess: (_, data) => navigate('/verify-email-sent', { state: { email: data.email } }),
     onError: (error) => {
       const response = error.response?.data
@@ -31,8 +34,9 @@ export default function RegisterPage() {
       )
 
       form.clearErrors()
+      setGeneralError('')
 
-      // Laravel validation messages belong to their fields, not the form summary.
+      // Khi có lỗi field, tuyệt đối không dùng message tổng quát của Laravel.
       if (fieldErrors.length > 0) {
         fieldErrors.forEach(([field, messages]) => {
           form.setError(field, { type: 'server', message: messages[0] })
@@ -40,13 +44,9 @@ export default function RegisterPage() {
         return
       }
 
-      form.setError('root.server', {
-        type: 'server',
-        message: response?.message || 'Đăng ký không thành công. Vui lòng thử lại.',
-      })
+      setGeneralError(response?.message || 'Đăng ký không thành công. Vui lòng thử lại.')
     },
   })
-  const generalError = form.formState.errors.root?.server?.message
 
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
