@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use Illuminate\Auth\AuthenticationException;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Validator;
@@ -21,7 +21,7 @@ class ApiFoundationTest extends TestCase
             match ($exception) {
                 'validation' => throw new ValidationException(
                     Validator::make([], [
-                    'email' => ['required', 'email']
+                        'email' => ['required', 'email'],
                     ])
                 ),
                 'authentication' => throw new AuthenticationException,
@@ -65,9 +65,11 @@ class ApiFoundationTest extends TestCase
 
     public function test_cors_allows_the_react_development_server(): void
     {
+        $frontendUrl = config('app.frontend_url');
+
         $this->options('/api/user', [
-            'Origin' => 'http://localhost:5173',
+            'Origin' => $frontendUrl,
             'Access-Control-Request-Method' => 'GET',
-        ])->assertHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
+        ])->assertHeader('Access-Control-Allow-Origin', $frontendUrl);
     }
 }
