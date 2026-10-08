@@ -1,0 +1,7 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { getApiErrorMessage } from '../../api/getApiErrorMessage'
+import { getTenant, updateTenant } from '../../api/tenantApi'
+import { tenantKeys } from '../../api/tenantKeys'
+import TenantForm from '../../components/forms/TenantForm'
+export default function TenantEditPage() { const { id } = useParams(); const navigate = useNavigate(); const queryClient = useQueryClient(); const query = useQuery({ queryKey: tenantKeys.detail(id), queryFn: () => getTenant(id) }); const mutation = useMutation({ mutationFn: (payload) => updateTenant(id, payload) }); if (query.isPending) return <p>Đang tải thông tin người thuê...</p>; if (query.isError) return <p className="text-red-600">{getApiErrorMessage(query.error)}</p>; const submit = async (payload) => { await mutation.mutateAsync(payload); await Promise.all([queryClient.invalidateQueries({ queryKey: tenantKeys.all }), queryClient.invalidateQueries({ queryKey: tenantKeys.detail(id) })]); navigate(`/tenants/${id}`, { replace: true, state: { message: 'Cập nhật người thuê thành công.' } }) }; return <section className="max-w-3xl"><Link to={`/tenants/${id}`} className="text-sm text-slate-600">← Quay lại chi tiết</Link><h2 className="mb-6 mt-3 text-2xl font-bold">Sửa người thuê</h2><TenantForm initialValues={query.data.data.data} onSubmit={submit} submitLabel="Lưu thay đổi" /></section> }
