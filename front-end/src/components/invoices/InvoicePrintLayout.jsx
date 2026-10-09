@@ -3,6 +3,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { formatBillingPeriodForDisplay, formatDateForDisplay } from '../../utils/date'
 import { formatCurrency, formatUtilityValue } from '../../utils/formatters'
 import { invoiceStatusLabels } from '../../utils/invoiceStatus'
+import { APP_TITLE } from '../../utils/brand'
 
 const utilityUnits = { ELECTRICITY: 'kWh', WATER: 'm³' }
 
@@ -37,7 +38,7 @@ function InvoicePrintHeader({ invoice }) {
     <header className="invoice-document-header">
       <div className="invoice-brand">
         <span className="invoice-brand-mark"><Building2 size={25} /></span>
-        <div><p className="invoice-brand-name">{boardingHouse?.name || 'NHÀ TRỌ'}</p><p className="invoice-brand-address">{boardingHouse?.address || 'Hệ thống quản lý nhà trọ'}</p></div>
+        <div><p className="invoice-brand-name">{boardingHouse?.name || 'NHÀ TRỌ'}</p><p className="invoice-brand-address">{boardingHouse?.address || APP_TITLE}</p></div>
       </div>
       <div className="invoice-document-meta">
         <p><span>Mã hóa đơn</span><strong>{invoice.invoice_code}</strong></p>

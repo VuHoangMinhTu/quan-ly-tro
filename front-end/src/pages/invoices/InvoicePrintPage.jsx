@@ -11,6 +11,7 @@ import '@fontsource/be-vietnam-pro/800.css'
 import { getInvoice } from '../../api/invoiceApi'
 import { invoiceKeys } from '../../api/invoiceKeys'
 import InvoicePrintLayout from '../../components/invoices/InvoicePrintLayout'
+import { APP_TITLE } from '../../utils/brand'
 import './InvoicePrintPage.css'
 
 export default function InvoicePrintPage() {
@@ -21,7 +22,7 @@ export default function InvoicePrintPage() {
   useEffect(() => {
     if (!invoice?.invoice_code) return undefined
     const previousTitle = document.title
-    document.title = `Hoa-don-${invoice.invoice_code}`
+    document.title = APP_TITLE
     return () => { document.title = previousTitle }
   }, [invoice?.invoice_code])
 
