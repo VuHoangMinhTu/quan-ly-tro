@@ -8,6 +8,7 @@ import { contractKeys } from '../../api/contractKeys'
 import ContractStatusBadge from '../../components/contracts/ContractStatusBadge'
 import RoomOccupantsSection from '../../components/rooms/RoomOccupantsSection'
 import RoomUtilitiesSection from '../../components/rooms/RoomUtilitiesSection'
+import RoomServicesSection from '../../components/rooms/RoomServicesSection'
 import AmenityIcon from '../../components/amenities/AmenityIcon'
 import RoomAmenitiesModal from '../../components/amenities/RoomAmenitiesModal'
 import { getInvoicesByRoom } from '../../api/invoiceApi'
@@ -85,6 +86,8 @@ export default function RoomDetailPage() {
       </div>
 
       <RoomOccupantsSection roomId={id} />
+
+      <RoomServicesSection key={room.id} room={room} />
 
       <RoomUtilitiesSection room={room} />
 

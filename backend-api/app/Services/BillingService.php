@@ -25,7 +25,16 @@ class BillingService
                     throw ValidationException::withMessages(['contract_id' => 'The contract is not valid for this billing period.']);
                 } $this->item($invoice, 'RENT', 'Tiền phòng tháng '.$start->format('m/Y'), 1, $c->monthly_rent, $c->monthly_rent);
             }
-            foreach ($invoice->room->boardingHouse->services()->where('is_active', true)->get() as $service) {
+            // The house catalogue is not a room subscription. Only explicitly
+            // assigned, currently enabled services participate in this generation.
+            $services = $invoice->room->services()
+                ->wherePivot('is_active', true)
+                ->where('services.is_active', true)
+                ->where('services.boarding_house_id', $invoice->room->boarding_house_id)
+                ->with('priceTiers')
+                ->get();
+
+            foreach ($services as $service) {
                 if ($service->billing_method === 'FIXED' && $service->base_price !== null) {
                     $this->item($invoice, $service->type, $service->name, 1, $service->base_price, $service->base_price);
                 }
@@ -40,11 +49,13 @@ class BillingService
                     if (! $meter) {
                         throw ValidationException::withMessages(['service_id' => 'An active utility meter is required.']);
                     }
-                    $current = $meter->readings()->whereDate('reading_date', '<=', $end)->orderByDesc('reading_date')->first();
+                    // readings() defaults to ascending order for history views;
+                    // replace it here rather than appending a conflicting order.
+                    $current = $meter->readings()->whereDate('reading_date', '<=', $end)->reorder('reading_date', 'desc')->first();
                     if (! $current) {
                         throw ValidationException::withMessages(['reading_date' => 'A current utility reading is required.']);
                     }
-                    $previous = $meter->readings()->whereDate('reading_date', '<', $start)->orderByDesc('reading_date')->first();
+                    $previous = $meter->readings()->whereDate('reading_date', '<', $start)->reorder('reading_date', 'desc')->first();
                     $consumption = $current->reading_value - ($previous ? $previous->reading_value : $meter->initial_reading);
                     if ($consumption < 0) {
                         throw ValidationException::withMessages(['reading_value' => 'Utility consumption cannot be negative.']);

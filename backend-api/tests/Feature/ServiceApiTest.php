@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\BoardingHouse;
 use App\Models\Landlord;
+use App\Models\Room;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ServiceApiTest extends TestCase
@@ -129,6 +131,97 @@ class ServiceApiTest extends TestCase
         ]))->assertStatus(422)->assertJsonValidationErrors(['type', 'billing_method']);
     }
 
+    #[DataProvider('utilityTypes')]
+    public function test_type_update_returns_422_if_any_assigned_room_has_that_active_utility_type(string $type, string $label): void
+    {
+        $landlord = $this->createLandlord();
+        $house = $this->createBoardingHouse($landlord);
+        $firstRoom = $this->createRoom($house);
+        $secondRoom = $this->createRoom($house, 'P002');
+        $candidate = $this->createService($house, ['type' => 'OTHER']);
+        $existing = $this->createService($house, ['type' => $type]);
+        $firstRoom->services()->attach($candidate, ['is_active' => true]);
+        $secondRoom->services()->attach($candidate, ['is_active' => true]);
+        $secondRoom->services()->attach($existing, ['is_active' => true]);
+
+        $this->withBearerToken($landlord)->putJson("/api/services/{$candidate->id}", $this->servicePayload(['type' => $type]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('type')
+            ->assertJsonPath('errors.type.0', "Không thể thay đổi dịch vụ: phòng đang áp dụng một dịch vụ {$label} khác.");
+
+        $this->assertDatabaseHas('services', ['id' => $candidate->id, 'type' => 'OTHER', 'is_active' => true]);
+        $this->assertDatabaseHas('room_services', ['room_id' => $secondRoom->id, 'service_id' => $candidate->id, 'is_active' => true]);
+        $this->assertDatabaseHas('room_services', ['room_id' => $secondRoom->id, 'service_id' => $existing->id, 'is_active' => true]);
+    }
+
+    public static function utilityTypes(): array
+    {
+        return ['electricity' => ['ELECTRICITY', 'điện'], 'water' => ['WATER', 'nước']];
+    }
+
+    public function test_reactivating_catalog_service_returns_422_if_assigned_room_has_active_same_type(): void
+    {
+        $landlord = $this->createLandlord();
+        $house = $this->createBoardingHouse($landlord);
+        $room = $this->createRoom($house);
+        $candidate = $this->createService($house, ['type' => 'WATER', 'is_active' => false]);
+        $existing = $this->createService($house, ['type' => 'WATER']);
+        $room->services()->attach($candidate, ['is_active' => true]);
+        $room->services()->attach($existing, ['is_active' => true]);
+
+        $this->withBearerToken($landlord)->putJson("/api/services/{$candidate->id}", $this->servicePayload(['type' => 'WATER']))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('is_active')
+            ->assertJsonPath('errors.is_active.0', 'Không thể thay đổi dịch vụ: phòng đang áp dụng một dịch vụ nước khác.');
+
+        $this->assertDatabaseHas('services', ['id' => $candidate->id, 'is_active' => false]);
+        $this->assertDatabaseCount('room_services', 2);
+    }
+
+    #[DataProvider('nonConflictingStates')]
+    public function test_catalog_type_update_succeeds_when_no_active_room_utility_conflict_exists(bool $candidateActive, bool $otherGloballyActive, bool $otherAssigned): void
+    {
+        $landlord = $this->createLandlord();
+        $house = $this->createBoardingHouse($landlord);
+        $room = $this->createRoom($house);
+        $candidate = $this->createService($house, ['type' => 'OTHER']);
+        $existing = $this->createService($house, ['type' => 'WATER', 'is_active' => $otherGloballyActive]);
+        $room->services()->attach($candidate, ['is_active' => true]);
+        $room->services()->attach($existing, ['is_active' => $otherAssigned]);
+
+        $this->withBearerToken($landlord)->putJson("/api/services/{$candidate->id}", $this->servicePayload([
+            'type' => 'WATER', 'is_active' => $candidateActive,
+        ]))->assertOk()->assertJsonPath('data', null);
+
+        $this->assertDatabaseHas('services', ['id' => $candidate->id, 'type' => 'WATER', 'is_active' => $candidateActive]);
+        $this->assertDatabaseHas('room_services', ['room_id' => $room->id, 'service_id' => $existing->id, 'is_active' => $otherAssigned]);
+    }
+
+    public static function nonConflictingStates(): array
+    {
+        return [
+            'other pivot inactive' => [true, true, false],
+            'other catalog inactive' => [true, false, true],
+            'candidate becoming inactive' => [false, true, true],
+        ];
+    }
+
+    public function test_unrelated_catalog_price_edit_does_not_change_existing_assignments(): void
+    {
+        $landlord = $this->createLandlord();
+        $house = $this->createBoardingHouse($landlord);
+        $room = $this->createRoom($house);
+        $service = $this->createService($house);
+        $room->services()->attach($service, ['is_active' => true]);
+
+        $this->withBearerToken($landlord)->putJson("/api/services/{$service->id}", $this->servicePayload([
+            'name' => 'New name', 'base_price' => 4500,
+        ]))->assertOk()->assertJsonPath('data', null);
+
+        $this->assertDatabaseHas('services', ['id' => $service->id, 'name' => 'New name', 'base_price' => 4500]);
+        $this->assertDatabaseHas('room_services', ['room_id' => $room->id, 'service_id' => $service->id, 'is_active' => true]);
+    }
+
     private function createLandlord(): Landlord
     {
         $user = User::factory()->create();
@@ -144,6 +237,11 @@ class ServiceApiTest extends TestCase
     private function createService(BoardingHouse $boardingHouse, array $attributes = []): Service
     {
         return Service::create(['boarding_house_id' => $boardingHouse->id, ...$this->servicePayload(), ...$attributes]);
+    }
+
+    private function createRoom(BoardingHouse $boardingHouse, string $roomCode = 'P001'): Room
+    {
+        return Room::create(['boarding_house_id' => $boardingHouse->id, 'room_code' => $roomCode, 'monthly_rent' => 2000000, 'status' => 'AVAILABLE']);
     }
 
     private function withBearerToken(Landlord $landlord): static

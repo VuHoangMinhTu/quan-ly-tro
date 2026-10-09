@@ -11,6 +11,7 @@ use App\Models\Service;
 use App\Models\UtilityMeter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class UtilityMeterController extends Controller
@@ -24,10 +25,12 @@ class UtilityMeterController extends Controller
 
     public function store(StoreUtilityMeterRequest $request, int $roomId): JsonResponse
     {
-        $room = $this->room($request, $roomId);
-        $data = $request->validated();
-        $this->validateMeter($room, $data);
-        $room->utilityMeters()->create($data);
+        DB::transaction(function () use ($request, $roomId): void {
+            $room = $this->room($request, $roomId, true);
+            $data = $request->validated();
+            $this->validateMeter($room, $data);
+            $room->utilityMeters()->create($data);
+        });
 
         return ApiResponse::success(null, 'Utility meter created successfully.', 201);
     }
@@ -40,9 +43,14 @@ class UtilityMeterController extends Controller
     public function update(UpdateUtilityMeterRequest $request, int $id): JsonResponse
     {
         $meter = $this->meter($request, $id);
-        $data = $request->validated();
-        $this->validateMeter($meter->room, $data, $meter->id);
-        $meter->update($data);
+
+        DB::transaction(function () use ($request, $meter): void {
+            $room = $this->room($request, $meter->room_id, true);
+            $lockedMeter = $room->utilityMeters()->lockForUpdate()->findOrFail($meter->id);
+            $data = $request->validated();
+            $this->validateMeter($room, $data, $lockedMeter);
+            $lockedMeter->update($data);
+        });
 
         return ApiResponse::success(null, 'Utility meter updated successfully.');
     }
@@ -54,9 +62,12 @@ class UtilityMeterController extends Controller
         return ApiResponse::success(null, 'Utility meter deleted successfully.');
     }
 
-    private function room(Request $request, int $id): Room
+    private function room(Request $request, int $id, bool $lockForUpdate = false): Room
     {
-        return Room::whereHas('boardingHouse', fn ($query) => $query->where('landlord_id', $request->user()->landlord->id))->findOrFail($id);
+        // Share the room lock with service assignment so eligibility and duplicate checks stay valid until saved.
+        return Room::whereHas('boardingHouse', fn ($query) => $query->where('landlord_id', $request->user()->landlord->id))
+            ->when($lockForUpdate, fn ($query) => $query->lockForUpdate())
+            ->findOrFail($id);
     }
 
     private function meter(Request $request, int $id): UtilityMeter
@@ -64,16 +75,36 @@ class UtilityMeterController extends Controller
         return UtilityMeter::whereHas('room.boardingHouse', fn ($query) => $query->where('landlord_id', $request->user()->landlord->id))->findOrFail($id);
     }
 
-    private function validateMeter(Room $room, array $data, ?int $ignoreId = null): void
+    /**
+     * @param  array{service_id: int, meter_code?: ?string, initial_reading: numeric, is_active?: bool}  $data
+     */
+    private function validateMeter(Room $room, array $data, ?UtilityMeter $meter = null): void
     {
-        $service = Service::findOrFail($data['service_id']);
+        $service = Service::query()->lockForUpdate()->findOrFail($data['service_id']);
         if ($service->boarding_house_id !== $room->boarding_house_id) {
             throw ValidationException::withMessages(['service_id' => 'The service must belong to the room boarding house.']);
         }
         if (! in_array($service->billing_method, ['PER_UNIT', 'TIERED'], true)) {
             throw ValidationException::withMessages(['service_id' => 'The service billing method must be PER_UNIT or TIERED.']);
         }
-        if (($data['is_active'] ?? true) && UtilityMeter::where('room_id', $room->id)->where('service_id', $service->id)->where('is_active', true)->when($ignoreId, fn ($query) => $query->whereKeyNot($ignoreId))->exists()) {
+
+        $isActive = $data['is_active'] ?? $meter?->is_active ?? true;
+        $requiresAssignment = $meter === null
+            || (int) $meter->service_id !== $service->id
+            || ($isActive && ! $meter->is_active);
+
+        // Keep historical meters editable/deactivatable after unassignment; require eligibility for new use.
+        if ($requiresAssignment) {
+            if (! $service->is_active) {
+                throw ValidationException::withMessages(['service_id' => 'The service must be active.']);
+            }
+
+            if (! $room->services()->wherePivot('is_active', true)->whereKey($service->id)->exists()) {
+                throw ValidationException::withMessages(['service_id' => 'The service must be actively assigned to this room.']);
+            }
+        }
+
+        if ($isActive && UtilityMeter::where('room_id', $room->id)->where('service_id', $service->id)->where('is_active', true)->when($meter, fn ($query) => $query->whereKeyNot($meter->id))->exists()) {
             throw ValidationException::withMessages(['service_id' => 'The room already has an active meter for this service.']);
         }
     }

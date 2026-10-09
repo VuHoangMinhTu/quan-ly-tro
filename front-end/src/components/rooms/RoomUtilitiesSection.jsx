@@ -8,9 +8,12 @@ import {
   updateUtilityMeter,
 } from '../../api/utilityMeterApi'
 import { utilityKeys } from '../../api/utilityKeys'
+import { getRoomServices } from '../../api/roomServiceApi'
+import { roomKeys } from '../../api/roomKeys'
 import UtilityMeterForm from '../forms/UtilityMeterForm'
 import { formatDate, formatUtilityValue } from '../../utils/formatters'
 import { SERVICE_TYPE_LABELS } from '../../utils/service'
+import { getMeterServices } from '../../utils/roomServices'
 
 function getMeterTitle(meter) {
   return SERVICE_TYPE_LABELS[meter.service?.type] || meter.service?.name || 'Dịch vụ'
@@ -47,6 +50,10 @@ export default function RoomUtilitiesSection({ room }) {
     queryKey: utilityKeys.meters(room.id),
     queryFn: () => getUtilityMeters(room.id),
   })
+  const servicesQuery = useQuery({
+    queryKey: roomKeys.services(room.id),
+    queryFn: () => getRoomServices(room.id),
+  })
 
   const saveMeter = useMutation({
     mutationFn: (payload) => (
@@ -66,6 +73,8 @@ export default function RoomUtilitiesSection({ room }) {
   })
 
   const meters = metersQuery.data?.data?.data || []
+  const meterServices = getMeterServices(servicesQuery.data?.data?.data || [])
+  const canAddMeter = !servicesQuery.isPending && !servicesQuery.isError && meterServices.length > 0
 
   return (
     <section className="mt-6 rounded-xl bg-white p-6 shadow-sm">
@@ -76,22 +85,29 @@ export default function RoomUtilitiesSection({ room }) {
         </div>
         <button
           type="button"
+          disabled={!canAddMeter}
           onClick={() => setEditingMeter({})}
-          className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+          className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Thêm đồng hồ
         </button>
       </div>
 
+      {!servicesQuery.isPending && !servicesQuery.isError && meterServices.length === 0 && <p className="mt-4 text-sm text-slate-500">Muốn thêm đồng hồ, hãy chọn dịch vụ Theo đơn vị hoặc Bậc thang ở phần Dịch vụ áp dụng. Dịch vụ Cố định / Theo người không cần đồng hồ.</p>}
+      {servicesQuery.isError && <p className="mt-4 text-sm text-red-600">Chưa tải được dịch vụ của phòng để tạo đồng hồ mới.</p>}
+
       {metersQuery.isPending ? (
         <p className="mt-5 text-sm text-slate-500">Đang tải đồng hồ...</p>
+      ) : metersQuery.isError ? (
+        <p className="mt-5 text-sm text-red-600">Không thể tải đồng hồ của phòng.</p>
       ) : meters.length === 0 ? (
         <div className="mt-5 rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center">
           <p className="text-sm text-slate-500">Phòng này chưa có đồng hồ điện/nước.</p>
           <button
             type="button"
+            disabled={!canAddMeter}
             onClick={() => setEditingMeter({})}
-            className="mt-3 text-sm font-medium text-slate-900 underline underline-offset-4"
+            className="mt-3 text-sm font-medium text-slate-900 underline underline-offset-4 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Thêm đồng hồ
           </button>
@@ -199,7 +215,8 @@ export default function RoomUtilitiesSection({ room }) {
               <button type="button" onClick={() => setEditingMeter(null)} aria-label="Đóng">✕</button>
             </div>
             <UtilityMeterForm
-              boardingHouseId={room.boarding_house_id}
+              key={editingMeter.id || `new-${room.id}`}
+              roomId={room.id}
               initialValues={editingMeter}
               onSubmit={(payload) => saveMeter.mutateAsync(payload)}
               label="Lưu đồng hồ"

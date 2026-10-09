@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Room extends Model
@@ -73,5 +74,12 @@ class Room extends Model
     public function utilityMeters()
     {
         return $this->hasMany(UtilityMeter::class);
+    }
+
+    public function services(): BelongsToMany
+    {
+        return $this->belongsToMany(Service::class, 'room_services')
+            ->withPivot('is_active')
+            ->withTimestamps();
     }
 }

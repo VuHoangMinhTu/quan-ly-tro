@@ -3,5 +3,6 @@ export const roomKeys = {
   // them here so every query and invalidation targets the same cache entry.
   byBoardingHouse: (boardingHouseId) => ['rooms', String(boardingHouseId)],
   detail: (id) => ['room', String(id)],
+  services: (roomId) => ['room-services', String(roomId)],
   amenities: ['amenities'],
 }

@@ -2,14 +2,15 @@
 
 use App\Http\Controllers\Api\AmenityController;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\GoogleAuthController;
 use App\Http\Controllers\Api\BoardingHouseController;
 use App\Http\Controllers\Api\ContractController;
+use App\Http\Controllers\Api\GoogleAuthController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\InvoiceItemController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PayOSPaymentController;
 use App\Http\Controllers\Api\RoomController;
+use App\Http\Controllers\Api\RoomServiceController;
 use App\Http\Controllers\Api\RoomTenantController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\ServicePriceTierController;
@@ -53,6 +54,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
     Route::put('/rooms/{id}', [RoomController::class, 'update']);
     Route::delete('/rooms/{id}', [RoomController::class, 'destroy']);
+    Route::get('/rooms/{roomId}/services', [RoomServiceController::class, 'index']);
+    Route::put('/rooms/{roomId}/services', [RoomServiceController::class, 'update']);
     Route::get('/rooms/{roomId}/invoices', [InvoiceController::class, 'index']);
     Route::post('/rooms/{roomId}/invoices', [InvoiceController::class, 'store']);
     Route::get('/invoices/{id}', [InvoiceController::class, 'show']);

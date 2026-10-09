@@ -10,6 +10,8 @@ use App\Models\BoardingHouse;
 use App\Models\Service;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ServiceController extends Controller
 {
@@ -43,8 +45,16 @@ class ServiceController extends Controller
 
     public function update(UpdateServiceRequest $request, int $id): JsonResponse
     {
-        $service = $this->findOwnedService($request, $id);
-        $service->update($request->validated());
+        $boardingHouseId = $this->findOwnedService($request, $id)->boarding_house_id;
+
+        DB::transaction(function () use ($request, $id, $boardingHouseId): void {
+            // Share the assignment lock before snapshot reads, so conflict checks see assignments committed while waiting.
+            BoardingHouse::query()->whereKey($boardingHouseId)->lockForUpdate()->firstOrFail();
+            $service = $this->findOwnedService($request, $id, true);
+            $data = $request->validated();
+            $this->ensureNoUtilityTypeConflict($service, $data);
+            $service->update($data);
+        }, 3);
 
         return ApiResponse::success(null, 'Service updated successfully.');
     }
@@ -55,17 +65,49 @@ class ServiceController extends Controller
 
         return ApiResponse::success(null, 'Service deleted successfully.');
     }
-    // 
+    //
 
     private function findOwnedBoardingHouse(Request $request, int $id): BoardingHouse
     {
         return $request->user()->landlord->boardingHouses()->findOrFail($id);
     }
 
-    private function findOwnedService(Request $request, int $id): Service
+    /** @param array<string, mixed> $data */
+    private function ensureNoUtilityTypeConflict(Service $service, array $data): void
+    {
+        $type = $data['type'];
+        $isActive = (bool) ($data['is_active'] ?? $service->is_active);
+        $typeChanged = $type !== $service->type;
+        $activeChanged = $isActive !== $service->is_active;
+
+        if (! $isActive || ! in_array($type, ['ELECTRICITY', 'WATER'], true) || (! $typeChanged && ! $activeChanged)) {
+            return;
+        }
+
+        $hasConflict = $service->rooms()
+            ->wherePivot('is_active', true)
+            ->whereHas('services', function ($query) use ($service, $type): void {
+                $query->where('services.id', '!=', $service->id)
+                    ->where('services.type', $type)
+                    ->where('services.is_active', true)
+                    ->where('room_services.is_active', true);
+            })
+            ->exists();
+
+        if ($hasConflict) {
+            $field = $typeChanged ? 'type' : 'is_active';
+            $label = $type === 'ELECTRICITY' ? 'điện' : 'nước';
+            throw ValidationException::withMessages([
+                $field => "Không thể thay đổi dịch vụ: phòng đang áp dụng một dịch vụ {$label} khác.",
+            ]);
+        }
+    }
+
+    private function findOwnedService(Request $request, int $id, bool $lockForUpdate = false): Service
     {
         return Service::query()
             ->whereHas('boardingHouse', fn ($query) => $query->where('landlord_id', $request->user()->landlord->id))
+            ->when($lockForUpdate, fn ($query) => $query->lockForUpdate())
             ->findOrFail($id);
     }
 }

@@ -184,7 +184,7 @@ test('create caches the returned room with amenities, invalidates its list and o
     formatCurrency: String, formatArea: String, formatDate: String,
     Pencil: () => null, Trash2: () => null, AmenityIcon: () => null,
     ContractStatusBadge: () => null, RoomOccupantsSection: () => null,
-    RoomUtilitiesSection: () => null, RoomAmenitiesModal: () => null, InvoiceStatusBadge: () => null,
+    RoomUtilitiesSection: () => null, RoomServicesSection: () => null, RoomAmenitiesModal: () => null, InvoiceStatusBadge: () => null,
     Link: ({ children }) => React.createElement('a', {}, children),
   })
   const displayedAmenities = elements(RoomDetailPage())
