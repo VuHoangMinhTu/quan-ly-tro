@@ -15,9 +15,11 @@ export default function RoomCreatePage() {
   const mutation = useMutation({ mutationFn: (payload) => createRoom(boardingHouseId, payload) })
 
   const handleSubmit = async (payload) => {
-    await mutation.mutateAsync(payload)
+    const response = await mutation.mutateAsync(payload)
+    const room = response.data.data
+    queryClient.setQueryData(roomKeys.detail(room.id), response)
     await queryClient.invalidateQueries({ queryKey: roomKeys.byBoardingHouse(boardingHouseId) })
-    navigate(`/boarding-houses/${boardingHouseId}/rooms`, { replace: true, state: { message: 'Tạo phòng thành công.' } })
+    navigate(`/rooms/${room.id}`, { replace: true, state: { message: 'Tạo phòng thành công.' } })
   }
 
   if (boardingHouseQuery.isPending) return <p>Đang tải nhà trọ...</p>

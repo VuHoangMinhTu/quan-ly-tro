@@ -7,7 +7,10 @@ use App\Models\BoardingHouse;
 use App\Models\Landlord;
 use App\Models\Room;
 use App\Models\User;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use RuntimeException;
 use Tests\TestCase;
 
 class RoomApiTest extends TestCase
@@ -32,6 +35,7 @@ class RoomApiTest extends TestCase
     {
         $landlord = $this->createLandlord();
         $boardingHouse = $this->createBoardingHouse($landlord);
+        Amenity::create(['name' => 'Bàn ghế']);
 
         $this->withBearerToken($landlord)->postJson("/api/boarding-houses/{$boardingHouse->id}/rooms", [
             ...$this->roomPayload(),
@@ -40,12 +44,31 @@ class RoomApiTest extends TestCase
         ])->assertCreated()
             ->assertJsonPath('success', true)
             ->assertJsonPath('message', 'Room created successfully.')
-            ->assertJsonPath('data', null);
+            ->assertJsonPath('data.boarding_house_id', $boardingHouse->id)
+            ->assertJsonCount(0, 'data.amenities');
 
         $this->assertDatabaseHas('rooms', [
             'boarding_house_id' => $boardingHouse->id,
             'room_code' => 'P001',
         ]);
+        $this->assertDatabaseCount('room_amenities', 0);
+    }
+
+    public function test_room_can_be_created_with_an_empty_amenity_list(): void
+    {
+        $landlord = $this->createLandlord();
+        $boardingHouse = $this->createBoardingHouse($landlord);
+        Amenity::create(['name' => 'Máy lạnh']);
+
+        $this->withBearerToken($landlord)
+            ->postJson("/api/boarding-houses/{$boardingHouse->id}/rooms", $this->roomPayload(['amenity_ids' => []]))
+            ->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.room_code', 'P001')
+            ->assertJsonCount(0, 'data.amenities');
+
+        $this->assertDatabaseCount('rooms', 1);
+        $this->assertDatabaseCount('room_amenities', 0);
     }
 
     public function test_landlord_cannot_create_room_in_another_landlords_boarding_house(): void
@@ -203,11 +226,66 @@ class RoomApiTest extends TestCase
             ->postJson("/api/boarding-houses/{$boardingHouse->id}/rooms", $this->roomPayload([
                 'amenity_ids' => [$wifi->id, $airConditioner->id],
             ]))->assertCreated()
-            ->assertJsonPath('data', null);
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(2, 'data.amenities');
 
         $room = Room::query()->firstOrFail();
         $this->assertDatabaseCount('room_amenities', 2);
-        $this->assertTrue($room->amenities()->whereKey($wifi->id)->exists());
+        $this->assertDatabaseHas('room_amenities', ['room_id' => $room->id, 'amenity_id' => $wifi->id]);
+        $this->assertDatabaseHas('room_amenities', ['room_id' => $room->id, 'amenity_id' => $airConditioner->id]);
+    }
+
+    public function test_invalid_amenity_id_returns_422_without_creating_a_room(): void
+    {
+        $landlord = $this->createLandlord();
+        $boardingHouse = $this->createBoardingHouse($landlord);
+
+        $this->withBearerToken($landlord)
+            ->postJson("/api/boarding-houses/{$boardingHouse->id}/rooms", $this->roomPayload(['amenity_ids' => [99999]]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('amenity_ids.0');
+
+        $this->assertDatabaseCount('rooms', 0);
+        $this->assertDatabaseCount('room_amenities', 0);
+    }
+
+    public function test_duplicate_amenity_ids_do_not_create_duplicate_pivot_rows(): void
+    {
+        $landlord = $this->createLandlord();
+        $boardingHouse = $this->createBoardingHouse($landlord);
+        $fan = Amenity::create(['name' => 'Quạt']);
+        $television = Amenity::create(['name' => 'Tivi']);
+
+        $this->withBearerToken($landlord)
+            ->postJson("/api/boarding-houses/{$boardingHouse->id}/rooms", $this->roomPayload([
+                'amenity_ids' => [$fan->id, $fan->id, $television->id],
+            ]))
+            ->assertCreated()
+            ->assertJsonCount(2, 'data.amenities');
+
+        $room = Room::query()->firstOrFail();
+        $this->assertDatabaseCount('room_amenities', 2);
+        $this->assertDatabaseHas('room_amenities', ['room_id' => $room->id, 'amenity_id' => $fan->id]);
+        $this->assertDatabaseHas('room_amenities', ['room_id' => $room->id, 'amenity_id' => $television->id]);
+    }
+
+    public function test_room_creation_rolls_back_when_amenity_sync_fails(): void
+    {
+        $landlord = $this->createLandlord();
+        $boardingHouse = $this->createBoardingHouse($landlord);
+        $amenity = Amenity::create(['name' => 'Tủ quần áo']);
+        DB::listen(static function (QueryExecuted $query): void {
+            if (str_starts_with($query->sql, 'insert') && str_contains($query->sql, 'room_amenities')) {
+                throw new RuntimeException('Simulated pivot write failure.');
+            }
+        });
+
+        $this->withBearerToken($landlord)
+            ->postJson("/api/boarding-houses/{$boardingHouse->id}/rooms", $this->roomPayload(['amenity_ids' => [$amenity->id]]))
+            ->assertServerError();
+
+        $this->assertDatabaseCount('rooms', 0);
+        $this->assertDatabaseCount('room_amenities', 0);
     }
 
     public function test_room_can_update_amenities_using_sync(): void

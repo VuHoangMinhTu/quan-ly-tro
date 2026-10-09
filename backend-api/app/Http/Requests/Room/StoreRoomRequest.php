@@ -25,7 +25,7 @@ class StoreRoomRequest extends FormRequest
             'max_tenants' => ['nullable', 'integer', 'min:1'],
             'status' => ['required', Rule::in(['AVAILABLE', 'RENTED', 'RESERVED', 'MAINTENANCE'])],
             'description' => ['nullable', 'string'],
-            'amenity_ids' => ['nullable', 'array'],
+            'amenity_ids' => ['sometimes', 'nullable', 'array'],
             'amenity_ids.*' => ['integer', 'exists:amenities,id'],
         ];
     }

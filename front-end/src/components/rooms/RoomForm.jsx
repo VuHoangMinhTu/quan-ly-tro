@@ -31,7 +31,7 @@ const schema = z.object({
   max_tenants: optionalInteger,
   status: z.enum(['AVAILABLE', 'RENTED', 'RESERVED', 'MAINTENANCE']),
   description: z.string().optional(),
-  amenity_ids: z.array(z.number()).optional(),
+  amenity_ids: z.array(z.number().int()).default([]),
 })
 
 const emptyValues = {
@@ -52,7 +52,7 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
       max_tenants: initialValues.max_tenants ?? '',
       status: initialValues.status || 'AVAILABLE',
       description: initialValues.description || '',
-      amenity_ids: initialValues.amenities?.map((amenity) => amenity.id) || initialValues.amenity_ids || [],
+      amenity_ids: (initialValues.amenities?.map((amenity) => amenity.id) || initialValues.amenity_ids || []).map(Number),
     })
   }, [form, initialValues])
 
@@ -63,15 +63,16 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
         ...values,
         room_name: values.room_name?.trim() || null,
         description: values.description?.trim() || null,
+        amenity_ids: (values.amenity_ids || []).map(Number),
       })
     } catch (error) {
       const errors = error.response?.data?.errors
       if (errors) {
         Object.entries(errors).forEach(([field, messages]) => {
-          form.setError(field, { type: 'server', message: messages[0] })
+          form.setError(field.startsWith('amenity_ids.') ? 'amenity_ids' : field, { type: 'server', message: messages[0] })
         })
       }
-      setSubmitError(getApiErrorMessage(error))
+      if (!errors || Object.keys(errors).length === 0) setSubmitError(getApiErrorMessage(error))
     }
   }
 
@@ -125,24 +126,44 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
       </div>
 
       <fieldset>
-        <legend className="text-sm font-medium text-slate-700">Tiện nghi</legend>
+        <legend className="text-sm font-medium text-slate-700">Tiện nghi <span className="font-normal text-slate-500">(không bắt buộc)</span></legend>
         {amenitiesQuery.isPending && <p className="mt-2 text-sm text-slate-500">Đang tải tiện nghi...</p>}
-        {amenitiesQuery.isError && <p className="mt-2 text-sm text-red-600">Không thể tải tiện nghi.</p>}
+        {amenitiesQuery.isError && <p className="mt-2 text-sm text-slate-600">Không thể tải tiện nghi. Bạn vẫn có thể lưu phòng mà không chọn thêm tiện nghi.</p>}
         {amenities.length > 0 && (
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {amenities.map((amenity) => (
-              <label key={amenity.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">
-                <input type="checkbox" value={amenity.id} {...form.register('amenity_ids', { valueAsNumber: true })} />
-                {amenity.name}
-              </label>
-            ))}
-          </div>
+          <Controller
+            name="amenity_ids"
+            control={form.control}
+            render={({ field }) => {
+              const selectedIds = field.value || []
+
+              return <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {amenities.map((amenity, index) => {
+                  const amenityId = Number(amenity.id)
+
+                  return <label key={amenity.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      name={field.name}
+                      value={amenityId}
+                      ref={index === 0 ? field.ref : undefined}
+                      checked={selectedIds.includes(amenityId)}
+                      onBlur={field.onBlur}
+                      onChange={(event) => field.onChange(event.target.checked
+                        ? [...new Set([...selectedIds, amenityId])]
+                        : selectedIds.filter((id) => id !== amenityId))}
+                    />
+                    {amenity.name}
+                  </label>
+                })}
+              </div>
+            }}
+          />
         )}
         {errors.amenity_ids && <p className="mt-1 text-sm text-red-600">{errors.amenity_ids.message}</p>}
       </fieldset>
 
       {submitError && <p className="text-sm text-red-600">{submitError}</p>}
-      <button disabled={isSubmitting || amenitiesQuery.isPending} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60">
+      <button disabled={isSubmitting} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60">
         {isSubmitting ? 'Đang lưu...' : submitLabel}
       </button>
     </form>

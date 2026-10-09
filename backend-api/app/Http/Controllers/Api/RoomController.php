@@ -26,17 +26,17 @@ class RoomController extends Controller
     {
         $boardingHouse = $this->findOwnedBoardingHouse($request, $boardingHouseId);
         $data = $request->validated();
-        $hasAmenities = array_key_exists('amenity_ids', $data);
         $amenityIds = $data['amenity_ids'] ?? [];
         unset($data['amenity_ids']);
 
-        $room = $boardingHouse->rooms()->create($data);
-
-        if ($hasAmenities) {
+        $room = DB::transaction(function () use ($boardingHouse, $data, $amenityIds): Room {
+            $room = $boardingHouse->rooms()->create($data);
             $room->amenities()->sync($amenityIds);
-        }
 
-        return ApiResponse::success(null, 'Room created successfully.', 201);
+            return $room->load('amenities');
+        });
+
+        return ApiResponse::success($room, 'Room created successfully.', 201);
     }
 
     public function show(Request $request, int $id): JsonResponse
