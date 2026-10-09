@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Landlord;
 use App\Models\User;
-use Illuminate\Auth\Notifications\VerifyEmail;
+use App\Notifications\VerifyEmailNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
@@ -38,7 +38,7 @@ class AuthApiTest extends TestCase
             'full_name' => $payload['name'],
             'phone' => $payload['phone'],
         ]);
-        Notification::assertSentTo($user, VerifyEmail::class);
+        Notification::assertSentTo($user, VerifyEmailNotification::class);
     }
 
     public function test_registration_rejects_a_duplicate_email(): void
