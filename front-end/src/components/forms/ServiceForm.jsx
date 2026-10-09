@@ -4,13 +4,14 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { BILLING_METHOD_LABELS, BILLING_METHODS, getBasePriceLabel, getSuggestedServiceUnit, SERVICE_TYPE_LABELS, SERVICE_TYPES } from '../../utils/service'
+import { toFormString } from '../../utils/form'
 import MoneyInput from '../ui/MoneyInput'
 
 const schema = z.object({
   name: z.string().trim().min(1, 'Vui lòng nhập tên dịch vụ'),
   type: z.enum(SERVICE_TYPES),
   billing_method: z.enum(BILLING_METHODS),
-  unit: z.string().max(50, 'Đơn vị không được quá 50 ký tự').optional(),
+  unit: z.string({ error: 'Đơn vị phải là nội dung văn bản.' }).max(50, 'Đơn vị không được quá 50 ký tự').optional(),
   base_price: z.any(),
   is_active: z.boolean(),
 }).superRefine((values, context) => {
@@ -23,7 +24,7 @@ const defaults = { name: '', type: 'ELECTRICITY', billing_method: 'FIXED', unit:
 const inputClass = 'mt-1 w-full rounded border p-2'
 
 export default function ServiceForm({ initialValues = defaults, onSubmit, label }) {
-  const values = { ...defaults, ...initialValues, base_price: initialValues.base_price ?? '', is_active: initialValues.is_active ?? true }
+  const values = { ...defaults, ...initialValues, unit: toFormString(initialValues.unit), base_price: initialValues.base_price ?? '', is_active: initialValues.is_active ?? true }
   const form = useForm({ resolver: zodResolver(schema), defaultValues: values })
   const [submitError, setSubmitError] = useState('')
   const [billingMethod, setBillingMethod] = useState(values.billing_method)

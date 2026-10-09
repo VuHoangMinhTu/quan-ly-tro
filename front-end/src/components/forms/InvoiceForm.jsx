@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Controller, useForm } from 'react-hook-form'
 import { getContractsByRoom } from '../../api/contractApi'
 import { contractKeys } from '../../api/contractKeys'
+import { toFormString } from '../../utils/form'
 import DateInput from '../ui/DateInput'
 import MoneyInput from '../ui/MoneyInput'
 import { invoiceStatusLabels } from '../../utils/invoiceStatus'
@@ -27,6 +28,7 @@ export default function InvoiceForm({ roomId, initialValues = defaults, onSubmit
       billing_period: formatBillingPeriodForDisplay(initialValues.billing_period),
       issued_at: formatDateForDisplay(initialValues.issued_at),
       due_date: formatDateForDisplay(initialValues.due_date),
+      note: toFormString(initialValues.note),
     })
   }, [form, initialValues])
   const submit = async (values) => {

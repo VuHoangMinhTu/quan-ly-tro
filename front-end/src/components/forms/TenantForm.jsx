@@ -3,6 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { getApiErrorMessage, applyApiFieldErrors } from '../../api/getApiErrorMessage'
+import { toFormString } from '../../utils/form'
 import DateInput from '../ui/DateInput'
 import { formatDateForApi, formatDateForDisplay, isNotFutureDisplayDate, isValidDisplayDate } from '../../utils/date'
 
@@ -11,21 +12,34 @@ const optionalDate = z.string()
   .refine((value) => !value || isNotFutureDisplayDate(value), 'Ngày không được ở tương lai')
 const schema = z.object({
   full_name: z.string().trim().min(1, 'Vui lòng nhập họ tên').max(255),
-  phone: z.string().max(20).optional(),
-  email: z.string().email('Email không hợp lệ').max(255).or(z.literal('')),
+  phone: z.string({ error: 'Số điện thoại phải là nội dung văn bản.' }).max(20).optional(),
+  email: z.string({ error: 'Email phải là nội dung văn bản.' }).email('Email không hợp lệ').max(255).or(z.literal('')),
   date_of_birth: optionalDate,
   gender: z.enum(['MALE', 'FEMALE', 'OTHER', '']),
-  identity_number: z.string().max(30).optional(),
-  identity_issue_place: z.string().max(255).optional(),
+  identity_number: z.string({ error: 'Số định danh phải là nội dung văn bản.' }).max(30).optional(),
+  identity_issue_place: z.string({ error: 'Nơi cấp phải là nội dung văn bản.' }).max(255).optional(),
   identity_issue_date: optionalDate,
-  permanent_address: z.string().max(500).optional(),
+  permanent_address: z.string({ error: 'Địa chỉ thường trú phải là nội dung văn bản.' }).max(500).optional(),
 })
 const emptyValues = { full_name: '', phone: '', email: '', date_of_birth: '', gender: '', identity_number: '', identity_issue_place: '', identity_issue_date: '', permanent_address: '' }
 
 export default function TenantForm({ initialValues = emptyValues, onSubmit, submitLabel }) {
   const [submitError, setSubmitError] = useState('')
   const form = useForm({ resolver: zodResolver(schema), defaultValues: emptyValues })
-  useEffect(() => { form.reset({ ...emptyValues, ...initialValues, date_of_birth: formatDateForDisplay(initialValues.date_of_birth), identity_issue_date: formatDateForDisplay(initialValues.identity_issue_date), gender: initialValues.gender || '' }) }, [form, initialValues])
+  useEffect(() => {
+    form.reset({
+      ...emptyValues,
+      ...initialValues,
+      phone: toFormString(initialValues.phone),
+      email: toFormString(initialValues.email),
+      identity_number: toFormString(initialValues.identity_number),
+      identity_issue_place: toFormString(initialValues.identity_issue_place),
+      permanent_address: toFormString(initialValues.permanent_address),
+      date_of_birth: formatDateForDisplay(initialValues.date_of_birth),
+      identity_issue_date: formatDateForDisplay(initialValues.identity_issue_date),
+      gender: initialValues.gender || '',
+    })
+  }, [form, initialValues])
   const submit = async (values) => {
     setSubmitError('')
     const payload = {
