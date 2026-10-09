@@ -18,7 +18,7 @@ class PaymentController extends Controller
 {
     public function index(Request $r, int $invoiceId): JsonResponse
     {
-        return ApiResponse::success($this->invoice($r, $invoiceId)->findOrFail()->payments, 'Lấy danh sách thanh toán thành công.');
+        return ApiResponse::success($this->invoice($r, $invoiceId)->findOrFail($invoiceId)->payments, 'Lấy danh sách thanh toán thành công.');
     }
 
     public function store(StorePaymentRequest $r, int $invoiceId): JsonResponse
