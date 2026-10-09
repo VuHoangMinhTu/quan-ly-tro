@@ -34,8 +34,7 @@ export default function RoomServicesModal({ room, assignedServices, onClose }) {
       onClose()
     },
     onError: (error) => {
-      const fieldError = Object.values(error.response?.data?.errors || {}).flat()[0]
-      setSaveError(fieldError || getApiErrorMessage(error))
+      setSaveError(getApiErrorMessage(error))
     },
   })
 
@@ -60,7 +59,7 @@ export default function RoomServicesModal({ room, assignedServices, onClose }) {
         <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">Mỗi phòng chỉ áp dụng một dịch vụ Điện và một dịch vụ Nước. Chọn dịch vụ mới sẽ thay dịch vụ cùng loại đang chọn. Các hóa đơn đã lập không thay đổi.</p>
         {suspendedServices.length > 0 && <p className="mt-3 text-sm text-slate-600">Dịch vụ đã tạm ngưng không thể chọn và sẽ được bỏ áp dụng khi lưu: {suspendedServices.map((service) => service.name).join(', ')}.</p>}
         {catalogQuery.isPending ? <p className="mt-5 text-sm text-slate-500">Đang tải danh mục dịch vụ...</p>
-          : catalogQuery.isError ? <div className="mt-5 text-sm"><p className="text-red-600">Không thể tải danh mục dịch vụ. Các lựa chọn chưa được thay đổi.</p><button type="button" onClick={() => catalogQuery.refetch()} className="mt-2 font-medium underline">Thử lại</button></div>
+          : catalogQuery.isError ? <div className="mt-5 text-sm"><p className="text-red-600">{getApiErrorMessage(catalogQuery.error)} Các lựa chọn chưa được thay đổi.</p><button type="button" onClick={() => catalogQuery.refetch()} className="mt-2 font-medium underline">Thử lại</button></div>
             : catalog.length === 0 ? <div className="mt-5 rounded-lg border border-dashed p-5 text-center"><p className="text-sm text-slate-600">Nhà trọ chưa có dịch vụ đang áp dụng.</p><Link to={`/boarding-houses/${room.boarding_house_id}/services`} className="mt-3 inline-block text-sm font-medium underline">Quản lý danh mục dịch vụ</Link></div>
               : <div className="mt-5 grid gap-3 sm:grid-cols-2">{catalog.map((service) => {
                 const checked = selectedIds.includes(Number(service.id))

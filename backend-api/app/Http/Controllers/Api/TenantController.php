@@ -18,7 +18,7 @@ class TenantController extends Controller
     {
         return ApiResponse::success(
             $this->landlordTenants($request)->latest()->get(),
-            'Tenants retrieved successfully.'
+            'Lấy danh sách người thuê thành công.'
         );
     }
 
@@ -27,14 +27,14 @@ class TenantController extends Controller
     {
         $tenant = $this->landlordTenants($request)->create($request->validated());
 
-        return ApiResponse::success(null, 'Tenant created successfully.', 201);
+        return ApiResponse::success(null, 'Tạo người thuê thành công.', 201);
     }
 
     public function show(Request $request, int $id): JsonResponse
     {
         return ApiResponse::success(
             $this->findOwnedTenant($request, $id),
-            'Tenant retrieved successfully.'
+            'Lấy thông tin người thuê thành công.'
         );
     }
 
@@ -43,14 +43,14 @@ class TenantController extends Controller
         $tenant = $this->findOwnedTenant($request, $id);
         $tenant->update($request->validated());
 
-        return ApiResponse::success(null, 'Tenant updated successfully.');
+        return ApiResponse::success(null, 'Cập nhật người thuê thành công.');
     }
 
     public function destroy(Request $request, int $id): JsonResponse
     {
         $this->findOwnedTenant($request, $id)->delete();
 
-        return ApiResponse::success(null, 'Tenant deleted successfully.');
+        return ApiResponse::success(null, 'Xóa người thuê thành công.');
     }
 
     private function landlordTenants(Request $request)

@@ -37,7 +37,7 @@ class AuthController extends Controller
 
         $user->sendEmailVerificationNotification();
 
-        return ApiResponse::success(null, 'Registration successful. Please verify your email.', 201);
+        return ApiResponse::success(null, 'Đăng ký thành công. Vui lòng xác minh email.', 201);
     }
 
     public function login(LoginRequest $request): JsonResponse
@@ -46,11 +46,11 @@ class AuthController extends Controller
         $user = User::query()->with('landlord')->where('email', $data['email'])->first();
 
         if (! $user || ! Hash::check($data['password'], $user->password)) {
-            return ApiResponse::error('Invalid credentials.', null, 401);
+            return ApiResponse::error('Email hoặc mật khẩu không chính xác.', null, 401);
         }
 
         if (! $user->hasVerifiedEmail()) {
-            return ApiResponse::error('Please verify your email before logging in.', null, 403);
+            return ApiResponse::error('Vui lòng xác minh email trước khi đăng nhập.', null, 403);
         }
 
         $token = $user->createToken('api-token')->plainTextToken;
@@ -59,14 +59,14 @@ class AuthController extends Controller
             'user' => $user,
             'landlord' => $user->landlord,
             'token' => $token,
-        ], 'Logged in successfully.');
+        ], 'Đăng nhập thành công.');
     }
 
     public function logout(Request $request): JsonResponse
     {
         $request->user()->currentAccessToken()?->delete();
 
-        return ApiResponse::success(null, 'Logged out successfully.');
+        return ApiResponse::success(null, 'Đăng xuất thành công.');
     }
 
     public function me(Request $request): JsonResponse
@@ -76,7 +76,7 @@ class AuthController extends Controller
         return ApiResponse::success([
             'user' => $user,
             'landlord' => $user->landlord,
-        ]);
+        ], 'Lấy thông tin tài khoản thành công.');
     }
 
     public function resendVerification(Request $request): JsonResponse
@@ -85,15 +85,15 @@ class AuthController extends Controller
         $user = User::query()->where('email', $request->string('email'))->first();
 
         if (! $user) {
-            return ApiResponse::success(null, 'If the account exists, a verification email has been sent.');
+            return ApiResponse::success(null, 'Nếu tài khoản tồn tại, email xác minh đã được gửi.');
         }
 
         if ($user->hasVerifiedEmail()) {
-            return ApiResponse::success(null, 'Email is already verified.');
+            return ApiResponse::success(null, 'Email đã được xác minh.');
         }
 
         $user->sendEmailVerificationNotification();
 
-        return ApiResponse::success(null, 'Verification email sent successfully.');
+        return ApiResponse::success(null, 'Gửi email xác minh thành công.');
     }
 }

@@ -109,7 +109,7 @@ class VerifyEmailNotificationTest extends TestCase
         $user = User::factory()->unverified()->create();
 
         $this->postJson('/api/email/verification-notification', ['email' => $user->email])
-            ->assertOk()->assertJsonPath('message', 'Verification email sent successfully.');
+            ->assertOk()->assertJsonPath('message', 'Gửi email xác minh thành công.');
 
         Notification::assertSentTo($user, VerifyEmailNotification::class, function (VerifyEmailNotification $notification) use ($user): bool {
             $mail = $notification->toMail($user);

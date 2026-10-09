@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -49,11 +50,11 @@ export default function GoogleCallbackPage() {
           debug('Navigating to dashboard')
           navigate('/dashboard', { replace: true })
         }
-      } catch {
+      } catch (requestError) {
         localStorage.removeItem('access_token')
 
         if (active) {
-          setError('Đăng nhập Google thất bại. Vui lòng thử lại.')
+          setError(getApiErrorMessage(requestError))
         }
       }
     }

@@ -27,7 +27,7 @@ trait ValidatesActiveContractOverlap
             ->exists();
 
         if ($overlaps) {
-            $validator->errors()->add('start_date', 'The active contract overlaps an existing active contract for this room.');
+            $validator->errors()->add('start_date', 'Thời hạn hợp đồng trùng với hợp đồng đang hiệu lực của phòng. Vui lòng kiểm tra ngày bắt đầu và kết thúc.');
         }
     }
 }

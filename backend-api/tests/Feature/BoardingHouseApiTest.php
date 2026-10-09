@@ -34,7 +34,7 @@ class BoardingHouseApiTest extends TestCase
             'landlord_id' => 99999,
         ])->assertCreated()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Boarding house created successfully.')
+            ->assertJsonPath('message', 'Tạo nhà trọ thành công.')
             ->assertJsonPath('data', null);
 
         $this->assertDatabaseHas('boarding_houses', [
@@ -83,7 +83,7 @@ class BoardingHouseApiTest extends TestCase
 
         $this->withBearerToken($otherLandlord)->getJson("/api/boarding-houses/{$boardingHouse->id}")
             ->assertNotFound()
-            ->assertJsonPath('message', 'Not Found.');
+            ->assertJsonPath('message', 'Không tìm thấy nhà trọ.');
     }
 
     public function test_landlord_can_update_their_own_boarding_house(): void
@@ -127,7 +127,7 @@ class BoardingHouseApiTest extends TestCase
         $this->withBearerToken($landlord)->deleteJson("/api/boarding-houses/{$boardingHouse->id}")
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Boarding house deleted successfully.')
+            ->assertJsonPath('message', 'Xóa nhà trọ thành công.')
             ->assertJsonPath('data', null);
 
         $this->assertSoftDeleted('boarding_houses', ['id' => $boardingHouse->id]);

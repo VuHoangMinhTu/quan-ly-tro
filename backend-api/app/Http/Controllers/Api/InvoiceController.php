@@ -20,7 +20,7 @@ class InvoiceController extends Controller
 {
     public function index(Request $r, int $roomId): JsonResponse
     {
-        return ApiResponse::success($this->room($r, $roomId)->invoices()->with('contract')->orderByDesc('billing_period')->get(), 'Invoices retrieved successfully.');
+        return ApiResponse::success($this->room($r, $roomId)->invoices()->with('contract')->orderByDesc('billing_period')->get(), 'Lấy danh sách hóa đơn thành công.');
     }
 
     public function store(StoreInvoiceRequest $r, int $roomId): JsonResponse
@@ -32,12 +32,12 @@ class InvoiceController extends Controller
         $this->period($room, $d['billing_period']);
         $room->invoices()->create([...$d, 'subtotal' => 0, 'total_amount' => 0, 'paid_amount' => 0]);
 
-        return ApiResponse::success(null, 'Invoice created successfully.', 201);
+        return ApiResponse::success(null, 'Tạo hóa đơn thành công.', 201);
     }
 
     public function show(Request $r, int $id): JsonResponse
     {
-        return ApiResponse::success($this->invoice($r, $id)->load(['room.boardingHouse', 'contract.tenant', 'items', 'payosPaymentRequest']), 'Invoice retrieved successfully.');
+        return ApiResponse::success($this->invoice($r, $id)->load(['room.boardingHouse', 'contract.tenant', 'items', 'payosPaymentRequest']), 'Lấy thông tin hóa đơn thành công.');
     }
 
     public function update(UpdateInvoiceRequest $r, int $id): JsonResponse
@@ -58,13 +58,13 @@ class InvoiceController extends Controller
         $this->contract($i->room, $d['contract_id'] ?? null);
         $this->period($i->room, $d['billing_period'], $i->id);
         if (($d['discount_amount'] ?? 0) > $i->subtotal) {
-            throw ValidationException::withMessages(['discount_amount' => 'The discount amount cannot exceed the subtotal.']);
+            throw ValidationException::withMessages(['discount_amount' => 'Số tiền giảm giá không được vượt quá tạm tính.']);
         }
         if ($d['status'] === 'CANCELLED' && $i->paid_amount > 0) {
-            throw ValidationException::withMessages(['status' => 'An invoice with payments cannot be cancelled.']);
+            throw ValidationException::withMessages(['status' => 'Hóa đơn đã có thanh toán nên không thể hủy.']);
         }
         if ($i->paid_amount > $i->subtotal - ($d['discount_amount'] ?? 0)) {
-            throw ValidationException::withMessages(['discount_amount' => 'The total amount cannot be lower than the paid amount.']);
+            throw ValidationException::withMessages(['discount_amount' => 'Tổng tiền hóa đơn không được nhỏ hơn số tiền đã thanh toán.']);
         }
         $i->update([...$d, 'total_amount' => $i->subtotal - ($d['discount_amount'] ?? 0)]);
         $updatedInvoice = $i->fresh();
@@ -74,24 +74,24 @@ class InvoiceController extends Controller
             (float) $updatedInvoice->total_amount - (float) $updatedInvoice->paid_amount,
         );
 
-        return ApiResponse::success(null, 'Invoice updated successfully.');
+        return ApiResponse::success(null, 'Cập nhật hóa đơn thành công.');
     }
 
     public function destroy(Request $r, int $id): JsonResponse
     {
         $i = $this->invoice($r, $id);
         if ($i->status !== 'DRAFT') {
-            throw ValidationException::withMessages(['status' => 'Only DRAFT invoices can be deleted.']);
+            throw ValidationException::withMessages(['status' => 'Chỉ có thể xóa hóa đơn ở trạng thái nháp.']);
         }$i->delete();
 
-        return ApiResponse::success(null, 'Invoice deleted successfully.');
+        return ApiResponse::success(null, 'Xóa hóa đơn thành công.');
     }
 
     public function generate(Request $r, int $id, BillingService $billing): JsonResponse
     {
         $billing->generateForInvoice($this->invoice($r, $id));
 
-        return ApiResponse::success(null, 'Invoice generated successfully.');
+        return ApiResponse::success(null, 'Tạo các khoản thu tự động thành công.');
     }
 
     private function room(Request $r, int $id): Room
@@ -107,14 +107,14 @@ class InvoiceController extends Controller
     private function contract(Room $room, ?int $id): void
     {
         if ($id && ! Contract::where('room_id', $room->id)->whereKey($id)->exists()) {
-            throw ValidationException::withMessages(['contract_id' => 'The contract must belong to this room.']);
+            throw ValidationException::withMessages(['contract_id' => 'Hợp đồng phải thuộc phòng này.']);
         }
     }
 
     private function period(Room $room, string $date, ?int $ignore = null): void
     {
         if (Invoice::where('room_id', $room->id)->whereDate('billing_period', $date)->where('status', '!=', 'CANCELLED')->when($ignore, fn ($q) => $q->whereKeyNot($ignore))->exists()) {
-            throw ValidationException::withMessages(['billing_period' => 'An invoice already exists for this billing period.']);
+            throw ValidationException::withMessages(['billing_period' => 'Phòng đã có hóa đơn cho kỳ này. Vui lòng chọn kỳ khác.']);
         }
     }
 

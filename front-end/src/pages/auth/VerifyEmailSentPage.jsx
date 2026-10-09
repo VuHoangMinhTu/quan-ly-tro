@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
 import { resendVerification } from '../../api/authApi'
@@ -15,6 +16,7 @@ export default function VerifyEmailSentPage() {
         <p className="mt-4 rounded-lg bg-slate-50 p-3 text-left text-sm leading-relaxed text-slate-600">
           Nếu quý khách không tìm thấy email do hệ thống gửi đến, vui lòng kiểm tra thư mục Spam / Thư rác trong hộp thư.
         </p>
+        {mutation.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(mutation.error)}</p>}
         {mutation.data && <p className="mt-3 text-sm text-green-700">{mutation.data.data.message}</p>}
         <button
           disabled={!email || mutation.isPending}

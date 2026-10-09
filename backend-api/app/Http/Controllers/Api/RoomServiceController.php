@@ -22,7 +22,7 @@ class RoomServiceController extends Controller
             ->orderBy('services.id')
             ->get();
 
-        return ApiResponse::success($services, 'Room services retrieved successfully.');
+        return ApiResponse::success($services, 'Lấy danh sách dịch vụ của phòng thành công.');
     }
 
     public function update(UpdateRoomServicesRequest $request, int $roomId): JsonResponse
@@ -49,7 +49,7 @@ class RoomServiceController extends Controller
             );
         }, 3);
 
-        return ApiResponse::success(null, 'Room services updated successfully.');
+        return ApiResponse::success(null, 'Cập nhật dịch vụ của phòng thành công.');
     }
 
     private function findOwnedRoom(Request $request, int $roomId, bool $lockForUpdate = false): Room

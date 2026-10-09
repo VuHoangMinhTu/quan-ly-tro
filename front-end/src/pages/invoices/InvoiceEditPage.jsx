@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getInvoice, updateInvoice } from '../../api/invoiceApi'
@@ -17,7 +18,7 @@ export default function InvoiceEditPage() {
   const updateMutation = useMutation({ mutationFn: (payload) => updateInvoice(id, payload) })
 
   if (invoiceQuery.isPending || contractsQuery.isPending) return <p>Đang tải...</p>
-  if (invoiceQuery.isError || contractsQuery.isError || !invoice) return <p>Không thể tải dữ liệu hóa đơn.</p>
+  if (invoiceQuery.isError || contractsQuery.isError || !invoice) return <p>{getApiErrorMessage(invoiceQuery.error || contractsQuery.error)}</p>
 
   const editableFinancials = canEditInvoiceFinancials(invoice)
   const submit = async (payload) => {

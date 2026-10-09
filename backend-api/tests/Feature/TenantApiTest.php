@@ -31,7 +31,7 @@ class TenantApiTest extends TestCase
         $this->withBearerToken($landlord)->postJson('/api/tenants', $payload)
             ->assertCreated()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Tenant created successfully.')
+            ->assertJsonPath('message', 'Tạo người thuê thành công.')
             ->assertJsonPath('data', null);
 
         $this->assertDatabaseHas('tenants', [
@@ -142,7 +142,7 @@ class TenantApiTest extends TestCase
         $this->withBearerToken($landlord)->deleteJson("/api/tenants/{$tenant->id}")
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Tenant deleted successfully.')
+            ->assertJsonPath('message', 'Xóa người thuê thành công.')
             ->assertJsonPath('data', null);
 
         $this->assertSoftDeleted('tenants', ['id' => $tenant->id]);

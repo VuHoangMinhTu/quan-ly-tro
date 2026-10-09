@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\SetApiLocale;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -17,7 +18,7 @@ class ApiFoundationTest extends TestCase
     {
         parent::setUp();
 
-        Route::get('/api/_foundation-test/{exception}', function (string $exception) {
+        Route::middleware(SetApiLocale::class)->get('/api/_foundation-test/{exception}', function (string $exception) {
             match ($exception) {
                 'validation' => throw new ValidationException(
                     Validator::make([], [
@@ -36,21 +37,28 @@ class ApiFoundationTest extends TestCase
     {
         $this->getJson('/api/_foundation-test/validation')
             ->assertStatus(422)
-            ->assertJsonPath('message', 'The given data was invalid.')
-            // Chỉ kiểm tra sự tồn tại của Key/Schema, không quan tâm giá trị Value là gì.
+            ->assertJsonPath('message', 'Vui lòng nhập email.')
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('errors.email.0', 'Vui lòng nhập email.')
             ->assertJsonStructure(['errors' => ['email']]);
 
         $this->getJson('/api/_foundation-test/authentication')
             ->assertStatus(401)
-            ->assertJsonPath('message', 'Unauthenticated.');
+            ->assertJsonPath('message', 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('errors', null);
 
         $this->getJson('/api/_foundation-test/authorization')
             ->assertStatus(403)
-            ->assertJsonPath('message', 'Forbidden.');
+            ->assertJsonPath('message', 'Bạn không có quyền thực hiện thao tác này.')
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('errors', null);
 
         $this->getJson('/api/_foundation-test/not-found')
             ->assertStatus(404)
-            ->assertJsonPath('message', 'Not Found.');
+            ->assertJsonPath('message', 'Không tìm thấy dữ liệu.')
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('errors', null);
     }
 
     public function test_production_does_not_expose_internal_exception_details(): void
@@ -59,7 +67,7 @@ class ApiFoundationTest extends TestCase
 
         $this->getJson('/api/_foundation-test/server')
             ->assertStatus(500)
-            ->assertJsonPath('message', 'Server Error.')
+            ->assertJsonPath('message', 'Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau.')
             ->assertDontSee('Sensitive internal detail');
     }
 

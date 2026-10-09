@@ -17,7 +17,7 @@ class ServicePriceTierController extends Controller
     {
         return ApiResponse::success(
             $this->findOwnedService($request, $serviceId)->priceTiers()->get(),
-            'Service price tiers retrieved successfully.'
+            'Lấy danh sách bậc giá thành công.'
         );
     }
 
@@ -27,7 +27,7 @@ class ServicePriceTierController extends Controller
             ->priceTiers()
             ->create($request->validated());
 
-        return ApiResponse::success(null, 'Service price tier created successfully.', 201);
+        return ApiResponse::success(null, 'Tạo bậc giá thành công.', 201);
     }
 
     public function update(UpdateServicePriceTierRequest $request, int $id): JsonResponse
@@ -35,14 +35,14 @@ class ServicePriceTierController extends Controller
         $tier = $this->findOwnedTier($request, $id);
         $tier->update($request->validated());
 
-        return ApiResponse::success(null, 'Service price tier updated successfully.');
+        return ApiResponse::success(null, 'Cập nhật bậc giá thành công.');
     }
 
     public function destroy(Request $request, int $id): JsonResponse
     {
         $this->findOwnedTier($request, $id)->delete();
 
-        return ApiResponse::success(null, 'Service price tier deleted successfully.');
+        return ApiResponse::success(null, 'Xóa bậc giá thành công.');
     }
 
     private function findOwnedService(Request $request, int $id): Service

@@ -22,7 +22,7 @@ class ContractController extends Controller
             ->latest()
             ->get();
 
-        return ApiResponse::success($contracts, 'Contracts retrieved successfully.');
+        return ApiResponse::success($contracts, 'Lấy danh sách hợp đồng thành công.');
     }
 
     public function store(StoreContractRequest $request, int $roomId): JsonResponse
@@ -34,14 +34,14 @@ class ContractController extends Controller
 
         $room->contracts()->create($data);
 
-        return ApiResponse::success(null, 'Contract created successfully.', 201);
+        return ApiResponse::success(null, 'Tạo hợp đồng thành công.', 201);
     }
 
     public function show(Request $request, int $id): JsonResponse
     {
         return ApiResponse::success(
             $this->findOwnedContract($request, $id)->load(['room', 'tenant']),
-            'Contract retrieved successfully.'
+            'Lấy thông tin hợp đồng thành công.'
         );
     }
 
@@ -54,14 +54,14 @@ class ContractController extends Controller
 
         $contract->update($data);
 
-        return ApiResponse::success(null, 'Contract updated successfully.');
+        return ApiResponse::success(null, 'Cập nhật hợp đồng thành công.');
     }
 
     public function destroy(Request $request, int $id): JsonResponse
     {
         $this->findOwnedContract($request, $id)->delete();
 
-        return ApiResponse::success(null, 'Contract deleted successfully.');
+        return ApiResponse::success(null, 'Xóa hợp đồng thành công.');
     }
 
     private function findOwnedRoom(Request $request, int $id): Room

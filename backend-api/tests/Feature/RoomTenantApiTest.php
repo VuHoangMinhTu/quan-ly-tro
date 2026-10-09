@@ -38,7 +38,7 @@ class RoomTenantApiTest extends TestCase
             'is_primary' => true,
         ]))->assertCreated()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Room tenant added successfully.')
+            ->assertJsonPath('message', 'Thêm người ở trong phòng thành công.')
             ->assertJsonPath('data', null);
 
         $this->assertDatabaseHas('room_tenants', [
@@ -173,7 +173,7 @@ class RoomTenantApiTest extends TestCase
             'move_in_date' => '2026-10-01',
         ]))->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Room tenant updated successfully.')
+            ->assertJsonPath('message', 'Cập nhật người ở trong phòng thành công.')
             ->assertJsonPath('data', null);
 
         $this->assertDatabaseHas('room_tenants', [
@@ -247,7 +247,7 @@ class RoomTenantApiTest extends TestCase
         $this->withBearerToken($landlord)->deleteJson("/api/room-tenants/{$roomTenant->id}")
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Room tenant deleted successfully.')
+            ->assertJsonPath('message', 'Xóa người ở trong phòng thành công.')
             ->assertJsonPath('data', null);
 
         $this->assertDatabaseMissing('room_tenants', ['id' => $roomTenant->id]);

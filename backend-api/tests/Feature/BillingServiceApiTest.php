@@ -34,7 +34,7 @@ class BillingServiceApiTest extends TestCase
         $this->generate($user, $invoice)
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Invoice generated successfully.')
+            ->assertJsonPath('message', 'Tạo các khoản thu tự động thành công.')
             ->assertJsonPath('data', null);
 
         $this->assertDatabaseCount('invoice_items', 1);
@@ -105,7 +105,7 @@ class BillingServiceApiTest extends TestCase
         $this->generate($user, $invoice)
             ->assertUnprocessable()
             ->assertJsonValidationErrors('service_id')
-            ->assertJsonPath('errors.service_id.0', 'An active utility meter is required.');
+            ->assertJsonPath('errors.service_id.0', 'Dịch vụ Nước đang tính theo đơn vị nhưng phòng chưa có đồng hồ đang hoạt động cho dịch vụ này.');
 
         $this->assertDatabaseCount('invoice_items', 0);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'subtotal' => 0, 'total_amount' => 0]);
@@ -147,7 +147,7 @@ class BillingServiceApiTest extends TestCase
         $this->generate($user, $invoice)
             ->assertUnprocessable()
             ->assertJsonValidationErrors('reading_date')
-            ->assertJsonPath('errors.reading_date.0', 'A current utility reading is required.');
+            ->assertJsonPath('errors.reading_date.0', 'Dịch vụ Nước chưa có chỉ số công tơ trong hoặc trước kỳ hóa đơn này. Vui lòng ghi chỉ số.');
 
         $this->assertDatabaseCount('invoice_items', 0);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'total_amount' => 0]);

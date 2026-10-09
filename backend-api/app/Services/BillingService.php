@@ -22,7 +22,7 @@ class BillingService
             if ($invoice->contract) {
                 $c = $invoice->contract;
                 if ($c->room_id !== $invoice->room_id || $c->start_date > $end || ($c->end_date && $c->end_date < $start)) {
-                    throw ValidationException::withMessages(['contract_id' => 'The contract is not valid for this billing period.']);
+                    throw ValidationException::withMessages(['contract_id' => 'Hợp đồng không có hiệu lực trong kỳ hóa đơn này.']);
                 } $this->item($invoice, 'RENT', 'Tiền phòng tháng '.$start->format('m/Y'), 1, $c->monthly_rent, $c->monthly_rent);
             }
             // The house catalogue is not a room subscription. Only explicitly
@@ -47,28 +47,33 @@ class BillingService
                 if (in_array($service->billing_method, ['PER_UNIT', 'TIERED'], true)) {
                     $meter = $invoice->room->utilityMeters()->where('service_id', $service->id)->where('is_active', true)->first();
                     if (! $meter) {
-                        throw ValidationException::withMessages(['service_id' => 'An active utility meter is required.']);
+                        throw ValidationException::withMessages(['service_id' => __('services.missing_meter', [
+                            'type' => __('services.types.'.$service->type),
+                            'method' => __('services.billing_methods.'.$service->billing_method),
+                        ])]);
                     }
                     // readings() defaults to ascending order for history views;
                     // replace it here rather than appending a conflicting order.
                     $current = $meter->readings()->whereDate('reading_date', '<=', $end)->reorder('reading_date', 'desc')->first();
                     if (! $current) {
-                        throw ValidationException::withMessages(['reading_date' => 'A current utility reading is required.']);
+                        throw ValidationException::withMessages(['reading_date' => __('services.missing_reading', [
+                            'type' => __('services.types.'.$service->type),
+                        ])]);
                     }
                     $previous = $meter->readings()->whereDate('reading_date', '<', $start)->reorder('reading_date', 'desc')->first();
                     $consumption = $current->reading_value - ($previous ? $previous->reading_value : $meter->initial_reading);
                     if ($consumption < 0) {
-                        throw ValidationException::withMessages(['reading_value' => 'Utility consumption cannot be negative.']);
+                        throw ValidationException::withMessages(['reading_value' => 'Mức tiêu thụ điện/nước không được âm. Vui lòng kiểm tra lại chỉ số công tơ.']);
                     }
                     if ($service->billing_method === 'PER_UNIT') {
                         if ($service->base_price === null) {
-                            throw ValidationException::withMessages(['service_id' => 'Service base price is required.']);
+                            throw ValidationException::withMessages(['service_id' => 'Dịch vụ chưa có đơn giá. Vui lòng cập nhật đơn giá trước khi tạo khoản thu.']);
                         }
                         $this->item($invoice, $service->type, $service->name.' '.$consumption, $consumption, $service->base_price, $consumption * $service->base_price);
                     } else {
                         $tiers = $service->priceTiers;
                         if ($tiers->isEmpty()) {
-                            throw ValidationException::withMessages(['service_id' => 'Service price tiers are required.']);
+                            throw ValidationException::withMessages(['service_id' => 'Dịch vụ chưa có bảng giá bậc thang. Vui lòng thêm bậc giá trước khi tạo khoản thu.']);
                         }
                         $amount = 0;
                         foreach ($tiers as $tier) {

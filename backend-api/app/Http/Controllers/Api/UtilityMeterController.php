@@ -20,7 +20,7 @@ class UtilityMeterController extends Controller
     {
         $meters = $this->room($request, $roomId)->utilityMeters()->with(['service', 'latestReading'])->get();
 
-        return ApiResponse::success($meters, 'Utility meters retrieved successfully.');
+        return ApiResponse::success($meters, 'Lấy danh sách đồng hồ điện/nước thành công.');
     }
 
     public function store(StoreUtilityMeterRequest $request, int $roomId): JsonResponse
@@ -32,12 +32,12 @@ class UtilityMeterController extends Controller
             $room->utilityMeters()->create($data);
         });
 
-        return ApiResponse::success(null, 'Utility meter created successfully.', 201);
+        return ApiResponse::success(null, 'Tạo đồng hồ điện/nước thành công.', 201);
     }
 
     public function show(Request $request, int $id): JsonResponse
     {
-        return ApiResponse::success($this->meter($request, $id)->load(['room', 'service', 'latestReading']), 'Utility meter retrieved successfully.');
+        return ApiResponse::success($this->meter($request, $id)->load(['room', 'service', 'latestReading']), 'Lấy thông tin đồng hồ điện/nước thành công.');
     }
 
     public function update(UpdateUtilityMeterRequest $request, int $id): JsonResponse
@@ -52,14 +52,14 @@ class UtilityMeterController extends Controller
             $lockedMeter->update($data);
         });
 
-        return ApiResponse::success(null, 'Utility meter updated successfully.');
+        return ApiResponse::success(null, 'Cập nhật đồng hồ điện/nước thành công.');
     }
 
     public function destroy(Request $request, int $id): JsonResponse
     {
         $this->meter($request, $id)->delete();
 
-        return ApiResponse::success(null, 'Utility meter deleted successfully.');
+        return ApiResponse::success(null, 'Xóa đồng hồ điện/nước thành công.');
     }
 
     private function room(Request $request, int $id, bool $lockForUpdate = false): Room
@@ -82,10 +82,10 @@ class UtilityMeterController extends Controller
     {
         $service = Service::query()->lockForUpdate()->findOrFail($data['service_id']);
         if ($service->boarding_house_id !== $room->boarding_house_id) {
-            throw ValidationException::withMessages(['service_id' => 'The service must belong to the room boarding house.']);
+            throw ValidationException::withMessages(['service_id' => 'Dịch vụ phải thuộc cùng nhà trọ với phòng.']);
         }
         if (! in_array($service->billing_method, ['PER_UNIT', 'TIERED'], true)) {
-            throw ValidationException::withMessages(['service_id' => 'The service billing method must be PER_UNIT or TIERED.']);
+            throw ValidationException::withMessages(['service_id' => 'Đồng hồ chỉ dùng cho dịch vụ tính theo đơn vị hoặc bậc thang.']);
         }
 
         $isActive = $data['is_active'] ?? $meter?->is_active ?? true;
@@ -96,16 +96,16 @@ class UtilityMeterController extends Controller
         // Keep historical meters editable/deactivatable after unassignment; require eligibility for new use.
         if ($requiresAssignment) {
             if (! $service->is_active) {
-                throw ValidationException::withMessages(['service_id' => 'The service must be active.']);
+                throw ValidationException::withMessages(['service_id' => 'Dịch vụ phải đang được áp dụng.']);
             }
 
             if (! $room->services()->wherePivot('is_active', true)->whereKey($service->id)->exists()) {
-                throw ValidationException::withMessages(['service_id' => 'The service must be actively assigned to this room.']);
+                throw ValidationException::withMessages(['service_id' => 'Dịch vụ phải được gán và đang áp dụng cho phòng này.']);
             }
         }
 
         if ($isActive && UtilityMeter::where('room_id', $room->id)->where('service_id', $service->id)->where('is_active', true)->when($meter, fn ($query) => $query->whereKeyNot($meter->id))->exists()) {
-            throw ValidationException::withMessages(['service_id' => 'The room already has an active meter for this service.']);
+            throw ValidationException::withMessages(['service_id' => 'Phòng đã có đồng hồ đang hoạt động cho dịch vụ này.']);
         }
     }
 }

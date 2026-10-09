@@ -4,7 +4,7 @@ namespace App\Custom;
 
 class ApiResponse
 {
-    public static function success($data = null, string $message = 'Success', int $status = 200)
+    public static function success($data = null, string $message = 'Thành công.', int $status = 200)
     {
         return response()->json([
             'success' => true,
@@ -13,7 +13,7 @@ class ApiResponse
         ], $status);
     }
 
-    public static function error(string $message = 'Error', $errors = null, int $status = 400)
+    public static function error(string $message = 'Yêu cầu không hợp lệ.', $errors = null, int $status = 400)
     {
         return response()->json([
             'success' => false,

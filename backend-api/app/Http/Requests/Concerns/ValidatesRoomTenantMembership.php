@@ -22,11 +22,11 @@ trait ValidatesRoomTenantMembership
         $moveOutDate = $this->input('move_out_date');
 
         if ($status === 'ACTIVE' && $moveOutDate !== null) {
-            $validator->errors()->add('move_out_date', 'The move out date must be null when the status is ACTIVE.');
+            $validator->errors()->add('move_out_date', 'Người đang ở không được có ngày chuyển đi.');
         }
 
         if ($status === 'MOVED_OUT' && $moveOutDate === null) {
-            $validator->errors()->add('move_out_date', 'The move out date is required when the status is MOVED_OUT.');
+            $validator->errors()->add('move_out_date', 'Vui lòng nhập ngày chuyển đi khi người thuê đã chuyển đi.');
         }
 
         if ($status !== 'ACTIVE') {
@@ -38,11 +38,11 @@ trait ValidatesRoomTenantMembership
             ->when($ignoredRoomTenantId, fn ($query) => $query->whereKeyNot($ignoredRoomTenantId));
 
         if ($memberships->clone()->where('tenant_id', $this->integer('tenant_id'))->where('status', 'ACTIVE')->exists()) {
-            $validator->errors()->add('tenant_id', 'The tenant already has an active membership in this room.');
+            $validator->errors()->add('tenant_id', 'Người thuê này đã đang ở trong phòng.');
         }
 
         if ($isPrimary && $memberships->where('is_primary', true)->where('status', 'ACTIVE')->exists()) {
-            $validator->errors()->add('is_primary', 'The room already has an active primary tenant.');
+            $validator->errors()->add('is_primary', 'Phòng đã có người đứng tên đang ở.');
         }
     }
 }

@@ -4,20 +4,20 @@ namespace App\Services;
 
 use App\Exceptions\PayOSReconciliationException;
 use App\Models\Invoice;
-use App\Models\PayOSPaymentRequest;
 use App\Models\Payment;
+use App\Models\PayOSPaymentRequest;
 use Carbon\Carbon;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\Psr7\HttpFactory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use PayOS\Exceptions\NotFoundException;
 use PayOS\Models\V2\PaymentRequests\CreatePaymentLinkRequest;
 use PayOS\Models\V2\PaymentRequests\CreatePaymentLinkResponse;
 use PayOS\Models\V2\PaymentRequests\PaymentLink;
 use PayOS\Models\Webhooks\ConfirmWebhookResponse;
 use PayOS\Models\Webhooks\WebhookData;
-use PayOS\Exceptions\NotFoundException;
 use PayOS\PayOS;
 use PayOS\PayOSOptions;
 use RuntimeException;
@@ -69,7 +69,7 @@ class PayOSService
 
             if (in_array($reconciled->status, ['PAID', 'UNDERPAID'], true)) {
                 throw new PayOSReconciliationException(
-                    'The existing payOS payment request has received payment and is awaiting verified payment reconciliation.',
+                    'Yêu cầu thanh toán payOS hiện tại đã nhận tiền và đang chờ đối soát. Không thể tạo mã thanh toán mới.',
                     409,
                 );
             }
@@ -86,7 +86,7 @@ class PayOSService
                 // payload or checkout URL. Never replace a live remote order when
                 // those locally persisted fields cannot be recovered.
                 throw new PayOSReconciliationException(
-                    'The existing payOS payment request is still active, but its checkout details are unavailable.',
+                    'Yêu cầu thanh toán payOS hiện tại vẫn hoạt động nhưng chưa có đủ thông tin QR. Cần đối soát trước khi tạo mã mới.',
                     409,
                 );
             }
@@ -117,7 +117,7 @@ class PayOSService
             // Một placeholder mơ hồ còn tồn tại nghĩa là order remote có thể đã
             // được tạo. Dừng lại để reconcile, không phát hành order code thứ hai.
             if ($invoice->payosPaymentRequests()->whereIn('status', ['CREATING', 'CREATION_FAILED', 'RECONCILIATION_REQUIRED'])->exists()) {
-                throw new PayOSReconciliationException('A payOS payment request is being reconciled. Please try again.', 409);
+                throw new PayOSReconciliationException('Yêu cầu thanh toán payOS hiện tại đang được đối soát. Vui lòng thử lại sau.', 409);
             }
 
             // Ghi placeholder CREATING và order_code khi vẫn đang giữ lock. Nhờ đó
@@ -169,7 +169,7 @@ class PayOSService
             }
 
             throw new PayOSReconciliationException(
-                'Unable to verify the current payOS payment request. Please try again.',
+                'Chưa thể xác minh yêu cầu thanh toán payOS hiện tại. Vui lòng thử lại sau.',
                 502,
                 $exception,
             );
@@ -199,7 +199,7 @@ class PayOSService
             ]);
 
             throw new PayOSReconciliationException(
-                'Unable to verify the current payOS payment request. Please try again.',
+                'Chưa thể xác minh yêu cầu thanh toán payOS hiện tại. Vui lòng thử lại sau.',
                 502,
                 $exception,
             );
@@ -222,9 +222,9 @@ class PayOSService
     public function messageFor(PayOSPaymentRequest $request): string
     {
         return match ($request->getAttribute('_payos_action')) {
-            'reused' => 'Existing payOS payment request reused.',
-            'reconciled' => 'payOS payment request reconciled successfully.',
-            default => 'payOS payment request ready.',
+            'reused' => 'Đã sử dụng lại mã thanh toán payOS hiện có.',
+            'reconciled' => 'Đối soát yêu cầu thanh toán payOS thành công.',
+            default => 'Yêu cầu thanh toán payOS đã sẵn sàng.',
         };
     }
 
@@ -422,7 +422,7 @@ class PayOSService
                 $reconciled = $this->reconcilePaymentRequest($staleRequest);
                 if (! $this->isTerminalStatus($reconciled->status)) {
                     throw new PayOSReconciliationException(
-                        'Unable to cancel the previous payOS payment request. Please try again.',
+                        'Chưa thể hủy yêu cầu thanh toán payOS trước đó. Vui lòng thử lại sau.',
                         502,
                         $exception,
                     );
@@ -479,15 +479,15 @@ class PayOSService
     private function remainingAmount(Invoice $invoice): int
     {
         if (! in_array($invoice->status, ['UNPAID', 'PARTIALLY_PAID'], true) || $invoice->total_amount <= 0) {
-            throw ValidationException::withMessages(['status' => 'This invoice cannot receive payOS payments.']);
+            throw ValidationException::withMessages(['status' => 'Chỉ có thể thanh toán payOS cho hóa đơn chưa thanh toán hoặc thanh toán một phần.']);
         }
 
         $remaining = (float) $invoice->total_amount - (float) $invoice->paid_amount;
         if ($remaining <= 0) {
-            throw ValidationException::withMessages(['amount' => 'This invoice has no remaining amount.']);
+            throw ValidationException::withMessages(['amount' => 'Hóa đơn không còn số tiền cần thanh toán.']);
         }
         if (floor($remaining) !== $remaining) {
-            throw ValidationException::withMessages(['amount' => 'payOS payments must use whole VND amounts.']);
+            throw ValidationException::withMessages(['amount' => 'Số tiền thanh toán payOS phải là số nguyên đồng Việt Nam.']);
         }
 
         return (int) $remaining;
@@ -502,13 +502,13 @@ class PayOSService
 
         // SDK v2 relies on PSR discovery, whose bundled candidate list does not yet
         // recognize Guzzle 8. Supply the PSR-18/PSR-17 implementations explicitly.
-        $factory = new HttpFactory();
+        $factory = new HttpFactory;
 
         return PayOS::options(new PayOSOptions(
             $config['client_id'],
             $config['api_key'],
             $config['checksum_key'],
-            httpClient: new GuzzleClient(),
+            httpClient: new GuzzleClient,
             requestFactory: $factory,
             streamFactory: $factory,
         ));

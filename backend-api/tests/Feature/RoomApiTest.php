@@ -43,7 +43,7 @@ class RoomApiTest extends TestCase
             'landlord_id' => 99999,
         ])->assertCreated()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Room created successfully.')
+            ->assertJsonPath('message', 'Tạo phòng thành công.')
             ->assertJsonPath('data.boarding_house_id', $boardingHouse->id)
             ->assertJsonCount(0, 'data.amenities');
 

@@ -1,3 +1,4 @@
+import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useEffect, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { formatCurrency } from '../../utils/formatters'
@@ -39,8 +40,8 @@ export default function PaymentForm({ remaining, initialValues = {}, onSubmit, l
         note: values.note || null,
       })
     } catch (requestError) {
-      const message = requestError.response?.data?.errors?.amount?.[0]
-      setError(message?.includes('exceeds') ? 'Số tiền thanh toán không được vượt quá số tiền còn lại.' : message || requestError.response?.data?.message || 'Không thể lưu thanh toán.')
+      applyApiFieldErrors(requestError, form.setError)
+      setError(getApiErrorMessage(requestError))
     }
   }
 
@@ -49,12 +50,12 @@ export default function PaymentForm({ remaining, initialValues = {}, onSubmit, l
       <p className="text-sm">Còn phải thanh toán: {formatCurrency(remaining)}</p>
       <div>
         <label className="block text-sm font-medium" htmlFor="payment-amount">Số tiền thanh toán</label>
-        <Controller name="amount" control={form.control} render={({ field }) => <MoneyInput {...field} id="payment-amount" placeholder="0" className="mt-1 w-full rounded border p-2" />} />
+        <Controller name="amount" control={form.control} render={({ field }) => <MoneyInput {...field} id="payment-amount" placeholder="0" className="mt-1 w-full rounded border p-2" />} />{form.formState.errors.amount && <p className="mt-1 text-sm text-red-600">{form.formState.errors.amount.message}</p>}
       </div>
-      <select className="w-full rounded border p-2" {...form.register('payment_method')}><option value="CASH">Tiền mặt</option><option value="BANK_TRANSFER">Chuyển khoản</option><option value="CARD">Thẻ</option><option value="OTHER">Khác</option></select>
-      <input type="datetime-local" className="w-full rounded border p-2" {...form.register('paid_at')} />
-      <input placeholder="Mã tham chiếu" className="w-full rounded border p-2" {...form.register('reference_code')} />
-      <textarea placeholder="Ghi chú" className="w-full rounded border p-2" {...form.register('note')} />
+      <select className="w-full rounded border p-2" {...form.register('payment_method')}><option value="CASH">Tiền mặt</option><option value="BANK_TRANSFER">Chuyển khoản</option><option value="CARD">Thẻ</option><option value="OTHER">Khác</option></select>{form.formState.errors.payment_method && <p className="mt-1 text-sm text-red-600">{form.formState.errors.payment_method.message}</p>}
+      <input type="datetime-local" className="w-full rounded border p-2" {...form.register('paid_at')} />{form.formState.errors.paid_at && <p className="mt-1 text-sm text-red-600">{form.formState.errors.paid_at.message}</p>}
+      <input placeholder="Mã tham chiếu" className="w-full rounded border p-2" {...form.register('reference_code')} />{form.formState.errors.reference_code && <p className="mt-1 text-sm text-red-600">{form.formState.errors.reference_code.message}</p>}
+      <textarea placeholder="Ghi chú" className="w-full rounded border p-2" {...form.register('note')} />{form.formState.errors.note && <p className="mt-1 text-sm text-red-600">{form.formState.errors.note.message}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button className="rounded bg-slate-900 px-4 py-2 text-sm text-white">{label}</button>
     </form>

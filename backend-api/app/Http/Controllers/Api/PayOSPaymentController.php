@@ -33,11 +33,11 @@ class PayOSPaymentController extends Controller
         } catch (WebhookException $exception) {
             Log::warning('Rejected invalid payOS webhook signature.', ['exception' => $exception->getMessage()]);
 
-            return ApiResponse::error('Invalid payOS webhook.', null, 400);
+            return ApiResponse::error('Dữ liệu webhook payOS không hợp lệ.', null, 400);
         }
 
         $payos->processVerifiedWebhook($data);
 
-        return ApiResponse::success(null, 'payOS webhook processed.');
+        return ApiResponse::success(null, 'Xử lý webhook payOS thành công.');
     }
 }

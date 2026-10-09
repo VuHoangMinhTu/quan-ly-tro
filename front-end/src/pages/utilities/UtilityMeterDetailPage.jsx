@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
@@ -66,7 +67,7 @@ function ServicePricing({ service, tiersQuery }) {
           <p className="text-sm font-semibold text-slate-900">Bảng giá theo bậc</p>
           {tiersQuery.isPending ? (
             <p className="mt-2 text-sm text-slate-500">Đang tải bảng giá...</p>
-          ) : tiers.length === 0 ? (
+          ) : tiersQuery.isError ? <p className="mt-2 text-sm text-red-600">{getApiErrorMessage(tiersQuery.error)}</p> : tiers.length === 0 ? (
             <p className="mt-2 text-sm text-slate-500">Chưa có bậc giá được cấu hình.</p>
           ) : (
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -123,7 +124,7 @@ export default function UtilityMeterDetailPage() {
   })
 
   if (meterQuery.isPending) return <p>Đang tải đồng hồ...</p>
-  if (meterQuery.isError || !meter) return <p className="text-red-600">Không tìm thấy đồng hồ.</p>
+  if (meterQuery.isError || !meter) return <p className="text-red-600">{getApiErrorMessage(meterQuery.error)}</p>
 
   const readings = readingsQuery.data?.data?.data || []
   const unit = meter.service?.unit || ''
@@ -149,6 +150,9 @@ export default function UtilityMeterDetailPage() {
       </div>
 
       <ServicePricing service={meter.service} tiersQuery={tiersQuery} />
+
+      {readingsQuery.isError && <p className="mt-3 text-sm text-red-600">{getApiErrorMessage(readingsQuery.error)}</p>}
+      {deleteReading.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(deleteReading.error)}</p>}
 
       <div className="mt-6 overflow-x-auto rounded-xl bg-white shadow-sm">
         <table className="min-w-full text-sm">
@@ -185,7 +189,7 @@ export default function UtilityMeterDetailPage() {
             })}
           </tbody>
         </table>
-        {readings.length === 0 && <p className="p-6 text-center text-slate-500">Chưa có chỉ số được ghi.</p>}
+        {!readingsQuery.isPending && !readingsQuery.isError && readings.length === 0 && <p className="p-6 text-center text-slate-500">Chưa có chỉ số được ghi.</p>}
       </div>
 
       {editingReading && (

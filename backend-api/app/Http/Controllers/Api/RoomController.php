@@ -19,7 +19,7 @@ class RoomController extends Controller
         $boardingHouse = $this->findOwnedBoardingHouse($request, $boardingHouseId);
         $rooms = $boardingHouse->rooms()->with('amenities')->latest()->get();
 
-        return ApiResponse::success($rooms, 'Rooms retrieved successfully.');
+        return ApiResponse::success($rooms, 'Lấy danh sách phòng thành công.');
     }
 
     public function store(StoreRoomRequest $request, int $boardingHouseId): JsonResponse
@@ -36,14 +36,14 @@ class RoomController extends Controller
             return $room->load('amenities');
         });
 
-        return ApiResponse::success($room, 'Room created successfully.', 201);
+        return ApiResponse::success($room, 'Tạo phòng thành công.', 201);
     }
 
     public function show(Request $request, int $id): JsonResponse
     {
         return ApiResponse::success(
             $this->findOwnedRoom($request, $id)->load('amenities'),
-            'Room retrieved successfully.'
+            'Lấy thông tin phòng thành công.'
         );
     }
 
@@ -77,14 +77,14 @@ class RoomController extends Controller
             }
         });
 
-        return ApiResponse::success(null, 'Room updated successfully.');
+        return ApiResponse::success(null, 'Cập nhật phòng thành công.');
     }
 
     public function destroy(Request $request, int $id): JsonResponse
     {
         $this->findOwnedRoom($request, $id)->delete();
 
-        return ApiResponse::success(null, 'Room deleted successfully.');
+        return ApiResponse::success(null, 'Xóa phòng thành công.');
     }
 
     private function findOwnedBoardingHouse(Request $request, int $boardingHouseId): BoardingHouse

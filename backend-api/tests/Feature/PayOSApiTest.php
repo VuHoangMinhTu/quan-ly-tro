@@ -2,23 +2,24 @@
 
 namespace Tests\Feature;
 
+use App\Exceptions\PayOSReconciliationException;
 use App\Models\BoardingHouse;
 use App\Models\Invoice;
 use App\Models\Landlord;
-use App\Models\PayOSPaymentRequest;
 use App\Models\Payment;
+use App\Models\PayOSPaymentRequest;
 use App\Models\Room;
 use App\Models\User;
 use App\Services\PayOSService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
-use PayOS\Exceptions\WebhookException;
 use PayOS\Exceptions\NotFoundException;
+use PayOS\Exceptions\WebhookException;
 use PayOS\Models\V2\PaymentRequests\CreatePaymentLinkResponse;
 use PayOS\Models\V2\PaymentRequests\PaymentLink;
 use PayOS\Models\V2\PaymentRequests\PaymentLinkStatus;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PayOS\Models\Webhooks\WebhookData;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class PayOSApiTest extends TestCase
@@ -38,7 +39,7 @@ class PayOSApiTest extends TestCase
             'amount' => 3_000_000,
             'status' => 'PENDING',
         ]);
-        $service->shouldReceive('messageFor')->once()->andReturn('payOS payment request ready.');
+        $service->shouldReceive('messageFor')->once()->andReturn('Yêu cầu thanh toán payOS đã sẵn sàng.');
         $this->app->instance(PayOSService::class, $service);
 
         $this->withToken($user->createToken('test')->plainTextToken)
@@ -135,8 +136,8 @@ class PayOSApiTest extends TestCase
         $service->shouldReceive('fetchPaymentLink')->once()->andThrow(new \RuntimeException('Timed out'));
         $service->shouldReceive('createPaymentLink')->never();
 
-        $this->expectException(\App\Exceptions\PayOSReconciliationException::class);
-        $this->expectExceptionMessage('Unable to verify the current payOS payment request. Please try again.');
+        $this->expectException(PayOSReconciliationException::class);
+        $this->expectExceptionMessage('Chưa thể xác minh yêu cầu thanh toán payOS hiện tại. Vui lòng thử lại sau.');
         $service->createOrReuse($invoice);
 
         $this->assertSame('RECONCILIATION_REQUIRED', $request->fresh()->status);

@@ -23,7 +23,7 @@ class ServiceController extends Controller
             ->latest()
             ->get();
 
-        return ApiResponse::success($services, 'Services retrieved successfully.');
+        return ApiResponse::success($services, 'Lấy danh sách dịch vụ thành công.');
     }
 
     public function store(StoreServiceRequest $request, int $boardingHouseId): JsonResponse
@@ -32,14 +32,14 @@ class ServiceController extends Controller
             ->services()
             ->create($request->validated());
 
-        return ApiResponse::success(null, 'Service created successfully.', 201);
+        return ApiResponse::success(null, 'Tạo dịch vụ thành công.', 201);
     }
 
     public function show(Request $request, int $id): JsonResponse
     {
         return ApiResponse::success(
             $this->findOwnedService($request, $id)->load('priceTiers'),
-            'Service retrieved successfully.'
+            'Lấy thông tin dịch vụ thành công.'
         );
     }
 
@@ -56,14 +56,14 @@ class ServiceController extends Controller
             $service->update($data);
         }, 3);
 
-        return ApiResponse::success(null, 'Service updated successfully.');
+        return ApiResponse::success(null, 'Cập nhật dịch vụ thành công.');
     }
 
     public function destroy(Request $request, int $id): JsonResponse
     {
         $this->findOwnedService($request, $id)->delete();
 
-        return ApiResponse::success(null, 'Service deleted successfully.');
+        return ApiResponse::success(null, 'Xóa dịch vụ thành công.');
     }
     //
 

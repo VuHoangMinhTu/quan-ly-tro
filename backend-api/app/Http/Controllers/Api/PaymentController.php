@@ -18,7 +18,7 @@ class PaymentController extends Controller
 {
     public function index(Request $r, int $invoiceId): JsonResponse
     {
-        return ApiResponse::success($this->invoice($r, $invoiceId)->findOrFail()->payments, 'Payments retrieved successfully.');
+        return ApiResponse::success($this->invoice($r, $invoiceId)->findOrFail()->payments, 'Lấy danh sách thanh toán thành công.');
     }
 
     public function store(StorePaymentRequest $r, int $invoiceId): JsonResponse
@@ -30,12 +30,12 @@ class PaymentController extends Controller
             app(InvoicePaymentService::class)->recalculate($i);
         });
 
-        return ApiResponse::success(null, 'Payment created successfully.', 201);
+        return ApiResponse::success(null, 'Ghi nhận thanh toán thành công.', 201);
     }
 
     public function show(Request $r, int $id): JsonResponse
     {
-        return ApiResponse::success($this->payment($r, $id), 'Payment retrieved successfully.');
+        return ApiResponse::success($this->payment($r, $id), 'Lấy thông tin thanh toán thành công.');
     }
 
     public function update(UpdatePaymentRequest $r, int $id): JsonResponse
@@ -49,7 +49,7 @@ class PaymentController extends Controller
             app(InvoicePaymentService::class)->recalculate($i);
         });
 
-        return ApiResponse::success(null, 'Payment updated successfully.');
+        return ApiResponse::success(null, 'Cập nhật thanh toán thành công.');
     }
 
     public function destroy(Request $r, int $id): JsonResponse
@@ -62,7 +62,7 @@ class PaymentController extends Controller
             app(InvoicePaymentService::class)->recalculate($i);
         });
 
-        return ApiResponse::success(null, 'Payment deleted successfully.');
+        return ApiResponse::success(null, 'Xóa thanh toán thành công.');
     }
 
     private function invoice(Request $r, int $id)
@@ -78,17 +78,17 @@ class PaymentController extends Controller
     private function allowed(Invoice $i, $amount, ?int $ignore = null): void
     {
         if (! in_array($i->status, ['UNPAID', 'PARTIALLY_PAID'], true) || $i->total_amount <= 0) {
-            throw ValidationException::withMessages(['status' => 'This invoice cannot receive payments.']);
+            throw ValidationException::withMessages(['status' => 'Chỉ có thể ghi nhận thanh toán cho hóa đơn chưa thanh toán hoặc thanh toán một phần.']);
         }$paid = $i->payments()->when($ignore, fn ($q) => $q->whereKeyNot($ignore))->sum('amount');
         if ($amount > $i->total_amount - $paid) {
-            throw ValidationException::withMessages(['amount' => 'The payment amount exceeds the remaining amount.']);
+            throw ValidationException::withMessages(['amount' => 'Số tiền thanh toán không được vượt quá số tiền còn lại.']);
         }
     }
 
     private function manualOnly(Payment $payment): void
     {
         if ($payment->payment_source === 'PAYOS_WEBHOOK') {
-            throw ValidationException::withMessages(['payment' => 'payOS payments can only be changed by a verified webhook.']);
+            throw ValidationException::withMessages(['payment' => 'Thanh toán payOS chỉ được thay đổi qua webhook đã xác minh.']);
         }
     }
 }

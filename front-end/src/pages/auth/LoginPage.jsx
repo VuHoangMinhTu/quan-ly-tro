@@ -1,3 +1,4 @@
+import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -34,6 +35,7 @@ export default function LoginPage() {
       }
     },
     onSuccess: () => navigate('/dashboard'),
+    onError: (error) => applyApiFieldErrors(error, form.setError),
   })
 
   const handleGoogleLogin = () => {
@@ -41,7 +43,7 @@ export default function LoginPage() {
     window.location.assign(`${import.meta.env.VITE_API_BASE_URL}/auth/google/redirect`)
   }
 
-  const error = mutation.error?.response?.data?.message || mutation.error?.message
+  const error = mutation.error ? getApiErrorMessage(mutation.error) : ''
 
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
@@ -54,6 +56,8 @@ export default function LoginPage() {
         {location.state?.message && (
           <p className="mb-3 text-sm text-green-700">{location.state.message}</p>
         )}
+
+        {location.state?.error && !error && <p role="alert" className="mb-3 text-sm text-red-600">{location.state.error}</p>}
 
         <label>
           Email

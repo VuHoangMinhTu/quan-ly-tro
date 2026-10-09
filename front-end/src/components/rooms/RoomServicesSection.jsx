@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
@@ -23,7 +24,7 @@ export default function RoomServicesSection({ room }) {
         <button type="button" disabled={servicesQuery.isPending || servicesQuery.isError} onClick={() => setIsEditing(true)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">Chỉnh sửa dịch vụ</button>
       </div>
       {servicesQuery.isPending ? <p className="mt-4 text-sm text-slate-500">Đang tải dịch vụ áp dụng...</p>
-        : servicesQuery.isError ? <div className="mt-4 text-sm"><p className="text-red-600">Không thể tải dịch vụ của phòng.</p><button type="button" onClick={() => servicesQuery.refetch()} className="mt-2 font-medium underline">Thử lại</button></div>
+        : servicesQuery.isError ? <div className="mt-4 text-sm"><p className="text-red-600">{getApiErrorMessage(servicesQuery.error)}</p><button type="button" onClick={() => servicesQuery.refetch()} className="mt-2 font-medium underline">Thử lại</button></div>
           : services.length === 0 ? <p className="mt-4 text-sm text-slate-500">Phòng này chưa áp dụng dịch vụ nào.</p>
             : <div className="mt-4 grid gap-3 sm:grid-cols-2">{services.map((service) => {
               const active = isAppliedRoomService(service)
@@ -34,7 +35,7 @@ export default function RoomServicesSection({ room }) {
                 <p className="mt-3 font-medium">{formatRoomServicePrice(service)}</p><p className="mt-1 text-sm text-slate-600">{BILLING_METHOD_LABELS[service.billing_method]}</p>
                 {service.billing_method === 'TIERED' && <Link to={`/boarding-houses/${room.boarding_house_id}/services`} className="mt-2 inline-block text-sm font-medium underline">Xem bảng giá</Link>}
                 {requiresMeter && !metersQuery.isPending && !metersQuery.isError && !hasMeter && <p className="mt-3 rounded-md bg-amber-50 p-2 text-xs text-amber-800">Chưa có đồng hồ đang hoạt động. Hãy thêm đồng hồ ở phần Điện nước và ghi chỉ số trước khi lập hóa đơn.</p>}
-                {requiresMeter && metersQuery.isError && <p className="mt-3 text-xs text-slate-500">Chưa kiểm tra được đồng hồ. Dịch vụ này cần đồng hồ và chỉ số trước khi lập hóa đơn.</p>}
+                {requiresMeter && metersQuery.isError && <p className="mt-3 text-xs text-slate-500">{getApiErrorMessage(metersQuery.error)} Dịch vụ này cần đồng hồ và chỉ số trước khi lập hóa đơn.</p>}
               </article>
             })}</div>}
       {isEditing && <RoomServicesModal key={room.id} room={room} assignedServices={services} onClose={() => setIsEditing(false)} />}

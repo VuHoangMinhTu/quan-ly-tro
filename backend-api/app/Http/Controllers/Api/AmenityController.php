@@ -14,7 +14,7 @@ class AmenityController extends Controller
     {
         return ApiResponse::success(
             Amenity::query()->orderBy('name')->get(),
-            'Amenities retrieved successfully.'
+            'Lấy danh sách tiện nghi thành công.'
         );
     }
 
@@ -26,6 +26,6 @@ class AmenityController extends Controller
         // the new master amenity without closing and reopening the modal.
         return ApiResponse::success([
             'amenity' => $amenity->only(['id', 'name']),
-        ], 'Amenity created successfully.', 201);
+        ], 'Tạo tiện nghi thành công.', 201);
     }
 }

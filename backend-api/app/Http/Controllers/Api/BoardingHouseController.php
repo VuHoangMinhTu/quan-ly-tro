@@ -21,7 +21,7 @@ class BoardingHouseController extends Controller
             ->latest()
             ->get();
 
-        return ApiResponse::success($boardingHouses, 'Boarding houses retrieved successfully.');
+        return ApiResponse::success($boardingHouses, 'Lấy danh sách nhà trọ thành công.');
     }
 
     // Tương đương post bên rest api
@@ -30,7 +30,7 @@ class BoardingHouseController extends Controller
         $boardingHouse = $this->landlordBoardingHouses($request)
             ->create($request->validated());
 
-        return ApiResponse::success(null, 'Boarding house created successfully.', 201);
+        return ApiResponse::success(null, 'Tạo nhà trọ thành công.', 201);
     }
 
     // tương tự như get nhưng theo id, Lấy chi tiết một bản ghi
@@ -38,7 +38,7 @@ class BoardingHouseController extends Controller
     {
         return ApiResponse::success(
             $this->findOwnedBoardingHouse($request, $id),
-            'Boarding house retrieved successfully.'
+            'Lấy thông tin nhà trọ thành công.'
         );
     }
 
@@ -47,14 +47,14 @@ class BoardingHouseController extends Controller
         $boardingHouse = $this->findOwnedBoardingHouse($request, $id);
         $boardingHouse->update($request->validated());
 
-        return ApiResponse::success(null, 'Boarding house updated successfully.');
+        return ApiResponse::success(null, 'Cập nhật nhà trọ thành công.');
     }
 
     public function destroy(Request $request, int $id): JsonResponse
     {
         $this->findOwnedBoardingHouse($request, $id)->delete();
 
-        return ApiResponse::success(null, 'Boarding house deleted successfully.');
+        return ApiResponse::success(null, 'Xóa nhà trọ thành công.');
     }
 
     private function landlordBoardingHouses(Request $request)

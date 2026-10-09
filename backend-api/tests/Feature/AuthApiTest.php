@@ -27,7 +27,7 @@ class AuthApiTest extends TestCase
         $response = $this->postJson('/api/register', $payload)
             ->assertCreated()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Registration successful. Please verify your email.')
+            ->assertJsonPath('message', 'Đăng ký thành công. Vui lòng xác minh email.')
             ->assertJsonPath('data', null);
 
         $user = User::query()->where('email', $payload['email'])->firstOrFail();
@@ -50,7 +50,9 @@ class AuthApiTest extends TestCase
             'email' => 'owner@example.com',
             'phone' => '+84907654321',
             'password' => 'password123',
-        ])->assertStatus(422)->assertJsonValidationErrors('email');
+        ])->assertStatus(422)->assertJsonValidationErrors('email')
+            ->assertJsonPath('message', 'Địa chỉ email này đã được đăng ký.')
+            ->assertJsonPath('errors.email.0', 'Địa chỉ email này đã được đăng ký.');
     }
 
     public function test_user_can_log_in_and_receive_a_bearer_token(): void
@@ -78,14 +80,14 @@ class AuthApiTest extends TestCase
             'password' => 'incorrect-password',
         ])->assertUnauthorized()
             ->assertJsonPath('success', false)
-            ->assertJsonPath('message', 'Invalid credentials.');
+            ->assertJsonPath('message', 'Email hoặc mật khẩu không chính xác.');
     }
 
     public function test_me_requires_authentication(): void
     {
         $this->getJson('/api/me')
             ->assertUnauthorized()
-            ->assertJsonPath('message', 'Unauthenticated.');
+            ->assertJsonPath('message', 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
     }
 
     public function test_authenticated_user_can_retrieve_their_profile(): void
@@ -108,7 +110,7 @@ class AuthApiTest extends TestCase
         $this->withToken($newToken->plainTextToken)->postJson('/api/logout')
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Logged out successfully.')
+            ->assertJsonPath('message', 'Đăng xuất thành công.')
             ->assertJsonPath('data', null);
 
         $this->assertDatabaseMissing('personal_access_tokens', ['id' => $newToken->accessToken->id]);

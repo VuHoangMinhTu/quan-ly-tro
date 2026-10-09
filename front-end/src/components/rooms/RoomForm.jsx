@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { getAmenities } from '../../api/amenityApi'
-import { getApiErrorMessage } from '../../api/getApiErrorMessage'
+import { getApiErrorMessage, applyApiFieldErrors } from '../../api/getApiErrorMessage'
 import { roomKeys } from '../../api/roomKeys'
 import MoneyInput from '../ui/MoneyInput'
 
@@ -66,13 +66,8 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
         amenity_ids: (values.amenity_ids || []).map(Number),
       })
     } catch (error) {
-      const errors = error.response?.data?.errors
-      if (errors) {
-        Object.entries(errors).forEach(([field, messages]) => {
-          form.setError(field.startsWith('amenity_ids.') ? 'amenity_ids' : field, { type: 'server', message: messages[0] })
-        })
-      }
-      if (!errors || Object.keys(errors).length === 0) setSubmitError(getApiErrorMessage(error))
+      const applied = applyApiFieldErrors(error, form.setError, (field) => field.startsWith('amenity_ids.') ? 'amenity_ids' : field)
+      if (!applied) setSubmitError(getApiErrorMessage(error))
     }
   }
 
@@ -128,7 +123,7 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
       <fieldset>
         <legend className="text-sm font-medium text-slate-700">Tiện nghi <span className="font-normal text-slate-500">(không bắt buộc)</span></legend>
         {amenitiesQuery.isPending && <p className="mt-2 text-sm text-slate-500">Đang tải tiện nghi...</p>}
-        {amenitiesQuery.isError && <p className="mt-2 text-sm text-slate-600">Không thể tải tiện nghi. Bạn vẫn có thể lưu phòng mà không chọn thêm tiện nghi.</p>}
+        {amenitiesQuery.isError && <p className="mt-2 text-sm text-slate-600">{getApiErrorMessage(amenitiesQuery.error)} Bạn vẫn có thể lưu phòng mà không chọn thêm tiện nghi.</p>}
         {amenities.length > 0 && (
           <Controller
             name="amenity_ids"

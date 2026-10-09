@@ -78,7 +78,7 @@ class Invoice extends Model
     {
         $subtotal = $this->items()->sum('amount');
         if ($this->discount_amount > $subtotal) {
-            throw ValidationException::withMessages(['discount_amount' => 'The discount amount cannot exceed the subtotal.']);
+            throw ValidationException::withMessages(['discount_amount' => 'Số tiền giảm giá không được vượt quá tạm tính.']);
         }
         $this->update(['subtotal' => $subtotal, 'total_amount' => $subtotal - $this->discount_amount]);
     }

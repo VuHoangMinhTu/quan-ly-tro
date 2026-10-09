@@ -40,7 +40,7 @@ class RoomServiceApiTest extends TestCase
         $this->withBearerToken($landlord)->getJson("/api/rooms/{$room->id}/services")
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Room services retrieved successfully.')
+            ->assertJsonPath('message', 'Lấy danh sách dịch vụ của phòng thành công.')
             ->assertJsonCount(0, 'data');
 
         $this->assertDatabaseCount('room_services', 0);
@@ -99,7 +99,7 @@ class RoomServiceApiTest extends TestCase
             'boarding_house_id' => 999,
         ])->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Room services updated successfully.')
+            ->assertJsonPath('message', 'Cập nhật dịch vụ của phòng thành công.')
             ->assertJsonPath('data', null);
 
         $this->assertDatabaseCount('room_services', 2);

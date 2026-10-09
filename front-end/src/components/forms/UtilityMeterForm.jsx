@@ -1,3 +1,4 @@
+import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -7,13 +8,6 @@ import { getMeterServices } from '../../utils/roomServices'
 import { SERVICE_TYPE_LABELS } from '../../utils/service'
 
 const emptyValues = {}
-
-function meterErrorMessage(error) {
-  const errors = error.response?.data?.errors || {}
-  const message = errors.service_id?.[0] || errors.initial_reading?.[0]
-  if (message?.includes('active meter')) return 'Phòng đã có đồng hồ đang hoạt động cho dịch vụ này.'
-  return message || error.response?.data?.message || 'Không thể lưu đồng hồ.'
-}
 
 export default function UtilityMeterForm({ roomId, initialValues = emptyValues, onSubmit, label }) {
   const servicesQuery = useQuery({
@@ -50,7 +44,8 @@ export default function UtilityMeterForm({ roomId, initialValues = emptyValues, 
         meter_code: values.meter_code || null,
       })
     } catch (requestError) {
-      setError(meterErrorMessage(requestError))
+      applyApiFieldErrors(requestError, form.setError)
+      setError(getApiErrorMessage(requestError))
     }
   }
 
@@ -65,13 +60,13 @@ export default function UtilityMeterForm({ roomId, initialValues = emptyValues, 
         </select>
         {form.formState.errors.service_id && <p className="mt-1 text-sm text-red-600">{form.formState.errors.service_id.message}</p>}
         {servicesQuery.isPending ? <p className="mt-2 text-xs text-slate-500">Đang tải dịch vụ của phòng...</p>
-          : servicesQuery.isError ? <p className="mt-2 text-sm text-red-600">Không thể tải dịch vụ. Vui lòng đóng và thử lại trước khi chọn dịch vụ mới.</p>
+          : servicesQuery.isError ? <p className="mt-2 text-sm text-red-600">{getApiErrorMessage(servicesQuery.error)}</p>
             : services.length === 0 && <p className="mt-2 text-sm text-slate-600">Chưa có dịch vụ phù hợp. Hãy chọn dịch vụ Theo đơn vị hoặc Bậc thang ở phần Dịch vụ áp dụng trước.</p>}
         {hasHistoricalService && <p className="mt-2 text-xs text-slate-500">Có thể chỉnh thông tin hoặc ngừng đồng hồ cũ. Để bật lại, cần áp dụng lại dịch vụ phù hợp cho phòng.</p>}
       </div>
-      <div><label htmlFor="meter-code" className="block text-sm font-medium">Mã đồng hồ</label><input id="meter-code" placeholder="Không bắt buộc" className="mt-1 w-full rounded border p-2" {...form.register('meter_code')} /></div>
+      <div><label htmlFor="meter-code" className="block text-sm font-medium">Mã đồng hồ</label><input id="meter-code" placeholder="Không bắt buộc" className="mt-1 w-full rounded border p-2" {...form.register('meter_code')} />{form.formState.errors.meter_code && <p className="mt-1 text-sm text-red-600">{form.formState.errors.meter_code.message}</p>}</div>
       <div><label htmlFor="meter-initial" className="block text-sm font-medium">Chỉ số ban đầu *</label><input id="meter-initial" type="number" min="0" step="0.01" placeholder="0" className="mt-1 w-full rounded border p-2" {...form.register('initial_reading', { required: 'Vui lòng nhập chỉ số ban đầu.', min: { value: 0, message: 'Chỉ số ban đầu không được âm.' } })} />{form.formState.errors.initial_reading && <p className="mt-1 text-sm text-red-600">{form.formState.errors.initial_reading.message}</p>}</div>
-      <label className="flex gap-2 text-sm"><input type="checkbox" {...form.register('is_active')} /> Đang hoạt động</label>
+      <label className="flex gap-2 text-sm"><input type="checkbox" {...form.register('is_active')} /> Đang hoạt động</label>{form.formState.errors.is_active && <p className="mt-1 text-sm text-red-600">{form.formState.errors.is_active.message}</p>}
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       <button type="submit" disabled={!canSubmit} className="rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60">{form.formState.isSubmitting ? 'Đang lưu...' : label}</button>
     </form>

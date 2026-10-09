@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
@@ -94,12 +95,13 @@ export default function RoomUtilitiesSection({ room }) {
       </div>
 
       {!servicesQuery.isPending && !servicesQuery.isError && meterServices.length === 0 && <p className="mt-4 text-sm text-slate-500">Muốn thêm đồng hồ, hãy chọn dịch vụ Theo đơn vị hoặc Bậc thang ở phần Dịch vụ áp dụng. Dịch vụ Cố định / Theo người không cần đồng hồ.</p>}
-      {servicesQuery.isError && <p className="mt-4 text-sm text-red-600">Chưa tải được dịch vụ của phòng để tạo đồng hồ mới.</p>}
+      {servicesQuery.isError && <p className="mt-4 text-sm text-red-600">{getApiErrorMessage(servicesQuery.error)}</p>}
 
+      {deleteMeter.isError && <p role="alert" className="mt-4 text-sm text-red-600">{getApiErrorMessage(deleteMeter.error)}</p>}
       {metersQuery.isPending ? (
         <p className="mt-5 text-sm text-slate-500">Đang tải đồng hồ...</p>
       ) : metersQuery.isError ? (
-        <p className="mt-5 text-sm text-red-600">Không thể tải đồng hồ của phòng.</p>
+        <p className="mt-5 text-sm text-red-600">{getApiErrorMessage(metersQuery.error)}</p>
       ) : meters.length === 0 ? (
         <div className="mt-5 rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center">
           <p className="text-sm text-slate-500">Phòng này chưa có đồng hồ điện/nước.</p>

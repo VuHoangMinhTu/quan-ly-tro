@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { getApiErrorMessage } from '../../api/getApiErrorMessage'
+import { getApiErrorMessage, applyApiFieldErrors } from '../../api/getApiErrorMessage'
 import DateInput from '../ui/DateInput'
 import { formatDateForApi, formatDateForDisplay, isNotFutureDisplayDate, isValidDisplayDate } from '../../utils/date'
 
@@ -34,8 +34,7 @@ export default function TenantForm({ initialValues = emptyValues, onSubmit, subm
       identity_issue_date: formatDateForApi(values.identity_issue_date),
     }
     try { await onSubmit(payload) } catch (error) {
-      const errors = error.response?.data?.errors
-      if (errors) Object.entries(errors).forEach(([field, messages]) => form.setError(field, { type: 'server', message: messages[0] }))
+      applyApiFieldErrors(error, form.setError)
       setSubmitError(getApiErrorMessage(error))
     }
   }

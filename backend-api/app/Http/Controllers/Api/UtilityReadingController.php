@@ -16,7 +16,7 @@ class UtilityReadingController extends Controller
 {
     public function index(Request $request, int $meterId): JsonResponse
     {
-        return ApiResponse::success($this->meter($request, $meterId)->readings()->get(), 'Utility readings retrieved successfully.');
+        return ApiResponse::success($this->meter($request, $meterId)->readings()->get(), 'Lấy danh sách chỉ số điện/nước thành công.');
     }
 
     public function store(StoreUtilityReadingRequest $request, int $meterId): JsonResponse
@@ -26,12 +26,12 @@ class UtilityReadingController extends Controller
         $this->validateSequence($meter, $data);
         $meter->readings()->create($data);
 
-        return ApiResponse::success(null, 'Utility reading created successfully.', 201);
+        return ApiResponse::success(null, 'Thêm chỉ số điện/nước thành công.', 201);
     }
 
     public function show(Request $request, int $id): JsonResponse
     {
-        return ApiResponse::success($this->reading($request, $id)->load('meter'), 'Utility reading retrieved successfully.');
+        return ApiResponse::success($this->reading($request, $id)->load('meter'), 'Lấy thông tin chỉ số điện/nước thành công.');
     }
 
     public function update(UpdateUtilityReadingRequest $request, int $id): JsonResponse
@@ -41,14 +41,14 @@ class UtilityReadingController extends Controller
         $this->validateSequence($reading->meter, $data, $reading->id);
         $reading->update($data);
 
-        return ApiResponse::success(null, 'Utility reading updated successfully.');
+        return ApiResponse::success(null, 'Cập nhật chỉ số điện/nước thành công.');
     }
 
     public function destroy(Request $request, int $id): JsonResponse
     {
         $this->reading($request, $id)->delete();
 
-        return ApiResponse::success(null, 'Utility reading deleted successfully.');
+        return ApiResponse::success(null, 'Xóa chỉ số điện/nước thành công.');
     }
 
     private function meter(Request $request, int $id): UtilityMeter
@@ -65,18 +65,18 @@ class UtilityReadingController extends Controller
     {
         $readings = $meter->readings()->when($ignoreId, fn ($query) => $query->whereKeyNot($ignoreId));
         if ($readings->clone()->whereDate('reading_date', $data['reading_date'])->exists()) {
-            throw ValidationException::withMessages(['reading_date' => 'A reading already exists for this date.']);
+            throw ValidationException::withMessages(['reading_date' => 'Ngày này đã có chỉ số điện/nước. Vui lòng chọn ngày khác.']);
         }
         $previous = $readings->clone()->where('reading_date', '<', $data['reading_date'])->orderByDesc('reading_date')->first();
         $next = $readings->clone()->where('reading_date', '>', $data['reading_date'])->orderBy('reading_date')->first();
         if ($previous && $data['reading_value'] < $previous->reading_value) {
-            throw ValidationException::withMessages(['reading_value' => 'The reading value cannot be lower than the previous reading.']);
+            throw ValidationException::withMessages(['reading_value' => 'Chỉ số công tơ không được nhỏ hơn chỉ số trước đó.']);
         }
         if (! $previous && $data['reading_value'] < $meter->initial_reading) {
-            throw ValidationException::withMessages(['reading_value' => 'The first reading cannot be lower than the initial reading.']);
+            throw ValidationException::withMessages(['reading_value' => 'Chỉ số đầu tiên không được nhỏ hơn chỉ số đầu của đồng hồ.']);
         }
         if ($next && $data['reading_value'] > $next->reading_value) {
-            throw ValidationException::withMessages(['reading_value' => 'The reading value cannot exceed the next reading.']);
+            throw ValidationException::withMessages(['reading_value' => 'Chỉ số công tơ không được lớn hơn chỉ số của lần ghi kế tiếp.']);
         }
     }
 }

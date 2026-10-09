@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { getApiErrorMessage } from '../../api/getApiErrorMessage'
+import { getApiErrorMessage, applyApiFieldErrors } from '../../api/getApiErrorMessage'
 
 const schema = z.object({
   name: z.string().trim().min(1, 'Vui lòng nhập tên nhà trọ').max(255),
@@ -36,13 +36,7 @@ export default function BoardingHouseForm({ initialValues = emptyValues, onSubmi
         description: values.description?.trim() || null,
       })
     } catch (error) {
-      const errors = error.response?.data?.errors
-
-      if (errors) {
-        Object.entries(errors).forEach(([field, messages]) => {
-          form.setError(field, { type: 'server', message: messages[0] })
-        })
-      }
+      applyApiFieldErrors(error, form.setError)
 
       setSubmitError(getApiErrorMessage(error))
     }

@@ -31,7 +31,7 @@ export default function ContractDetailPage() {
   })
 
   if (query.isPending) return <p>Đang tải hợp đồng...</p>
-  if (query.isError) return <p className="text-red-600">Không tìm thấy hợp đồng.</p>
+  if (query.isError) return <p className="text-red-600">{getApiErrorMessage(query.error)}</p>
 
   const contract = query.data.data.data
 

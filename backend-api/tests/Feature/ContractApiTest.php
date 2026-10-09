@@ -37,7 +37,7 @@ class ContractApiTest extends TestCase
             'room_id' => 99999,
         ]))->assertCreated()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('message', 'Contract created successfully.')
+            ->assertJsonPath('message', 'Tạo hợp đồng thành công.')
             ->assertJsonPath('data', null);
 
         $this->assertDatabaseHas('contracts', [

@@ -14,7 +14,7 @@ trait ValidatesServiceTierChain
         }
 
         if ($service->billing_method !== 'TIERED') {
-            $validator->errors()->add('service_id', 'Price tiers are only allowed for TIERED services.');
+            $validator->errors()->add('service_id', 'Bậc giá chỉ áp dụng cho dịch vụ tính theo bậc thang.');
 
             return;
         }
@@ -44,16 +44,16 @@ trait ValidatesServiceTierChain
             $next = $tiers[$index + 1] ?? null;
 
             if ($next && $tier['to_quantity'] === null) {
-                $validator->errors()->add('to_quantity', 'Only the final tier may have no upper quantity.');
+                $validator->errors()->add('to_quantity', 'Bậc không giới hạn phải là bậc cuối cùng.');
             }
 
             if ($previous) {
                 if ($previous['tier_order'] === $tier['tier_order']) {
-                    $validator->errors()->add('tier_order', 'The tier order must be unique for this service.');
+                    $validator->errors()->add('tier_order', 'Thứ tự bậc giá đã tồn tại.');
                 } elseif ($previous['to_quantity'] === null) {
-                    $validator->errors()->add('tier_order', 'A tier cannot follow an open-ended tier.');
+                    $validator->errors()->add('tier_order', 'Không thể thêm bậc giá sau bậc không giới hạn.');
                 } elseif ($tier['from_quantity'] !== $previous['to_quantity']) {
-                    $validator->errors()->add('from_quantity', 'The tier must start where the previous tier ends.');
+                    $validator->errors()->add('from_quantity', 'Khoảng bậc giá phải bắt đầu tại điểm kết thúc của bậc trước, không được chồng lấn hoặc bỏ trống.');
                 }
             }
         }

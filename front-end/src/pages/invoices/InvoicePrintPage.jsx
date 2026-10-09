@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Printer } from 'lucide-react'
@@ -25,7 +26,7 @@ export default function InvoicePrintPage() {
   }, [invoice?.invoice_code])
 
   if (invoiceQuery.isPending) return <main className="invoice-print-state">Đang tải hóa đơn...</main>
-  if (invoiceQuery.isError || !invoice) return <main className="invoice-print-state"><p>Không thể tải hóa đơn.</p><Link to={`/invoices/${id}`}>Quay lại chi tiết</Link></main>
+  if (invoiceQuery.isError || !invoice) return <main className="invoice-print-state"><p>{getApiErrorMessage(invoiceQuery.error)}</p><Link to={`/invoices/${id}`}>Quay lại chi tiết</Link></main>
 
   const printInvoice = async () => {
     await document.fonts?.ready

@@ -12,7 +12,6 @@ use App\Models\InvoiceItem;
 use App\Services\PayOSService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 
 class InvoiceItemController extends Controller
 {
@@ -27,7 +26,7 @@ class InvoiceItemController extends Controller
         $updatedInvoice = $i->fresh();
         app(PayOSService::class)->invalidateRequestsForAmountChange($updatedInvoice, $oldRemaining, (float) $updatedInvoice->total_amount - (float) $updatedInvoice->paid_amount);
 
-        return ApiResponse::success(null, 'Invoice item created successfully.', 201);
+        return ApiResponse::success(null, 'Tạo khoản thu thành công.', 201);
     }
 
     public function update(UpdateInvoiceItemRequest $r, int $id): JsonResponse
@@ -41,7 +40,7 @@ class InvoiceItemController extends Controller
         $updatedInvoice = $item->invoice->fresh();
         app(PayOSService::class)->invalidateRequestsForAmountChange($updatedInvoice, $oldRemaining, (float) $updatedInvoice->total_amount - (float) $updatedInvoice->paid_amount);
 
-        return ApiResponse::success(null, 'Invoice item updated successfully.');
+        return ApiResponse::success(null, 'Cập nhật khoản thu thành công.');
     }
 
     public function destroy(Request $r, int $id): JsonResponse
@@ -55,7 +54,7 @@ class InvoiceItemController extends Controller
         $updatedInvoice = $invoice->fresh();
         app(PayOSService::class)->invalidateRequestsForAmountChange($updatedInvoice, $oldRemaining, (float) $updatedInvoice->total_amount - (float) $updatedInvoice->paid_amount);
 
-        return ApiResponse::success(null, 'Invoice item deleted successfully.');
+        return ApiResponse::success(null, 'Xóa khoản thu thành công.');
     }
 
     private function invoice(Request $r, int $id): Invoice

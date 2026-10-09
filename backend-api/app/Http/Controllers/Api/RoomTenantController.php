@@ -23,7 +23,7 @@ class RoomTenantController extends Controller
             ->orderByDesc('move_in_date')
             ->get();
 
-        return ApiResponse::success($roomTenants, 'Room tenants retrieved successfully.');
+        return ApiResponse::success($roomTenants, 'Lấy danh sách người ở trong phòng thành công.');
     }
 
     public function store(StoreRoomTenantRequest $request, int $roomId): JsonResponse
@@ -35,7 +35,7 @@ class RoomTenantController extends Controller
 
         $room->roomTenants()->create($data);
 
-        return ApiResponse::success(null, 'Room tenant added successfully.', 201);
+        return ApiResponse::success(null, 'Thêm người ở trong phòng thành công.', 201);
     }
 
     public function update(UpdateRoomTenantRequest $request, int $id): JsonResponse
@@ -47,14 +47,14 @@ class RoomTenantController extends Controller
 
         $roomTenant->update($data);
 
-        return ApiResponse::success(null, 'Room tenant updated successfully.');
+        return ApiResponse::success(null, 'Cập nhật người ở trong phòng thành công.');
     }
 
     public function destroy(Request $request, int $id): JsonResponse
     {
         $this->findOwnedRoomTenant($request, $id)->delete();
 
-        return ApiResponse::success(null, 'Room tenant deleted successfully.');
+        return ApiResponse::success(null, 'Xóa người ở trong phòng thành công.');
     }
 
     private function findOwnedRoom(Request $request, int $id): Room

@@ -1,3 +1,4 @@
+import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -28,23 +29,11 @@ export default function RegisterPage() {
     onMutate: () => setGeneralError(''),
     onSuccess: (_, data) => navigate('/verify-email-sent', { state: { email: data.email } }),
     onError: (error) => {
-      const response = error.response?.data
-      const fieldErrors = Object.entries(response?.errors ?? {}).filter(
-        ([, messages]) => Array.isArray(messages) && messages.length > 0,
-      )
-
       form.clearErrors()
       setGeneralError('')
-
-      // Khi có lỗi field, tuyệt đối không dùng message tổng quát của Laravel.
-      if (fieldErrors.length > 0) {
-        fieldErrors.forEach(([field, messages]) => {
-          form.setError(field, { type: 'server', message: messages[0] })
-        })
-        return
-      }
-
-      setGeneralError(response?.message || 'Đăng ký không thành công. Vui lòng thử lại.')
+      // Field validation belongs only under the matching inputs.
+      if (applyApiFieldErrors(error, form.setError)) return
+      setGeneralError(getApiErrorMessage(error))
     },
   })
 

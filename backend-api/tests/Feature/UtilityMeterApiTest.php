@@ -54,7 +54,7 @@ class UtilityMeterApiTest extends TestCase
             $this->auth($l)->postJson("/api/rooms/$r->id/utility-meters", $this->payload(['service_id' => $s->id]))
                 ->assertUnprocessable()
                 ->assertJsonValidationErrors('service_id')
-                ->assertJsonPath('errors.service_id.0', 'The service billing method must be PER_UNIT or TIERED.');
+                ->assertJsonPath('errors.service_id.0', 'Đồng hồ chỉ dùng cho dịch vụ tính theo đơn vị hoặc bậc thang.');
         } $tier = $this->service($r->boardingHouse, ['billing_method' => 'TIERED', 'name' => 'Water']);
         $r->services()->attach($tier->id, ['is_active' => true]);
         $this->auth($l)->postJson("/api/rooms/$r->id/utility-meters", $this->payload(['service_id' => $tier->id]))->assertCreated();
@@ -101,7 +101,7 @@ class UtilityMeterApiTest extends TestCase
         $this->auth($landlord)->postJson("/api/rooms/$room->id/utility-meters", $this->payload(['service_id' => $service->id]))
             ->assertUnprocessable()
             ->assertJsonValidationErrors('service_id')
-            ->assertJsonPath('errors.service_id.0', 'The service must be actively assigned to this room.');
+            ->assertJsonPath('errors.service_id.0', 'Dịch vụ phải được gán và đang áp dụng cho phòng này.');
 
         $this->assertDatabaseCount('utility_meters', 0);
     }
@@ -116,7 +116,7 @@ class UtilityMeterApiTest extends TestCase
         $this->auth($landlord)->postJson("/api/rooms/$room->id/utility-meters", $this->payload(['service_id' => $service->id]))
             ->assertUnprocessable()
             ->assertJsonValidationErrors('service_id')
-            ->assertJsonPath('errors.service_id.0', 'The service must be actively assigned to this room.');
+            ->assertJsonPath('errors.service_id.0', 'Dịch vụ phải được gán và đang áp dụng cho phòng này.');
 
         $this->assertDatabaseCount('utility_meters', 0);
     }
@@ -131,7 +131,7 @@ class UtilityMeterApiTest extends TestCase
         $this->auth($landlord)->postJson("/api/rooms/$room->id/utility-meters", $this->payload(['service_id' => $service->id]))
             ->assertUnprocessable()
             ->assertJsonValidationErrors('service_id')
-            ->assertJsonPath('errors.service_id.0', 'The service must be active.');
+            ->assertJsonPath('errors.service_id.0', 'Dịch vụ phải đang được áp dụng.');
 
         $this->assertDatabaseCount('utility_meters', 0);
     }
