@@ -1,13 +1,16 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import LoginPage from '../pages/auth/LoginPage'
-import RegisterPage from '../pages/auth/RegisterPage'
-import VerifyEmailSentPage from '../pages/auth/VerifyEmailSentPage'
-import EmailVerifiedPage from '../pages/auth/EmailVerifiedPage'
-import GoogleCallbackPage from '../pages/auth/GoogleCallbackPage'
 import BoardingHouseCreatePage from '../pages/boarding-houses/BoardingHouseCreatePage'
 import BoardingHouseDetailPage from '../pages/boarding-houses/BoardingHouseDetailPage'
 import BoardingHouseEditPage from '../pages/boarding-houses/BoardingHouseEditPage'
 import BoardingHouseListPage from '../pages/boarding-houses/BoardingHouseListPage'
+import ChangePasswordPage from '../pages/auth/ChangePasswordPage'
+import EmailVerifiedPage from '../pages/auth/EmailVerifiedPage'
+import ForgotPasswordPage from '../pages/auth/ForgotPasswordPage'
+import GoogleCallbackPage from '../pages/auth/GoogleCallbackPage'
+import LoginPage from '../pages/auth/LoginPage'
+import RegisterPage from '../pages/auth/RegisterPage'
+import ResetPasswordPage from '../pages/auth/ResetPasswordPage'
+import VerifyEmailSentPage from '../pages/auth/VerifyEmailSentPage'
 import DashboardPage from '../pages/dashboard/DashboardPage'
 import RoomCreatePage from '../pages/rooms/RoomCreatePage'
 import RoomDetailPage from '../pages/rooms/RoomDetailPage'
@@ -39,6 +42,8 @@ export default function AppRoutes() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/verify-email-sent" element={<VerifyEmailSentPage />} />
         <Route path="/email-verified" element={<EmailVerifiedPage />} />
         <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
@@ -47,6 +52,7 @@ export default function AppRoutes() {
           <Route path="/invoices/:id/print" element={<InvoicePrintPage />} />
           <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/change-password" element={<ChangePasswordPage />} />
             <Route path="/rooms" element={<ModuleNavigationPage module="rooms" />} />
             <Route path="/contracts" element={<ModuleNavigationPage module="contracts" />} />
             <Route path="/services" element={<ModuleNavigationPage module="services" />} />

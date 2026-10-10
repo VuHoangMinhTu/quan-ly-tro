@@ -25,6 +25,8 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect']);
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback']);
 Route::post('/auth/google/exchange', [GoogleAuthController::class, 'exchange']);
+Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
 Route::post('/webhooks/payos', [PayOSPaymentController::class, 'webhook']);
 Route::post('/email/verification-notification', [AuthController::class, 'resendVerification'])->middleware('throttle:6,1');
 Route::get('/email/verify/{id}/{hash}', function (int $id, string $hash) {
@@ -40,6 +42,7 @@ Route::get('/email/verify/{id}/{hash}', function (int $id, string $hash) {
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+    Route::put('/auth/password', [AuthController::class, 'changePassword']);
 
     Route::get('/boarding-houses', [BoardingHouseController::class, 'index']);
     Route::post('/boarding-houses', [BoardingHouseController::class, 'store']);

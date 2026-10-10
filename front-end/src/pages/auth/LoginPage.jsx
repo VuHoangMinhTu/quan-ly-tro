@@ -73,7 +73,8 @@ export default function LoginPage() {
             {...form.register('password')}
           />
         </label>
-        <p className="mb-3 text-sm text-red-600">{form.formState.errors.password?.message}</p>
+        <p className="mb-2 text-sm text-red-600">{form.formState.errors.password?.message}</p>
+        <p className="mb-4 text-right text-sm"><Link className="font-medium text-slate-700 underline" to="/forgot-password">Quên mật khẩu?</Link></p>
 
         {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
