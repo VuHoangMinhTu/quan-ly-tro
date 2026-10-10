@@ -20,7 +20,7 @@ const { formatMeterPrice, getReadingPreview } = new Function(
     const [year, month, day] = String(value).split('T')[0].split('-')
     return year && month && day ? `${day}/${month}/${year}` : ''
   },
-  (value) => `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(Number(value))} \u0111`,
+  (value) => `${new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(Number(value))} đ`,
 )
 
 test('reading preview uses the initial reading when no earlier reading exists', () => {
@@ -46,6 +46,6 @@ test('reading preview does not pretend an invalid date or value is valid', () =>
 })
 
 test('meter pricing shows a unit price only for per-unit services', () => {
-  assert.equal(formatMeterPrice({ billing_method: 'PER_UNIT', base_price: '3500.00', unit: 'kWh' }), '3.500 \u0111 / kWh')
-  assert.equal(formatMeterPrice({ billing_method: 'TIERED', base_price: null, unit: 'm\u00b3' }), 'Theo b\u1ea3ng gi\u00e1 b\u1eadc thang')
+  assert.equal(formatMeterPrice({ billing_method: 'PER_UNIT', base_price: '3500.00', unit: 'kWh' }), '3.500 đ / kWh')
+  assert.equal(formatMeterPrice({ billing_method: 'TIERED', base_price: null, unit: 'm³' }), 'Theo bảng giá bậc thang')
 })
