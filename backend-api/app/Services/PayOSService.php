@@ -11,6 +11,7 @@ use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\Psr7\HttpFactory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use PayOS\Exceptions\NotFoundException;
 use PayOS\Models\V2\PaymentRequests\CreatePaymentLinkRequest;
@@ -123,7 +124,15 @@ class PayOSService
             // Ghi placeholder CREATING và order_code khi vẫn đang giữ lock. Nhờ đó
             // mọi request đến sau nhìn thấy dấu vết local trước khi gọi PayOS remote.
             $paymentRequest = $invoice->payosPaymentRequests()->create(['amount' => $amount, 'status' => 'CREATING']);
-            $paymentRequest->update(['order_code' => self::ORDER_CODE_OFFSET + $paymentRequest->id]);
+            $orderCode = self::ORDER_CODE_OFFSET + $paymentRequest->id;
+
+            // Description là snapshot của QR này: tính một lần trước khi gọi SDK,
+            // lưu cùng request và dùng đúng giá trị đó để request/signature PayOS
+            // luôn đồng nhất, kể cả khi tên tenant thay đổi về sau.
+            $paymentRequest->update([
+                'order_code' => $orderCode,
+                'description' => $this->buildPaymentDescription($invoice, $orderCode),
+            ]);
 
             return $paymentRequest;
         });
@@ -327,6 +336,7 @@ class PayOSService
             'checkout_url' => $request->checkout_url,
             'qr_code' => $request->qr_code,
             'amount' => (float) $request->amount,
+            'description' => $request->description,
             'status' => $request->status,
             'expired_at' => $request->expired_at,
         ];
@@ -468,7 +478,7 @@ class PayOSService
         $response = $this->client()->paymentRequests->create(new CreatePaymentLinkRequest(
             $request->order_code,
             (int) $request->amount,
-            $this->description($invoice),
+            $request->description,
             $this->redirectUrl('cancel_url', $invoice->id),
             $this->redirectUrl('return_url', $invoice->id),
         ));
@@ -522,9 +532,87 @@ class PayOSService
         return $url.$separator.'invoice_id='.$invoiceId;
     }
 
-    private function description(Invoice $invoice): string
+    /**
+     * Build a tenant-facing transfer description for a newly created PayOS order.
+     *
+     * The limit is config-backed today because the SDK does not expose the
+     * merchant receiving channel's description constraint. It is intentionally a
+     * separate method so a future landlord-specific PayOS configuration can supply
+     * its own limit without changing order/reuse behaviour.
+     */
+    public function buildPaymentDescription(Invoice $invoice, ?int $orderCode = null): string
     {
-        return mb_substr('Thanh toan '.$invoice->invoice_code, 0, 25);
+        $invoice->loadMissing('contract.tenant');
+        $maxLength = $this->descriptionMaxLength();
+        $tenantName = $this->normalizePaymentDescription($invoice->contract?->tenant?->full_name);
+
+        if ($tenantName !== '') {
+            return $this->shortenTenantDescription($tenantName, $maxLength);
+        }
+
+        $invoiceCode = $this->normalizePaymentDescription($invoice->invoice_code);
+        if ($invoiceCode !== '') {
+            return $this->fitFallbackDescription($invoiceCode, $maxLength);
+        }
+
+        // The order code is unique and only used as the final non-empty fallback.
+        return $this->fitFallbackDescription('PAYOS '.($orderCode ?? $invoice->id ?? 'PAYMENT'), $maxLength);
+    }
+
+    private function normalizePaymentDescription(?string $value): string
+    {
+        $ascii = Str::ascii(trim((string) $value));
+        $upper = mb_strtoupper($ascii, 'UTF-8');
+        $safe = preg_replace('/[^A-Z0-9]+/', ' ', $upper) ?? '';
+
+        return trim(preg_replace('/\s+/', ' ', $safe) ?? '');
+    }
+
+    private function shortenTenantDescription(string $tenantName, int $maxLength): string
+    {
+        $suffix = ' CK';
+        $fullDescription = $tenantName.$suffix;
+        if (mb_strlen($fullDescription) <= $maxLength) {
+            return $fullDescription;
+        }
+
+        $availableNameLength = $maxLength - mb_strlen($suffix);
+        if ($availableNameLength <= 0) {
+            return mb_substr('CK', 0, $maxLength);
+        }
+
+        $parts = explode(' ', $tenantName);
+        $lastName = end($parts) ?: '';
+        $initialsAndLastName = implode('', array_map(
+            static fn (string $part): string => mb_substr($part, 0, 1),
+            array_slice($parts, 0, -1),
+        )).$lastName;
+
+        if (mb_strlen($initialsAndLastName) <= $availableNameLength) {
+            return $initialsAndLastName.$suffix;
+        }
+
+        $firstInitialAndLastName = mb_substr($parts[0], 0, 1).$lastName;
+        if (mb_strlen($firstInitialAndLastName) <= $availableNameLength) {
+            return $firstInitialAndLastName.$suffix;
+        }
+
+        return mb_substr($firstInitialAndLastName, 0, $availableNameLength).$suffix;
+    }
+
+    private function fitFallbackDescription(string $value, int $maxLength): string
+    {
+        $compact = str_replace(' ', '', $value);
+        $safe = $compact !== '' ? $compact : 'PAYOS';
+
+        return mb_substr($safe, 0, $maxLength);
+    }
+
+    private function descriptionMaxLength(): int
+    {
+        $configuredLength = (int) config('services.payos.description_max_length', 9);
+
+        return $configuredLength > 0 ? $configuredLength : 9;
     }
 
     private function configuration(string $key): string

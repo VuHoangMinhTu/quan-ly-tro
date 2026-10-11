@@ -17,6 +17,7 @@ class PayOSPaymentRequest extends Model
         'checkout_url',
         'qr_code',
         'amount',
+        'description',
         'status',
         'expired_at',
         'cancelled_at',

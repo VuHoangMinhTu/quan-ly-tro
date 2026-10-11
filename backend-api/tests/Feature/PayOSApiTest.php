@@ -4,11 +4,13 @@ namespace Tests\Feature;
 
 use App\Exceptions\PayOSReconciliationException;
 use App\Models\BoardingHouse;
+use App\Models\Contract;
 use App\Models\Invoice;
 use App\Models\Landlord;
 use App\Models\Payment;
 use App\Models\PayOSPaymentRequest;
 use App\Models\Room;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\PayOSService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -37,6 +39,7 @@ class PayOSApiTest extends TestCase
             'checkout_url' => 'https://pay.example/checkout',
             'qr_code' => '000201010212',
             'amount' => 3_000_000,
+            'description' => 'NGUYEN VAN AN CK',
             'status' => 'PENDING',
         ]);
         $service->shouldReceive('messageFor')->once()->andReturn('Yêu cầu thanh toán payOS đã sẵn sàng.');
@@ -47,7 +50,129 @@ class PayOSApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.payment_request.amount', 3_000_000)
+            ->assertJsonPath('data.payment_request.description', 'NGUYEN VAN AN CK')
             ->assertJsonPath('data.payment_request.checkout_url', 'https://pay.example/checkout');
+    }
+
+    public function test_builds_payment_description_from_the_contract_tenant_name(): void
+    {
+        config(['services.payos.description_max_length' => 64]);
+        [, $invoice] = $this->ownerAndInvoiceWithTenant('Nguyễn Văn An');
+
+        $this->assertSame('NGUYEN VAN AN CK', app(PayOSService::class)->buildPaymentDescription($invoice));
+    }
+
+    public function test_normalizes_vietnamese_accents_in_a_payment_description(): void
+    {
+        config(['services.payos.description_max_length' => 64]);
+        [, $invoice] = $this->ownerAndInvoiceWithTenant('Đỗ Thị Hồng Ngọc');
+
+        $this->assertSame('DO THI HONG NGOC CK', app(PayOSService::class)->buildPaymentDescription($invoice));
+    }
+
+    public function test_a_very_long_tenant_name_is_shortened_deterministically_within_the_configured_limit(): void
+    {
+        config(['services.payos.description_max_length' => 16]);
+        [, $invoice] = $this->ownerAndInvoiceWithTenant('Nguyễn Văn Nguyễn Đức Thanh Long');
+
+        $description = app(PayOSService::class)->buildPaymentDescription($invoice);
+
+        $this->assertSame('NVNDTLONG CK', $description);
+        $this->assertLessThanOrEqual(16, mb_strlen($description));
+    }
+
+    public function test_abbreviates_a_long_tenant_description_to_the_configured_limit(): void
+    {
+        config(['services.payos.description_max_length' => 9]);
+        [, $invoice] = $this->ownerAndInvoiceWithTenant('Đỗ Thị Hồng Ngọc');
+
+        $description = app(PayOSService::class)->buildPaymentDescription($invoice);
+
+        $this->assertSame('DNGOC CK', $description);
+        $this->assertLessThanOrEqual(9, mb_strlen($description));
+    }
+
+    public function test_payment_description_falls_back_to_the_normalized_invoice_code_without_a_contract(): void
+    {
+        config(['services.payos.description_max_length' => 64]);
+        [, $invoice] = $this->ownerAndInvoice();
+        $invoice->update(['invoice_code' => 'HD-10-2026']);
+
+        $this->assertSame('HD102026', app(PayOSService::class)->buildPaymentDescription($invoice->fresh()));
+    }
+
+    public function test_payment_description_falls_back_to_order_code_when_no_name_or_invoice_code_exists(): void
+    {
+        config(['services.payos.description_max_length' => 64]);
+        [, $invoice] = $this->ownerAndInvoice();
+        $invoice->update(['invoice_code' => '']);
+
+        $this->assertSame('PAYOS9000000123', app(PayOSService::class)->buildPaymentDescription($invoice->fresh(), 9_000_000_123));
+    }
+
+    public function test_a_new_payos_request_snapshots_the_description_before_it_is_sent_to_payos(): void
+    {
+        config(['services.payos.description_max_length' => 64]);
+        [, $invoice] = $this->ownerAndInvoiceWithTenant('Nguyễn Văn An');
+        $service = $this->reconciliationService();
+        $service->shouldReceive('createPaymentLink')->once()->withArgs(
+            function (Invoice $createdInvoice, PayOSPaymentRequest $request) use ($invoice): bool {
+                $this->assertTrue($createdInvoice->is($invoice));
+                $this->assertSame('NGUYEN VAN AN CK', $request->description);
+
+                return true;
+            },
+        )->andReturn($this->createdLink(9_000_000_002, 1_000_000));
+
+        $request = $service->createOrReuse($invoice);
+
+        $this->assertSame('NGUYEN VAN AN CK', $request->description);
+        $this->assertDatabaseHas('payos_payment_requests', [
+            'id' => $request->id,
+            'description' => 'NGUYEN VAN AN CK',
+        ]);
+        $this->assertSame('NGUYEN VAN AN CK', $service->payload($request)['description']);
+    }
+
+    public function test_a_usable_legacy_request_is_reused_without_rebuilding_its_description(): void
+    {
+        config(['services.payos.description_max_length' => 9]);
+        [, $invoice] = $this->ownerAndInvoiceWithTenant('Nguyễn Văn An');
+        $request = $this->paymentRequest($invoice, 1_000_000, ['description' => 'LEGACY DESCRIPTION']);
+
+        $result = app(PayOSService::class)->createOrReuse($invoice);
+
+        $this->assertSame($request->id, $result->id);
+        $this->assertSame('LEGACY DESCRIPTION', $result->description);
+        $this->assertDatabaseCount('payos_payment_requests', 1);
+    }
+
+    public function test_webhook_matching_uses_order_code_not_the_description_snapshot(): void
+    {
+        [, $invoice] = $this->ownerAndInvoice(3_000_000);
+        $request = $this->paymentRequest($invoice, 3_000_000, ['description' => 'NGUYEN VAN AN CK']);
+        $data = new WebhookData(
+            $request->order_code,
+            3_000_000,
+            'UNRELATED TRANSFER TEXT',
+            '123',
+            'PAYOS-REFERENCE-DESCRIPTION-TEST',
+            '2026-09-29T10:00:00+07:00',
+            'VND',
+            $request->payment_link_id,
+            '00',
+            'success',
+        );
+        $service = Mockery::mock(PayOSService::class)->makePartial();
+        $service->shouldReceive('verifyWebhook')->once()->andReturn($data);
+        $this->app->instance(PayOSService::class, $service);
+
+        $this->postJson('/api/webhooks/payos', ['code' => '00'])->assertOk();
+
+        $this->assertDatabaseHas('payments', [
+            'invoice_id' => $invoice->id,
+            'external_reference' => 'PAYOS-REFERENCE-DESCRIPTION-TEST',
+        ]);
     }
 
     public function test_reconciliation_recovers_a_pending_request_without_creating_another_order(): void
@@ -200,13 +325,14 @@ class PayOSApiTest extends TestCase
     public function test_invoice_detail_returns_the_current_usable_payos_request(): void
     {
         [$user, $invoice] = $this->ownerAndInvoice(3_000_000);
-        $request = $this->paymentRequest($invoice, 3_000_000);
+        $request = $this->paymentRequest($invoice, 3_000_000, ['description' => 'NGUYEN VAN AN CK']);
 
         $this->withToken($user->createToken('test')->plainTextToken)
             ->getJson("/api/invoices/{$invoice->id}")
             ->assertOk()
             ->assertJsonPath('data.payos_payment_request.id', $request->id)
             ->assertJsonPath('data.payos_payment_request.order_code', $request->order_code)
+            ->assertJsonPath('data.payos_payment_request.description', 'NGUYEN VAN AN CK')
             ->assertJsonPath('data.payos_payment_request.qr_code', '000201010212');
     }
 
@@ -340,7 +466,29 @@ class PayOSApiTest extends TestCase
         return [$user, $invoice];
     }
 
-    private function paymentRequest(Invoice $invoice, int $amount): PayOSPaymentRequest
+    private function ownerAndInvoiceWithTenant(string $tenantName): array
+    {
+        [$user, $invoice] = $this->ownerAndInvoice();
+        $tenant = Tenant::create([
+            'landlord_id' => $user->landlord->id,
+            'full_name' => $tenantName,
+        ]);
+        $contract = Contract::create([
+            'room_id' => $invoice->room_id,
+            'tenant_id' => $tenant->id,
+            'contract_code' => 'PAYOS-CONTRACT-'.(Contract::query()->count() + 1),
+            'start_date' => '2026-09-01',
+            'end_date' => '2027-08-31',
+            'monthly_rent' => 1_000_000,
+            'deposit_amount' => 0,
+            'status' => 'ACTIVE',
+        ]);
+        $invoice->update(['contract_id' => $contract->id]);
+
+        return [$user, $invoice->fresh()];
+    }
+
+    private function paymentRequest(Invoice $invoice, int $amount, array $attributes = []): PayOSPaymentRequest
     {
         return PayOSPaymentRequest::create([
             'invoice_id' => $invoice->id,
@@ -350,6 +498,7 @@ class PayOSApiTest extends TestCase
             'qr_code' => '000201010212',
             'amount' => $amount,
             'status' => 'PENDING',
+            ...$attributes,
         ]);
     }
 

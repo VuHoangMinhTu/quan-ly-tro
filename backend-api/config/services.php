@@ -15,6 +15,7 @@ return [
         'return_url' => env('PAYOS_RETURN_URL'),
         'cancel_url' => env('PAYOS_CANCEL_URL'),
         'webhook_url' => env('PAYOS_WEBHOOK_URL'),
+        'description_max_length' => (int) env('PAYOS_DESCRIPTION_MAX_LENGTH', 9),
     ],
 
     /*

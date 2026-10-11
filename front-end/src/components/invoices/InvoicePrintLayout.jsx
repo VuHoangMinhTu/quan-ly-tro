@@ -139,6 +139,7 @@ function PaymentInfo({ invoice, paymentRequest, remaining }) {
       <p><span>Số tiền cần thanh toán</span><strong>{formatCurrency(remaining)}</strong></p>
       <p><span>Phương thức</span><strong>{hasQr ? 'Chuyển khoản qua payOS' : 'Tiền mặt / Chuyển khoản'}</strong></p>
       {hasQr && <p><span>Mã thanh toán</span><strong>{paymentRequest.order_code}</strong></p>}
+      {hasQr && paymentRequest.description && <p><span>Nội dung chuyển khoản</span><strong>{paymentRequest.description}</strong></p>}
     </div>
   </section>
 }
