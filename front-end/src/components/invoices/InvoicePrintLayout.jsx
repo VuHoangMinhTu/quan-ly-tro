@@ -62,8 +62,8 @@ function PaymentQrCard({ invoice, paymentRequest, remaining }) {
     <strong className="invoice-top-payment-amount">{formatCurrency(remaining)}</strong>
     <span className="invoice-top-payment-status">{invoiceStatusLabels[invoice.status] || invoice.status}</span>
     {hasQr ? <>
-      <div className="invoice-top-qr"><QRCodeSVG value={paymentRequest.qr_code} size={118} level="M" /></div>
-      <span className="invoice-top-qr-label">Quét mã payOS để thanh toán</span>
+      <div className="invoice-top-qr"><QRCodeSVG value={paymentRequest.qr_code} size={100} level="M" /></div>
+      <span className="invoice-top-qr-label">Quét QR payOS để thanh toán</span>
     </> : <div className="invoice-top-payment-fallback"><CreditCard size={25} /><span>Thanh toán tiền mặt hoặc chuyển khoản theo hướng dẫn của chủ trọ.</span></div>}
   </aside>
 }
@@ -86,7 +86,7 @@ function InvoicePrintSummary({ invoice, paymentRequest, remaining }) {
 }
 
 function InvoicePrintItemsTable({ items }) {
-  return <section className="invoice-block invoice-keep-together">
+  return <section className="invoice-block">
     <SectionHeading>Chi tiết các khoản thu</SectionHeading>
     <table className="invoice-items-table">
       <thead><tr><th>STT</th><th>Diễn giải</th><th>Số lượng</th><th>Đơn giá</th><th>Thành tiền</th></tr></thead>
@@ -106,7 +106,7 @@ function UtilitySummary({ items }) {
   const utilityItems = items.filter((item) => utilityUnits[item.type])
   if (utilityItems.length === 0) return null
 
-  return <section className="invoice-block invoice-keep-together">
+  return <section className="invoice-block">
     <SectionHeading>Chi tiết điện nước</SectionHeading>
     <div className="invoice-utility-grid">
       {utilityItems.map((item) => <div key={item.id} className="invoice-utility-card">
@@ -158,7 +158,7 @@ export default function InvoicePrintLayout({ invoice }) {
       <PaymentInfo invoice={invoice} paymentRequest={paymentRequest} remaining={remaining} />
       <Totals invoice={invoice} remaining={remaining} />
     </div>
-    <section className="invoice-note-box invoice-block invoice-keep-together"><SectionHeading>Ghi chú</SectionHeading><p>{invoice.note || 'Không có ghi chú.'}</p></section>
+    {invoice.note?.trim() ? <section className="invoice-note-box invoice-block"><SectionHeading>Ghi chú</SectionHeading><p>{invoice.note}</p></section> : <p className="invoice-empty-note">Không có ghi chú.</p>}
     <footer className="invoice-footer"><strong>Cảm ơn quý khách!</strong><p>Vui lòng thanh toán đúng hạn và giữ hóa đơn này để đối chiếu khi cần.</p></footer>
   </article>
 }

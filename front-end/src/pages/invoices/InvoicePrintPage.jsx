@@ -35,7 +35,7 @@ export default function InvoicePrintPage() {
   }
 
   return <main className="invoice-print-page">
-    <nav className="invoice-print-actions" aria-label="Thao tác in hóa đơn">
+    <nav className="invoice-print-actions no-print" aria-label="Thao tác in hóa đơn">
       <Link to={`/invoices/${id}`}><ArrowLeft size={17} /> Quay lại</Link>
       <button type="button" onClick={printInvoice}><Printer size={17} /> In hóa đơn</button>
     </nav>
