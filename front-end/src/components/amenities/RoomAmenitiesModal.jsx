@@ -45,7 +45,7 @@ export default function RoomAmenitiesModal({ room, onClose }) {
       room_code: room.room_code,
       room_name: room.room_name,
       area: room.area,
-      monthly_rent: Number(room.monthly_rent),
+      monthly_rent: room.monthly_rent == null ? null : Number(room.monthly_rent),
       max_tenants: room.max_tenants,
       status: room.status,
       description: room.description,

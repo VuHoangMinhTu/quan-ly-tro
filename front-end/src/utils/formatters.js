@@ -19,7 +19,7 @@ export function formatCurrency(value) {
 }
 
 export function formatArea(value) {
-  return value === null || value === undefined ? '—' : `${Number(value)} m²`
+  return value == null || value === '' ? 'Chưa thiết lập' : new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(Number(value)) + ' m²'
 }
 
 export function formatUtilityValue(value) {

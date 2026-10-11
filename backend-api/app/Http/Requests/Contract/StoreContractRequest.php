@@ -35,7 +35,13 @@ class StoreContractRequest extends FormRequest
 
     public function withValidator(Validator $validator): void
     {
-        $validator->after(fn (Validator $validator) => $this->validateActiveContractOverlap($validator, $this->ownedRoom()));
+        $validator->after(function (Validator $validator): void {
+            $room = $this->ownedRoom();
+            if ($room && $room->monthly_rent === null) {
+                $validator->errors()->add('monthly_rent', 'Phòng chưa được thiết lập giá thuê. Vui lòng cập nhật giá thuê trước.');
+            }
+            $this->validateActiveContractOverlap($validator, $room);
+        });
     }
 
     private function ownedRoom(): ?Room

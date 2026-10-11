@@ -9,25 +9,20 @@ import { roomKeys } from '../../api/roomKeys'
 import MoneyInput from '../ui/MoneyInput'
 
 const optionalNumber = z.preprocess(
-  (value) => (value === '' || value === null || Number.isNaN(value) ? undefined : Number(value)),
-  z.number().min(0).optional(),
+  (value) => (value === '' || value == null || Number.isNaN(value) ? null : Number(value)),
+  z.number({ error: 'Vui lòng nhập số hợp lệ' }).min(0, 'Giá trị phải từ 0 trở lên').nullable(),
 )
 
 const optionalInteger = z.preprocess(
-  (value) => (value === '' || value === null || Number.isNaN(value) ? undefined : Number(value)),
-  z.number().int('Số người phải là số nguyên').min(1, 'Tối đa ít nhất 1 người').optional(),
-)
-
-const requiredNumber = z.preprocess(
-  (value) => (value === '' || value === null || Number.isNaN(value) ? undefined : Number(value)),
-  z.number({ error: 'Vui lòng nhập giá thuê' }).min(0, 'Giá thuê phải từ 0 trở lên'),
+  (value) => (value === '' || value == null || Number.isNaN(value) ? null : Number(value)),
+  z.number().int('Số người phải là số nguyên').min(1, 'Tối đa ít nhất 1 người').nullable(),
 )
 
 const schema = z.object({
   room_code: z.string().trim().min(1, 'Vui lòng nhập mã phòng').max(50),
   room_name: z.string().max(255).optional(),
   area: optionalNumber,
-  monthly_rent: requiredNumber,
+  monthly_rent: optionalNumber,
   max_tenants: optionalInteger,
   status: z.enum(['AVAILABLE', 'RENTED', 'RESERVED', 'MAINTENANCE']),
   description: z.string().optional(),
@@ -94,7 +89,7 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
         </div>
         <div>
           <label htmlFor="room-rent" className="block text-sm font-medium text-slate-700">Giá thuê hàng tháng</label>
-          <Controller name="monthly_rent" control={form.control} render={({ field }) => <MoneyInput {...field} id="room-rent" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="0" />} />
+          <Controller name="monthly_rent" control={form.control} render={({ field }) => <MoneyInput {...field} id="room-rent" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="Chưa thiết lập" />} />
           {errors.monthly_rent && <p className="mt-1 text-sm text-red-600">{errors.monthly_rent.message}</p>}
         </div>
         <div>

@@ -46,6 +46,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
     Route::get('/boarding-houses', [BoardingHouseController::class, 'index']);
     Route::post('/boarding-houses', [BoardingHouseController::class, 'store']);
+    Route::post('/boarding-houses/with-rooms', [BoardingHouseController::class, 'storeWithRooms']);
     Route::get('/boarding-houses/{id}', [BoardingHouseController::class, 'show']);
     Route::put('/boarding-houses/{id}', [BoardingHouseController::class, 'update']);
     Route::delete('/boarding-houses/{id}', [BoardingHouseController::class, 'destroy']);

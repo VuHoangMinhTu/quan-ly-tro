@@ -18,6 +18,7 @@ export default function ContractCreatePage() {
   if (roomQuery.isError) return <p className="text-red-600">{getApiErrorMessage(roomQuery.error)}</p>
 
   const room = roomQuery.data.data.data
+  if (room.monthly_rent == null) return <section className="max-w-3xl"><Link to={"/rooms/" + roomId} className="text-sm text-slate-600">← Quay lại phòng</Link><h2 className="mt-3 text-2xl font-bold">Thêm hợp đồng</h2><p className="mt-4 rounded-lg bg-amber-50 p-4 text-sm text-amber-900">Phòng chưa được thiết lập giá thuê. Vui lòng cập nhật giá thuê trước.</p><Link to={"/rooms/" + roomId + "/edit"} className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">Cập nhật giá thuê</Link></section>
   const submit = async (payload) => {
     await createMutation.mutateAsync(payload)
     await Promise.all([

@@ -27,7 +27,7 @@ export default function RoomCard({ room, actions }) {
           {statusLabels[room.status] || room.status}
         </span>
       </div>
-      <p className="mt-5 text-xl font-semibold text-slate-900">{formatCurrency(room.monthly_rent)}<span className="text-sm font-normal text-slate-500">/tháng</span></p>
+      <p className="mt-5 text-xl font-semibold text-slate-900">{room.monthly_rent == null ? 'Chưa thiết lập giá thuê' : formatCurrency(room.monthly_rent)}{room.monthly_rent != null && <span className="text-sm font-normal text-slate-500">/tháng</span>}</p>
       <div className="mt-4 flex items-center gap-4 text-sm text-slate-600">
         <span>{formatArea(room.area)}</span>
         <span className="inline-flex items-center gap-1"><Users size={15} /> {room.max_tenants ? `Tối đa ${room.max_tenants}` : 'Chưa đặt'}</span>

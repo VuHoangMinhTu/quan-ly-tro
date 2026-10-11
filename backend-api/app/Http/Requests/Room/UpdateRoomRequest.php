@@ -56,7 +56,7 @@ class UpdateRoomRequest extends FormRequest
             ],
 
             'monthly_rent' => [
-                'required',
+                'nullable',
                 'numeric',
                 'min:0',
             ],

@@ -72,7 +72,7 @@ export default function RoomDetailPage() {
       <div className="rounded-xl bg-white p-6 shadow-sm">
         <h3 className="text-lg font-semibold">Thông tin phòng</h3>
         <dl className="mt-5 grid gap-5 sm:grid-cols-2">
-          <div><dt className="text-sm text-slate-500">Giá thuê</dt><dd className="mt-1 font-medium">{formatCurrency(room.monthly_rent)}/tháng</dd></div>
+          <div><dt className="text-sm text-slate-500">Giá thuê</dt><dd className="mt-1 font-medium">{room.monthly_rent == null ? 'Chưa thiết lập giá thuê' : formatCurrency(room.monthly_rent) + '/tháng'}</dd></div>
           <div><dt className="text-sm text-slate-500">Diện tích</dt><dd className="mt-1 font-medium">{formatArea(room.area)}</dd></div>
           <div><dt className="text-sm text-slate-500">Số người tối đa</dt><dd className="mt-1 font-medium">{room.max_tenants || 'Chưa đặt'}</dd></div>
           <div><dt className="text-sm text-slate-500">Trạng thái</dt><dd className="mt-1 font-medium">{room.status}</dd></div>

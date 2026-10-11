@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Custom\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\BoardingHouse\StoreBoardingHouseRequest;
+use App\Http\Requests\BoardingHouse\StoreBoardingHouseWithRoomsRequest;
 use App\Http\Requests\BoardingHouse\UpdateBoardingHouseRequest;
 use App\Models\BoardingHouse;
 use App\Models\Landlord;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class BoardingHouseController extends Controller
 {
@@ -31,6 +33,36 @@ class BoardingHouseController extends Controller
             ->create($request->validated());
 
         return ApiResponse::success(null, 'Tạo nhà trọ thành công.', 201);
+    }
+
+    public function storeWithRooms(StoreBoardingHouseWithRoomsRequest $request): JsonResponse
+    {
+        $data = $request->validated();
+
+        $boardingHouse = DB::transaction(function () use ($request, $data): BoardingHouse {
+            // Both ownership keys are assigned by relations, never by the client.
+            $house = $this->landlordBoardingHouses($request)->create($data['boarding_house']);
+            foreach ($data['rooms'] as $room) {
+                $house->rooms()->create([
+                    'room_code' => $room['room_code'],
+                    'area' => $room['area'] ?? null,
+                    'monthly_rent' => $room['monthly_rent'] ?? null,
+                    'max_tenants' => $room['max_tenants'] ?? null,
+                    'status' => 'AVAILABLE',
+                ]);
+            }
+
+            return $house;
+        });
+
+        $count = count($data['rooms']);
+
+        // Only return the generated ID needed to open the new house detail.
+        return ApiResponse::success(
+            ['id' => $boardingHouse->id, 'rooms_count' => $count],
+            "Đã tạo nhà trọ và {$count} phòng thành công.",
+            201,
+        );
     }
 
     // tương tự như get nhưng theo id, Lấy chi tiết một bản ghi

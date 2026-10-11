@@ -192,3 +192,27 @@ test('create caches the returned room with amenities, invalidates its list and o
     .map((node) => node.props.children)
   assert.deepEqual(displayedAmenities, ['Bàn ghế', 'Máy lạnh'])
 })
+
+test('blank room numeric fields submit null, while a zero rent stays zero', async () => {
+  const harness = await roomFormHarness()
+  harness.form.setValue('monthly_rent', '')
+  await harness.submit()
+  assert.equal(harness.submitted[0].monthly_rent, null)
+  assert.equal(harness.submitted[0].area, null)
+  assert.equal(harness.submitted[0].max_tenants, null)
+  harness.form.setValue('monthly_rent', 0)
+  await harness.submit()
+  assert.equal(harness.submitted[1].monthly_rent, 0)
+})
+
+test('edit clears existing area, rent and occupancy limit with explicit nulls', async () => {
+  const harness = await roomFormHarness(undefined, { room_code: '101', monthly_rent: 3800000, area: 20, max_tenants: 2 })
+  harness.form.setValue('monthly_rent', '')
+  harness.form.setValue('area', Number.NaN)
+  harness.form.setValue('max_tenants', Number.NaN)
+  await harness.submit()
+  assert.equal(harness.submitted.length, 1)
+  assert.equal(harness.submitted[0].monthly_rent, null)
+  assert.equal(harness.submitted[0].area, null)
+  assert.equal(harness.submitted[0].max_tenants, null)
+})
