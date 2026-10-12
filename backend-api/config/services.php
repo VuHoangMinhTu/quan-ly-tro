@@ -15,7 +15,11 @@ return [
         'return_url' => env('PAYOS_RETURN_URL'),
         'cancel_url' => env('PAYOS_CANCEL_URL'),
         'webhook_url' => env('PAYOS_WEBHOOK_URL'),
-        'description_max_length' => (int) env('PAYOS_DESCRIPTION_MAX_LENGTH', 9),
+        // 9 for non-linked bank accounts; 0 disables BeeHouse's length limit
+        // for a linked channel. Invalid/empty values must not enable this mode.
+        'description_max_length' => filter_var(env('PAYOS_DESCRIPTION_MAX_LENGTH', 9), FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 0, 'default' => 9],
+        ]),
     ],
 
     /*

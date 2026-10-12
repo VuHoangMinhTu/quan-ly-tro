@@ -547,6 +547,13 @@ class PayOSService
         $tenantName = $this->normalizePaymentDescription($invoice->contract?->tenant?->full_name);
 
         if ($tenantName !== '') {
+            $fullDescription = $tenantName.' CK';
+            if ($maxLength === null || mb_strlen($fullDescription) <= $maxLength) {
+                return $fullDescription;
+            }
+
+            // Abbreviate only after the full name plus suffix exceeds the
+            // receiving channel's configured limit (including spaces).
             return $this->shortenTenantDescription($tenantName, $maxLength);
         }
 
@@ -571,11 +578,6 @@ class PayOSService
     private function shortenTenantDescription(string $tenantName, int $maxLength): string
     {
         $suffix = ' CK';
-        $fullDescription = $tenantName.$suffix;
-        if (mb_strlen($fullDescription) <= $maxLength) {
-            return $fullDescription;
-        }
-
         $availableNameLength = $maxLength - mb_strlen($suffix);
         if ($availableNameLength <= 0) {
             return mb_substr('CK', 0, $maxLength);
@@ -600,17 +602,22 @@ class PayOSService
         return mb_substr($firstInitialAndLastName, 0, $availableNameLength).$suffix;
     }
 
-    private function fitFallbackDescription(string $value, int $maxLength): string
+    private function fitFallbackDescription(string $value, ?int $maxLength): string
     {
         $compact = str_replace(' ', '', $value);
         $safe = $compact !== '' ? $compact : 'PAYOS';
 
-        return mb_substr($safe, 0, $maxLength);
+        return $maxLength === null ? $safe : mb_substr($safe, 0, $maxLength);
     }
 
-    private function descriptionMaxLength(): int
+    /** Zero explicitly disables application truncation for a linked channel. */
+    private function descriptionMaxLength(): ?int
     {
         $configuredLength = (int) config('services.payos.description_max_length', 9);
+
+        if ($configuredLength === 0) {
+            return null;
+        }
 
         return $configuredLength > 0 ? $configuredLength : 9;
     }

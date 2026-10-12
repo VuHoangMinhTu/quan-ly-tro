@@ -14,6 +14,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\PayOSService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Mockery;
 use PayOS\Exceptions\NotFoundException;
 use PayOS\Exceptions\WebhookException;
@@ -68,6 +69,176 @@ class PayOSApiTest extends TestCase
         [, $invoice] = $this->ownerAndInvoiceWithTenant('Đỗ Thị Hồng Ngọc');
 
         $this->assertSame('DO THI HONG NGOC CK', app(PayOSService::class)->buildPaymentDescription($invoice));
+    }
+
+    #[DataProvider('tenantDescriptionLimits')]
+    public function test_full_name_is_kept_when_it_fits_and_only_shortened_when_needed(string $name, int $limit, string $expected): void
+    {
+        config(['services.payos.description_max_length' => $limit]);
+        [, $invoice] = $this->ownerAndInvoiceWithTenant($name);
+
+        $description = app(PayOSService::class)->buildPaymentDescription($invoice);
+
+        $this->assertSame($expected, $description);
+        $this->assertLessThanOrEqual($limit, mb_strlen($description));
+    }
+
+    public static function tenantDescriptionLimits(): array
+    {
+        return [
+            'Minh Tu fits exactly at ten' => ['Minh Tú', 10, 'MINH TU CK'],
+            'Minh Tu needs abbreviation at nine' => ['Minh Tú', 9, 'MTU CK'],
+            'full Vietnamese name fits exactly' => ['Nguyễn Văn An', 16, 'NGUYEN VAN AN CK'],
+            'punctuation and repeated whitespace' => ["  Nguyễn\tThị   Quế-Hương!! ", 32, 'NGUYEN THI QUE HUONG CK'],
+            'minimal positive limit remains nonempty' => ['Minh Tú', 1, 'C'],
+        ];
+    }
+
+    public function test_linked_channel_keeps_the_full_name_with_unlimited_description_setting(): void
+    {
+        config(['services.payos.description_max_length' => 0]);
+        [, $invoice] = $this->ownerAndInvoiceWithTenant('Minh Tú');
+
+        $this->assertSame('MINH TU CK', app(PayOSService::class)->buildPaymentDescription($invoice));
+    }
+
+    #[DataProvider('descriptionEnvironmentValues')]
+    public function test_description_config_only_enables_unlimited_mode_for_explicit_zero(string $value, int $expected): void
+    {
+        $key = 'PAYOS_DESCRIPTION_MAX_LENGTH';
+        $hadEnv = array_key_exists($key, $_ENV);
+        $hadServer = array_key_exists($key, $_SERVER);
+        $previousEnv = $_ENV[$key] ?? null;
+        $previousServer = $_SERVER[$key] ?? null;
+        $previousProcess = getenv($key);
+
+        try {
+            $_ENV[$key] = $value;
+            $_SERVER[$key] = $value;
+            putenv($key.'='.$value);
+            $services = require config_path('services.php');
+
+            $this->assertSame($expected, $services['payos']['description_max_length']);
+        } finally {
+            if ($hadEnv) {
+                $_ENV[$key] = $previousEnv;
+            } else {
+                unset($_ENV[$key]);
+            }
+            if ($hadServer) {
+                $_SERVER[$key] = $previousServer;
+            } else {
+                unset($_SERVER[$key]);
+            }
+            putenv($previousProcess === false ? $key : $key.'='.$previousProcess);
+        }
+    }
+
+    public static function descriptionEnvironmentValues(): array
+    {
+        return [
+            'explicit unlimited' => ['0', 0],
+            'non-linked channel' => ['9', 9],
+            'finite limit' => ['32', 32],
+            'empty must not mean unlimited' => ['', 9],
+            'invalid must not mean unlimited' => ['invalid', 9],
+            'negative must not mean unlimited' => ['-1', 9],
+        ];
+    }
+
+    public function test_unlimited_new_request_snapshots_a_full_description_longer_than_255_characters(): void
+    {
+        config(['services.payos.description_max_length' => 0]);
+        $name = str_repeat('A', 255);
+        $expected = $name.' CK';
+        [, $invoice] = $this->ownerAndInvoiceWithTenant($name);
+        $service = $this->reconciliationService();
+        $service->shouldReceive('createPaymentLink')->once()->withArgs(
+            function (Invoice $createdInvoice, PayOSPaymentRequest $request) use ($expected): bool {
+                $this->assertSame($expected, $request->description);
+
+                return true;
+            },
+        )->andReturn($this->createdLink(9_000_000_002, 1_000_000));
+
+        $request = $service->createOrReuse($invoice);
+
+        $this->assertSame($expected, $service->payload($request)['description']);
+        $this->assertDatabaseHas('payos_payment_requests', ['id' => $request->id, 'description' => $expected]);
+        $this->assertSame('text', Schema::getColumnType('payos_payment_requests', 'description'));
+    }
+
+    public function test_description_migration_refuses_a_rollback_that_would_truncate_a_snapshot(): void
+    {
+        [, $invoice] = $this->ownerAndInvoice();
+        $description = str_repeat('A', 255).' CK';
+        $request = $this->paymentRequest($invoice, 1_000_000, ['description' => $description]);
+        $migration = require database_path('migrations/2026_10_12_184309_expand_payos_payment_description_to_text.php');
+
+        try {
+            $migration->down();
+            $this->fail('A historical description must never be truncated by a rollback.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Cannot restore VARCHAR(255) while longer payOS descriptions exist.', $exception->getMessage());
+        }
+
+        $this->assertSame('text', Schema::getColumnType('payos_payment_requests', 'description'));
+        $this->assertDatabaseHas('payos_payment_requests', ['id' => $request->id, 'description' => $description]);
+    }
+
+    public function test_unlimited_fallback_preserves_the_entire_normalized_invoice_code(): void
+    {
+        config(['services.payos.description_max_length' => 0]);
+        [, $invoice] = $this->ownerAndInvoice();
+        $invoice->update(['invoice_code' => 'HD-P101-2026-10']);
+
+        $this->assertSame('HDP101202610', app(PayOSService::class)->buildPaymentDescription($invoice->fresh()));
+    }
+
+    public function test_unlimited_mode_reuses_an_existing_qr_without_rewriting_the_description(): void
+    {
+        [, $invoice] = $this->ownerAndInvoiceWithTenant('Minh Tú');
+        $existing = $this->paymentRequest($invoice, 1_000_000, ['description' => 'MTU CK']);
+        config(['services.payos.description_max_length' => 0]);
+        $service = $this->reconciliationService();
+        $service->shouldReceive('createPaymentLink')->never();
+        $service->shouldReceive('fetchPaymentLink')->never();
+
+        $result = $service->createOrReuse($invoice);
+
+        $this->assertSame($existing->id, $result->id);
+        $this->assertSame('MTU CK', $result->description);
+        $this->assertDatabaseCount('payos_payment_requests', 1);
+        $this->assertDatabaseHas('payos_payment_requests', ['id' => $existing->id, 'description' => 'MTU CK']);
+    }
+
+    #[DataProvider('reusableDescriptionStatuses')]
+    public function test_increasing_limit_does_not_replace_or_rewrite_a_usable_request(string $status): void
+    {
+        config(['services.payos.description_max_length' => 9]);
+        [, $invoice] = $this->ownerAndInvoiceWithTenant('Minh Tú');
+        $request = $this->paymentRequest($invoice, 1_000_000, ['description' => 'MTU CK', 'status' => $status]);
+        $service = $this->reconciliationService();
+        $service->shouldReceive('createPaymentLink')->never();
+        $service->shouldReceive('fetchPaymentLink')->never();
+        config(['services.payos.description_max_length' => 32]);
+
+        $result = $service->createOrReuse($invoice);
+
+        $this->assertSame($request->id, $result->id);
+        $this->assertSame('MTU CK', $service->payload($result)['description']);
+        $this->assertSame('reused', $result->getAttribute('_payos_action'));
+        $this->assertDatabaseHas('payos_payment_requests', ['id' => $request->id, 'description' => 'MTU CK', 'status' => $status]);
+        $this->assertDatabaseCount('payos_payment_requests', 1);
+    }
+
+    public static function reusableDescriptionStatuses(): array
+    {
+        return [
+            'pending' => ['PENDING'],
+            'processing' => ['PROCESSING'],
+            'active' => ['ACTIVE'],
+        ];
     }
 
     public function test_a_very_long_tenant_name_is_shortened_deterministically_within_the_configured_limit(): void
