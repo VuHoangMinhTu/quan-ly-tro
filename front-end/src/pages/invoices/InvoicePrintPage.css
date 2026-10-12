@@ -1,4 +1,4 @@
-@page { size: A4 portrait; margin: 7mm 8mm; }
+@page { size: A4 portrait; margin: 6mm 7mm; }
 
 .invoice-print-page { min-height: 100vh; padding: 28px; background: #dbe4e7; color: #18312c; font-family: 'Be Vietnam Pro', Arial, 'Helvetica Neue', sans-serif; }
 .invoice-print-actions { display: flex; width: min(210mm, 100%); margin: 0 auto 16px; justify-content: space-between; gap: 12px; }
@@ -97,12 +97,29 @@
 }
 
 @media print {
-  html, body, #root { height: auto !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+  html, body, #root { height: auto !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; background: #fff !important; }
+  .invoice-print-page, .invoice-print-page *, .invoice-print-page *::before, .invoice-print-page *::after { box-sizing: border-box; }
   body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-  .invoice-print-page { height: auto; min-height: 0; margin: 0; padding: 0; background: #fff; }
+  .invoice-print-page { height: auto; min-height: 0; margin: 0; padding: 0; overflow: visible; background: #fff; }
   .no-print, .invoice-print-actions { display: none !important; }
   /* Page margins provide the gutter; another A4-sized box would exceed it. */
-  .invoice-sheet { width: 100%; height: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+  .invoice-sheet { display: block; width: 100%; height: auto; min-height: 0; margin: 0; padding: 0; overflow: visible; box-shadow: none; line-height: 1.35; }
+  /* Grid already stretches the QR card. A percentage minimum can feed back
+     into auto-sized grid rows during WebKit print layout. */
+  .invoice-top-payment-card { min-height: 0; }
+  /* Keep only small cards/rows/totals together, not the entire information
+     section. Long content must be allowed to fragment on later pages. */
+  .invoice-summary-layout, .invoice-payment-details { break-inside: auto; page-break-inside: auto; }
+  .invoice-summary-details, .invoice-financial-row { min-height: 0; }
+  /* Leave a little breathing room for printer/font-metric differences without
+     scaling the sheet or changing screen typography, QR size, or content. */
+  .invoice-document-header { padding-bottom: 6px; }
+  .invoice-title-band { margin: 5px 0; }
+  .invoice-block { margin-top: 6px; }
+  .invoice-section-heading { margin-bottom: 4px; }
+  .invoice-financial-row { margin-top: 6px; }
+  .invoice-empty-note { margin-top: 5px; }
+  .invoice-footer { position: static; height: auto; min-height: 0; margin-top: 4px; margin-bottom: 0; padding-top: 4px; padding-bottom: 0; break-inside: auto; page-break-inside: auto; }
   .invoice-items-table { overflow: visible; }
   .invoice-items-table thead { display: table-header-group; }
   .invoice-items-table tfoot { display: table-footer-group; }
