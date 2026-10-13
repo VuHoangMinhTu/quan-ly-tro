@@ -47,14 +47,14 @@ export default function RoomServicesModal({ room, assignedServices, onClose }) {
   }, [onClose, saveMutation.isPending])
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="room-services-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+    <div role="dialog" aria-modal="true" aria-labelledby="room-services-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+      <div className="max-h-[90dvh] w-full max-w-2xl overscroll-contain overflow-y-auto min-w-0 rounded-xl bg-white p-4 sm:p-6 shadow-xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 id="room-services-title" className="text-lg font-semibold">Dịch vụ áp dụng</h3>
             <p className="mt-1 text-sm text-slate-600">Chọn dịch vụ cho phòng {room.room_code}. Không chọn dịch vụ nào vẫn hợp lệ.</p>
           </div>
-          <button type="button" aria-label="Đóng" disabled={saveMutation.isPending} onClick={onClose} className="text-lg text-slate-500 hover:text-slate-950 disabled:opacity-50">✕</button>
+          <button type="button" aria-label="Đóng" disabled={saveMutation.isPending} onClick={onClose} className="flex size-11 shrink-0 items-center justify-center rounded-lg text-lg text-slate-500 hover:bg-slate-100 hover:text-slate-950 disabled:opacity-50">✕</button>
         </div>
         <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">Mỗi phòng chỉ áp dụng một dịch vụ Điện và một dịch vụ Nước. Chọn dịch vụ mới sẽ thay dịch vụ cùng loại đang chọn. Các hóa đơn đã lập không thay đổi.</p>
         {suspendedServices.length > 0 && <p className="mt-3 text-sm text-slate-600">Dịch vụ đã tạm ngưng không thể chọn và sẽ được bỏ áp dụng khi lưu: {suspendedServices.map((service) => service.name).join(', ')}.</p>}
@@ -64,14 +64,14 @@ export default function RoomServicesModal({ room, assignedServices, onClose }) {
               : <div className="mt-5 grid gap-3 sm:grid-cols-2">{catalog.map((service) => {
                 const checked = selectedIds.includes(Number(service.id))
                 return <label key={service.id} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 text-sm transition ${checked ? 'border-slate-900 bg-slate-50' : 'border-slate-200 hover:bg-slate-50'}`}>
-                  <input type="checkbox" checked={checked} disabled={saveMutation.isPending} onChange={() => { setSaveError(''); setSelectedIds((ids) => toggleRoomService(ids, service, catalog)) }} className="mt-1 accent-slate-900" />
-                  <span className="min-w-0"><span className="block font-semibold text-slate-900">{service.name}</span><span className="mt-1 block text-slate-500">{SERVICE_TYPE_LABELS[service.type]} · {BILLING_METHOD_LABELS[service.billing_method]}</span><span className="mt-2 block font-medium">{formatRoomServicePrice(service)}</span>{['PER_UNIT', 'TIERED'].includes(service.billing_method) && <span className="mt-1 block text-xs text-slate-500">Cần đồng hồ và chỉ số để lập hóa đơn.</span>}</span>
+                  <input type="checkbox" checked={checked} disabled={saveMutation.isPending} onChange={() => { setSaveError(''); setSelectedIds((ids) => toggleRoomService(ids, service, catalog)) }} className="mt-1 size-5 shrink-0 accent-slate-900" />
+                  <span className="min-w-0"><span className="block break-words font-semibold text-slate-900">{service.name}</span><span className="mt-1 block text-slate-500">{SERVICE_TYPE_LABELS[service.type]} · {BILLING_METHOD_LABELS[service.billing_method]}</span><span className="mt-2 block break-words font-medium">{formatRoomServicePrice(service)}</span>{['PER_UNIT', 'TIERED'].includes(service.billing_method) && <span className="mt-1 block text-xs text-slate-500">Cần đồng hồ và chỉ số để lập hóa đơn.</span>}</span>
                 </label>
               })}</div>}
         {saveError && <p role="alert" className="mt-4 text-sm text-red-600">{saveError}</p>}
-        <div className="mt-6 flex justify-end gap-3">
-          <button type="button" disabled={saveMutation.isPending} onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium disabled:opacity-50">Hủy</button>
-          <button type="button" disabled={catalogQuery.isPending || catalogQuery.isError || saveMutation.isPending} onClick={() => { setSaveError(''); saveMutation.mutate() }} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">{saveMutation.isPending ? 'Đang lưu...' : 'Lưu dịch vụ'}</button>
+        <div className="mt-6 flex flex-wrap justify-end gap-3">
+          <button type="button" disabled={saveMutation.isPending} onClick={onClose} className="min-h-11 sm:min-h-0 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium disabled:opacity-50">Hủy</button>
+          <button type="button" disabled={catalogQuery.isPending || catalogQuery.isError || saveMutation.isPending} onClick={() => { setSaveError(''); saveMutation.mutate() }} className="min-h-11 sm:min-h-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">{saveMutation.isPending ? 'Đang lưu...' : 'Lưu dịch vụ'}</button>
         </div>
       </div>
     </div>

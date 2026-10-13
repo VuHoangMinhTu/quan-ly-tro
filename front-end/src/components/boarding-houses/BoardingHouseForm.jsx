@@ -45,14 +45,14 @@ export default function BoardingHouseForm({ initialValues = emptyValues, onSubmi
   const { errors, isSubmitting } = form.formState
 
   return (
-    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-5 rounded-xl bg-white p-6 shadow-sm">
+    <form onSubmit={form.handleSubmit(handleSubmit)} className="min-w-0 break-words space-y-5 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
       <div>
         <label className="block text-sm font-medium text-slate-700" htmlFor="boarding-house-name">
           Tên nhà trọ
         </label>
         <input
           id="boarding-house-name"
-          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+          className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
           {...form.register('name')}
         />
         {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
@@ -64,7 +64,7 @@ export default function BoardingHouseForm({ initialValues = emptyValues, onSubmi
         </label>
         <input
           id="boarding-house-address"
-          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+          className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
           {...form.register('address')}
         />
         {errors.address && <p className="mt-1 text-sm text-red-600">{errors.address.message}</p>}
@@ -77,7 +77,7 @@ export default function BoardingHouseForm({ initialValues = emptyValues, onSubmi
         <textarea
           id="boarding-house-description"
           rows="4"
-          className="mt-1 w-full resize-y rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+          className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 resize-y rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
           {...form.register('description')}
         />
         {errors.description && <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>}
@@ -87,7 +87,7 @@ export default function BoardingHouseForm({ initialValues = emptyValues, onSubmi
 
       <button
         disabled={isSubmitting}
-        className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full sm:w-auto min-h-11 sm:min-h-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isSubmitting ? 'Đang lưu...' : submitLabel}
       </button>

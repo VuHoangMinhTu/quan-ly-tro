@@ -22,14 +22,14 @@ export default function RoomListPage() {
   const rooms = roomsQuery.data.data.data || []
 
   return (
-    <section>
-      <Link to={`/boarding-houses/${boardingHouseId}`} className="text-sm text-slate-600 hover:text-slate-950">← {boardingHouse.name}</Link>
-      <div className="mb-6 mt-3 flex flex-wrap items-center justify-between gap-3">
+    <section className="min-w-0">
+      <Link to={`/boarding-houses/${boardingHouseId}`} className="max-w-full break-words text-sm text-slate-600 hover:text-slate-950 inline-flex min-h-11 items-center lg:min-h-0">← {boardingHouse.name}</Link>
+      <div className="mb-6 mt-3 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Phòng</h2>
-          <p className="mt-1 text-sm text-slate-600">{boardingHouse.name}</p>
+          <h2 className="break-words text-xl font-bold sm:text-2xl">Phòng</h2>
+          <p className="mt-1 break-words text-sm text-slate-600">{boardingHouse.name}</p>
         </div>
-        <Link to={`/boarding-houses/${boardingHouseId}/rooms/new`} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+        <Link to={`/boarding-houses/${boardingHouseId}/rooms/new`} className="inline-flex min-h-11 sm:min-h-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
           <Plus size={17} /> Thêm phòng
         </Link>
       </div>
@@ -37,7 +37,7 @@ export default function RoomListPage() {
       {rooms.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
           <p className="font-medium">Nhà trọ này chưa có phòng.</p>
-          <Link className="mt-4 inline-block text-sm font-medium underline" to={`/boarding-houses/${boardingHouseId}/rooms/new`}>Thêm phòng</Link>
+          <Link className="mt-4 inline-flex min-h-11 sm:min-h-0 items-center text-sm font-medium underline" to={`/boarding-houses/${boardingHouseId}/rooms/new`}>Thêm phòng</Link>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -45,7 +45,7 @@ export default function RoomListPage() {
             <RoomCard
               key={room.id}
               room={room}
-              actions={<div className="flex gap-4 text-sm font-medium"><Link to={`/rooms/${room.id}`} className="text-slate-700 hover:text-slate-950">Xem</Link><Link to={`/rooms/${room.id}/edit`} className="text-slate-700 hover:text-slate-950">Sửa</Link></div>}
+              actions={<div className="flex flex-wrap gap-3 text-sm font-medium"><Link to={`/rooms/${room.id}`} className="inline-flex min-h-11 sm:min-h-0 items-center rounded-lg px-2 text-slate-700 hover:text-slate-950">Xem</Link><Link to={`/rooms/${room.id}/edit`} className="inline-flex min-h-11 sm:min-h-0 items-center rounded-lg px-2 text-slate-700 hover:text-slate-950">Sửa</Link></div>}
             />
           ))}
         </div>

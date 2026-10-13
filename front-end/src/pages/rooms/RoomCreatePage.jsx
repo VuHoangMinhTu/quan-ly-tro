@@ -26,10 +26,10 @@ export default function RoomCreatePage() {
   if (boardingHouseQuery.isError) return <p className="text-red-600">{getApiErrorMessage(boardingHouseQuery.error)}</p>
 
   return (
-    <section className="max-w-3xl">
-      <Link to={`/boarding-houses/${boardingHouseId}/rooms`} className="text-sm text-slate-600 hover:text-slate-950">← Quay lại danh sách phòng</Link>
-      <h2 className="mb-1 mt-3 text-2xl font-bold">Thêm phòng</h2>
-      <p className="mb-6 text-sm text-slate-600">{boardingHouseQuery.data.data.data.name}</p>
+    <section className="min-w-0 w-full max-w-3xl">
+      <Link to={`/boarding-houses/${boardingHouseId}/rooms`} className="text-sm text-slate-600 hover:text-slate-950 inline-flex min-h-11 items-center lg:min-h-0">← Quay lại danh sách phòng</Link>
+      <h2 className="mb-1 mt-3 break-words text-xl font-bold sm:text-2xl">Thêm phòng</h2>
+      <p className="mb-6 break-words text-sm text-slate-600">{boardingHouseQuery.data.data.data.name}</p>
       <RoomForm onSubmit={handleSubmit} submitLabel="Tạo phòng" />
     </section>
   )

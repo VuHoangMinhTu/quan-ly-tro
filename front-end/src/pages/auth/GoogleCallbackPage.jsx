@@ -68,14 +68,16 @@ export default function GoogleCallbackPage() {
 
   if (!code || error) {
     return (
-      <main className="p-8">
-        {error || 'Đăng nhập Google thất bại.'}{' '}
-        <Link className="underline" to="/login">
+      <main className="flex min-h-dvh items-center justify-center p-4">
+        <section className="w-full min-w-0 max-w-md break-words rounded-xl bg-white p-5 text-center shadow sm:p-8">
+        <p role="alert">{error || 'Đăng nhập Google thất bại.'}</p>
+        <Link className="mt-4 inline-flex min-h-11 items-center font-medium underline sm:min-h-0" to="/login">
           Quay lại đăng nhập
         </Link>
+        </section>
       </main>
     )
   }
 
-  return <main className="p-8">Đang đăng nhập bằng Google...</main>
+  return <main className="flex min-h-dvh items-center justify-center p-4"><section role="status" className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 text-center shadow sm:p-8">Đang đăng nhập bằng Google...</section></main>
 }

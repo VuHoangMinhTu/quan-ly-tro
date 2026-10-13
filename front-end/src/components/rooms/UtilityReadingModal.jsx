@@ -41,19 +41,19 @@ export default function UtilityReadingModal({ roomId, meter, onClose }) {
     getPreview: (date, value) => getReadingPreview(readings, meter.initial_reading, date, value),
   }
 
-  return <div role="dialog" aria-modal="true" aria-labelledby="new-reading-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-    <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+  return <div role="dialog" aria-modal="true" aria-labelledby="new-reading-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+    <div className="max-h-[90dvh] w-full max-w-md overscroll-contain overflow-y-auto min-w-0 rounded-xl bg-white p-4 sm:p-6 shadow-xl">
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0 break-words">
           <h3 id="new-reading-title" className="text-lg font-semibold">{title}</h3>
           <p className="mt-1 text-sm text-slate-600">{meter.service?.name || 'Dịch vụ đồng hồ'}</p>
         </div>
-        <button type="button" disabled={createMutation.isPending} onClick={onClose} aria-label="Đóng" className="text-lg text-slate-500 hover:text-slate-950 disabled:opacity-50">✕</button>
+        <button type="button" disabled={createMutation.isPending} onClick={onClose} aria-label="Đóng" className="flex size-11 shrink-0 items-center justify-center rounded-lg text-lg text-slate-500 hover:bg-slate-100 hover:text-slate-950 disabled:opacity-50">✕</button>
       </div>
       <div className="mt-4 grid gap-3 rounded-lg bg-slate-50 p-4 text-sm sm:grid-cols-2">
-        <div><p className="text-slate-500">Chỉ số gần nhất</p><p className="mt-1 font-semibold">{latestReading ? formatValue(latestReading.reading_value, unit) : formatValue(meter.initial_reading, unit)}</p></div>
-        <div><p className="text-slate-500">Ngày ghi gần nhất</p><p className="mt-1 font-semibold">{latestReading?.reading_date ? formatDate(latestReading.reading_date) : 'Chưa có chỉ số'}</p></div>
-        <div className="sm:col-span-2"><p className="text-slate-500">Đơn giá hiện tại</p><p className="mt-1 font-semibold">{formatMeterPrice(meter.service)}</p></div>
+        <div className="min-w-0"><p className="text-slate-500">Chỉ số gần nhất</p><p className="mt-1 break-words font-semibold">{latestReading ? formatValue(latestReading.reading_value, unit) : formatValue(meter.initial_reading, unit)}</p></div>
+        <div className="min-w-0"><p className="text-slate-500">Ngày ghi gần nhất</p><p className="mt-1 break-words font-semibold">{latestReading?.reading_date ? formatDate(latestReading.reading_date) : 'Chưa có chỉ số'}</p></div>
+        <div className="min-w-0 sm:col-span-2"><p className="text-slate-500">Đơn giá hiện tại</p><p className="mt-1 break-words font-semibold">{formatMeterPrice(meter.service)}</p></div>
       </div>
       {readingsQuery.isError ? <p className="mt-4 text-sm text-red-600">{getApiErrorMessage(readingsQuery.error)}</p> : <div className="mt-5"><UtilityReadingForm initialValues={{}} onSubmit={(payload) => createMutation.mutateAsync(payload)} label="Lưu chỉ số" readingContext={context} /></div>}
     </div>

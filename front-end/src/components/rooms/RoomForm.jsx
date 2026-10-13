@@ -70,36 +70,36 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
   const amenities = amenitiesQuery.data?.data?.data || []
 
   return (
-    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6 rounded-xl bg-white p-6 shadow-sm">
-      <div className="grid gap-5 md:grid-cols-2">
+    <form onSubmit={form.handleSubmit(handleSubmit)} className="min-w-0 break-words space-y-4 sm:space-y-6 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
+      <div className="grid gap-4 sm:gap-5 md:grid-cols-2">
         <div>
           <label htmlFor="room-code" className="block text-sm font-medium text-slate-700">Mã phòng</label>
-          <input id="room-code" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" {...form.register('room_code')} />
+          <input id="room-code" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('room_code')} />
           {errors.room_code && <p className="mt-1 text-sm text-red-600">{errors.room_code.message}</p>}
         </div>
         <div>
           <label htmlFor="room-name" className="block text-sm font-medium text-slate-700">Tên phòng <span className="font-normal text-slate-500">(không bắt buộc)</span></label>
-          <input id="room-name" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" {...form.register('room_name')} />
+          <input id="room-name" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('room_name')} />
           {errors.room_name && <p className="mt-1 text-sm text-red-600">{errors.room_name.message}</p>}
         </div>
         <div>
           <label htmlFor="room-area" className="block text-sm font-medium text-slate-700">Diện tích (m²)</label>
-          <input id="room-area" type="number" min="0" step="0.01" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" {...form.register('area', { valueAsNumber: true })} />
+          <input id="room-area" type="number" min="0" step="0.01" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('area', { valueAsNumber: true })} />
           {errors.area && <p className="mt-1 text-sm text-red-600">{errors.area.message}</p>}
         </div>
         <div>
           <label htmlFor="room-rent" className="block text-sm font-medium text-slate-700">Giá thuê hàng tháng</label>
-          <Controller name="monthly_rent" control={form.control} render={({ field }) => <MoneyInput {...field} id="room-rent" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="Chưa thiết lập" />} />
+          <Controller name="monthly_rent" control={form.control} render={({ field }) => <MoneyInput {...field} id="room-rent" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" placeholder="Chưa thiết lập" />} />
           {errors.monthly_rent && <p className="mt-1 text-sm text-red-600">{errors.monthly_rent.message}</p>}
         </div>
         <div>
           <label htmlFor="room-max-tenants" className="block text-sm font-medium text-slate-700">Số người tối đa</label>
-          <input id="room-max-tenants" type="number" min="1" step="1" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" {...form.register('max_tenants', { valueAsNumber: true })} />
+          <input id="room-max-tenants" type="number" min="1" step="1" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('max_tenants', { valueAsNumber: true })} />
           {errors.max_tenants && <p className="mt-1 text-sm text-red-600">{errors.max_tenants.message}</p>}
         </div>
         <div>
           <label htmlFor="room-status" className="block text-sm font-medium text-slate-700">Trạng thái</label>
-          <select id="room-status" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" {...form.register('status')}>
+          <select id="room-status" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('status')}>
             <option value="AVAILABLE">Còn trống</option>
             <option value="RENTED">Đã thuê</option>
             <option value="RESERVED">Đã đặt</option>
@@ -111,11 +111,11 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
 
       <div>
         <label htmlFor="room-description" className="block text-sm font-medium text-slate-700">Mô tả <span className="font-normal text-slate-500">(không bắt buộc)</span></label>
-        <textarea id="room-description" rows="4" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" {...form.register('description')} />
+        <textarea id="room-description" rows="4" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('description')} />
         {errors.description && <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>}
       </div>
 
-      <fieldset>
+      <fieldset className="min-w-0">
         <legend className="text-sm font-medium text-slate-700">Tiện nghi <span className="font-normal text-slate-500">(không bắt buộc)</span></legend>
         {amenitiesQuery.isPending && <p className="mt-2 text-sm text-slate-500">Đang tải tiện nghi...</p>}
         {amenitiesQuery.isError && <p className="mt-2 text-sm text-slate-600">{getApiErrorMessage(amenitiesQuery.error)} Bạn vẫn có thể lưu phòng mà không chọn thêm tiện nghi.</p>}
@@ -130,8 +130,9 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
                 {amenities.map((amenity, index) => {
                   const amenityId = Number(amenity.id)
 
-                  return <label key={amenity.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">
+                  return <label key={amenity.id} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">
                     <input
+                      className="h-4 w-4 shrink-0"
                       type="checkbox"
                       name={field.name}
                       value={amenityId}
@@ -142,7 +143,7 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
                         ? [...new Set([...selectedIds, amenityId])]
                         : selectedIds.filter((id) => id !== amenityId))}
                     />
-                    {amenity.name}
+                    <span className="min-w-0 break-words">{amenity.name}</span>
                   </label>
                 })}
               </div>
@@ -153,7 +154,7 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
       </fieldset>
 
       {submitError && <p className="text-sm text-red-600">{submitError}</p>}
-      <button disabled={isSubmitting} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60">
+      <button disabled={isSubmitting} className="w-full sm:w-auto min-h-11 sm:min-h-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60">
         {isSubmitting ? 'Đang lưu...' : submitLabel}
       </button>
     </form>

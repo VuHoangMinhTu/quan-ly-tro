@@ -32,7 +32,7 @@ function TenantSearch({ value, onCommit }) {
     <label className="sr-only" htmlFor="tenant-search">Tìm người thuê</label>
     <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 focus-within:ring-2 focus-within:ring-slate-400">
       <Search size={17} className="shrink-0 text-slate-400" aria-hidden="true" />
-      <input id="tenant-search" type="search" value={draft} onChange={(event) => setSearch({ urlValue: value, draft: event.target.value })} placeholder="Tìm theo tên, SĐT, email, CCCD" className="w-full py-2 text-sm outline-none" />
+      <input id="tenant-search" type="search" value={draft} onChange={(event) => setSearch({ urlValue: value, draft: event.target.value })} placeholder="Tìm theo tên, SĐT, email, CCCD" className="min-w-0 w-full py-3 text-sm outline-none" />
     </div>
   </div>
 }
@@ -106,10 +106,17 @@ export default function TenantListPage() {
   const houses = housesQuery.data?.data?.data || []
   const rooms = roomsQuery.data?.data?.data || []
 
-  return <section>
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-      <div><h2 className="text-2xl font-bold">Người thuê</h2><p className="mt-1 text-sm text-slate-600">Quản lý hồ sơ người thuê của bạn.</p></div>
-      <Link to="/tenants/new" className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"><Plus size={17} /> Thêm người thuê</Link>
+  const renderActions = (tenant) => <div className="flex flex-wrap items-center gap-2">
+    <Link to={'/tenants/' + tenant.id} className="inline-flex min-h-11 sm:min-h-0 items-center gap-1 rounded-lg border border-slate-200 px-3 text-sm hover:bg-slate-50"><Eye size={15} /> Xem</Link>
+    <Link to={'/tenants/' + tenant.id + '/edit'} className="inline-flex min-h-11 sm:min-h-0 items-center gap-1 rounded-lg border border-slate-200 px-3 text-sm hover:bg-slate-50"><Pencil size={15} /> Sửa</Link>
+    {confirmingId === tenant.id ? <><button type="button" onClick={() => mutation.mutate(tenant.id)} disabled={mutation.isPending || query.isPlaceholderData} className="min-h-11 sm:min-h-0 rounded-lg px-3 text-sm font-medium text-red-700 disabled:opacity-60">{mutation.isPending ? 'Đang xóa...' : 'Xác nhận'}</button><button type="button" onClick={() => setConfirmingId(null)} className="min-h-11 sm:min-h-0 rounded-lg px-3 text-sm">Hủy</button></>
+      : <button type="button" disabled={query.isPlaceholderData} onClick={() => { setDeleteError(''); setConfirmingId(tenant.id) }} className="inline-flex min-h-11 sm:min-h-0 items-center gap-1 rounded-lg px-3 text-sm text-red-700 hover:bg-red-50 disabled:opacity-60"><Trash2 size={15} /> Xóa</button>}
+  </div>
+
+  return <section className="min-w-0">
+    <div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div><h2 className="break-words text-xl font-bold sm:text-2xl">Người thuê</h2><p className="mt-1 text-sm text-slate-600">Quản lý hồ sơ người thuê của bạn.</p></div>
+      <Link to="/tenants/new" className="inline-flex min-h-11 sm:min-h-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"><Plus size={17} /> Thêm người thuê</Link>
     </div>
     {location.state?.message && <p className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{location.state.message}</p>}
     {deleteError && <p role="alert" className="mb-4 text-sm text-red-600">{deleteError}</p>}
@@ -133,8 +140,15 @@ export default function TenantListPage() {
           <p className="font-medium">{hasFilters ? 'Không tìm thấy người thuê phù hợp với bộ lọc.' : 'Bạn chưa có người thuê nào.'}</p>
           {hasFilters ? <button type="button" onClick={resetFilters} className="mt-4 rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50">Xóa bộ lọc</button> : <Link to="/tenants/new" className="mt-4 inline-block underline">Thêm người thuê</Link>}
         </div>
-          : <div aria-busy={query.isFetching} className="overflow-x-auto rounded-xl bg-white shadow-sm">
-            <table className="min-w-full text-left text-sm">
+          : <div aria-busy={query.isFetching}>
+            <div className="space-y-3 md:hidden">{tenants.map((tenant) => <article key={tenant.id} className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h3 className="break-words font-semibold text-slate-900">{tenant.full_name}</h3>
+              <p className="mt-1 break-words text-sm text-slate-600">{tenant.phone || 'Chưa cập nhật số điện thoại'}</p>
+              <p className="mt-2 break-words text-sm text-slate-600">{tenant.current_residence ? tenant.current_residence.boarding_house_name + ' · Phòng ' + tenant.current_residence.room_code : 'Chưa xếp phòng'}</p>
+              <div className="mt-4 border-t border-slate-100 pt-3">{renderActions(tenant)}</div>
+            </article>)}</div>
+            <div className="hidden overflow-x-auto rounded-xl bg-white shadow-sm md:block">
+            <table className="w-full min-w-[900px] text-left text-sm">
               <thead className="bg-slate-50 text-slate-600"><tr>{['Họ tên', 'Số điện thoại', 'Email', 'CCCD / Số định danh', 'Đang ở', 'Ngày sinh', 'Thao tác'].map((label) => <th scope="col" key={label} className="px-4 py-3 font-medium">{label}</th>)}</tr></thead>
               <tbody className="divide-y divide-slate-100">{tenants.map((tenant) => <tr key={tenant.id}>
                 <td className="px-4 py-4 font-medium">{tenant.full_name}</td>
@@ -143,14 +157,10 @@ export default function TenantListPage() {
                 <td className="px-4 py-4">{tenant.identity_number || '—'}</td>
                 <td className="min-w-36 max-w-48 px-4 py-4">{tenant.current_residence ? <><p className="font-medium">{tenant.current_residence.boarding_house_name}</p><p className="mt-1 text-xs text-slate-500">Phòng {tenant.current_residence.room_code}</p></> : <span className="text-slate-500">Chưa xếp phòng</span>}</td>
                 <td className="whitespace-nowrap px-4 py-4">{formatDate(tenant.date_of_birth)}</td>
-                <td className="px-4 py-4"><div className="flex gap-3 whitespace-nowrap">
-                  <Link to={'/tenants/' + tenant.id} className="inline-flex items-center gap-1"><Eye size={15} />Xem</Link>
-                  <Link to={'/tenants/' + tenant.id + '/edit'} className="inline-flex items-center gap-1"><Pencil size={15} />Sửa</Link>
-                  {confirmingId === tenant.id ? <><button type="button" onClick={() => mutation.mutate(tenant.id)} disabled={mutation.isPending || query.isPlaceholderData} className="text-red-700 disabled:opacity-60">{mutation.isPending ? 'Đang xóa...' : 'Xác nhận'}</button><button type="button" onClick={() => setConfirmingId(null)}>Hủy</button></>
-                    : <button type="button" disabled={query.isPlaceholderData} onClick={() => { setDeleteError(''); setConfirmingId(tenant.id) }} className="inline-flex items-center gap-1 text-red-700 disabled:opacity-60"><Trash2 size={15} />Xóa</button>}
-                </div></td>
+                <td className="px-4 py-4">{renderActions(tenant)}</td>
               </tr>)}</tbody>
             </table>
+            </div>
           </div>}
   </section>
 }

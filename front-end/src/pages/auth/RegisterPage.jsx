@@ -38,12 +38,12 @@ export default function RegisterPage() {
   })
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
+    <main className="flex min-h-dvh items-center justify-center p-4">
       <form
         onSubmit={form.handleSubmit((data) => mutation.mutate(data))}
-        className="w-full max-w-md rounded-xl bg-white p-8 shadow"
+        className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 sm:p-8 shadow"
       >
-        <h1 className="mb-6 text-2xl font-bold">Đăng ký tài khoản</h1>
+        <h1 className="mb-6 text-xl sm:text-2xl font-bold">Đăng ký tài khoản</h1>
         {fields.map(([field, label, type]) => {
           const fieldError = form.formState.errors[field]
 
@@ -52,7 +52,7 @@ export default function RegisterPage() {
               {label}
               <input
                 type={type}
-                className="mt-1 mb-1 w-full rounded border p-2"
+                className="min-h-11 sm:min-h-0 mt-1 mb-1 w-full min-w-0 rounded border p-2"
                 aria-invalid={Boolean(fieldError)}
                 aria-describedby={fieldError ? `${field}-error` : undefined}
                 {...form.register(field, {
@@ -76,11 +76,11 @@ export default function RegisterPage() {
             {generalError}
           </div>
         )}
-        <button disabled={mutation.isPending} className="w-full rounded bg-slate-900 p-2 text-white disabled:opacity-60">
+        <button disabled={mutation.isPending} className="min-h-11 sm:min-h-0 w-full min-w-0 rounded bg-slate-900 p-2 text-white disabled:opacity-60">
           {mutation.isPending ? 'Đang đăng ký...' : 'Đăng ký'}
         </button>
         <p className="mt-4 text-center text-sm">
-          Đã có tài khoản? <Link className="font-medium underline" to="/login">Đăng nhập</Link>
+          Đã có tài khoản? <Link className="inline-flex min-h-11 items-center font-medium underline lg:min-h-0" to="/login">Đăng nhập</Link>
         </p>
       </form>
     </main>

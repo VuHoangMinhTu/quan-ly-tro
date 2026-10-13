@@ -37,7 +37,7 @@ export default function UtilityReadingForm({ initialValues = {}, onSubmit, label
     }
   }
 
-  return <form onSubmit={form.handleSubmit(submit)} className="space-y-4">
+  return <form onSubmit={form.handleSubmit(submit)} className="min-w-0 break-words space-y-4">
     <div>
       <label className="block text-sm font-medium">Ngày ghi *</label>
       <Controller name="reading_date" control={form.control} rules={{ required: 'Vui lòng nhập ngày ghi.' }} render={({ field }) => <DateInput {...field} placeholder="dd/mm/yyyy" invalid={Boolean(form.formState.errors.reading_date)} />} />
@@ -45,7 +45,7 @@ export default function UtilityReadingForm({ initialValues = {}, onSubmit, label
     </div>
     <div>
       <label className="block text-sm font-medium" htmlFor="reading-value">Chỉ số công tơ hiện tại *</label>
-      <input id="reading-value" type="number" min="0" step="0.01" placeholder="VD: 150" className="mt-1 w-full rounded border p-2" {...form.register('reading_value', { required: 'Vui lòng nhập chỉ số công tơ.' })} />
+      <input id="reading-value" type="number" min="0" step="0.01" placeholder="VD: 150" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded border p-2" {...form.register('reading_value', { required: 'Vui lòng nhập chỉ số công tơ.' })} />
       {form.formState.errors.reading_value && <p className="mt-1 text-sm text-red-600">{form.formState.errors.reading_value.message}</p>}
       {preview && <div className={`mt-2 rounded-lg p-3 text-sm ${preview.consumption >= 0 ? 'bg-slate-50 text-slate-700' : 'bg-amber-50 text-amber-800'}`}>
         <p className="font-medium">Mức tiêu thụ kỳ này</p>
@@ -55,10 +55,10 @@ export default function UtilityReadingForm({ initialValues = {}, onSubmit, label
     </div>
     <div>
       <label className="block text-sm font-medium" htmlFor="reading-note">Ghi chú</label>
-      <textarea id="reading-note" placeholder="Ghi chú (không bắt buộc)" className="mt-1 w-full rounded border p-2" {...form.register('note')} />
+      <textarea id="reading-note" placeholder="Ghi chú (không bắt buộc)" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded border p-2" {...form.register('note')} />
       {form.formState.errors.note && <p className="mt-1 text-sm text-red-600">{form.formState.errors.note.message}</p>}
     </div>
     {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-    <button className="rounded bg-slate-900 px-4 py-2 text-sm text-white">{label}</button>
+    <button className="w-full sm:w-auto min-h-11 sm:min-h-0 rounded bg-slate-900 px-4 py-2 text-sm text-white">{label}</button>
   </form>
 }

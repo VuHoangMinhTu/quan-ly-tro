@@ -1,2 +1,25 @@
 @import "tailwindcss";
 body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; color: #0f172a; }
+
+/* Screen-only rules keep the invoice's independent print layout untouched. */
+@media screen {
+  .app-content > section { min-width: 0; }
+  .app-content :is(fieldset, dl, form) { min-width: 0; }
+  .app-content :is(input, select, textarea) { max-width: 100%; }
+  .mobile-navigation[open] { animation: navigation-slide-in 160ms ease-out; }
+}
+
+@media screen and (max-width: 1023px) {
+  /* Avoid Safari focus zoom on form controls without changing desktop fonts. */
+  .app-content :is(input:not([type='checkbox']):not([type='radio']), select, textarea) { font-size: 16px; }
+  .app-content :is(dd, p) { overflow-wrap: anywhere; }
+}
+
+@keyframes navigation-slide-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-navigation[open] { animation: none; }
+}

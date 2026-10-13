@@ -31,15 +31,15 @@ export default function BoardingHouseListPage() {
   if (query.isError) return <p className="text-red-600">{getApiErrorMessage(query.error)}</p>
 
   return (
-    <section>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <section className="min-w-0">
+      <div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Nhà trọ</h2>
+          <h2 className="break-words text-xl font-bold sm:text-2xl">Nhà trọ</h2>
           <p className="mt-1 text-sm text-slate-600">Quản lý các nhà trọ của bạn.</p>
         </div>
         <Link
           to="/boarding-houses/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+          className="inline-flex min-h-11 sm:min-h-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
         >
           <Plus size={17} /> Thêm nhà trọ
         </Link>
@@ -60,7 +60,7 @@ export default function BoardingHouseListPage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
+          <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
               <tr>
                 <th className="px-5 py-3 font-medium">Tên nhà trọ</th>
@@ -77,25 +77,25 @@ export default function BoardingHouseListPage() {
                   <td className="max-w-xs truncate px-5 py-4 text-slate-600">{house.description || '—'}</td>
                   <td className="px-5 py-4">
                     <div className="flex justify-end gap-3 whitespace-nowrap text-sm">
-                      <Link className="inline-flex items-center gap-1 text-slate-700 hover:text-slate-950" to={`/boarding-houses/${house.id}`}>
+                      <Link className="inline-flex min-h-11 min-w-11 items-center gap-1 lg:min-h-0 lg:min-w-0 text-slate-700 hover:text-slate-950" to={`/boarding-houses/${house.id}`}>
                         <Eye size={16} /> Xem
                       </Link>
-                      <Link className="inline-flex items-center gap-1 text-slate-700 hover:text-slate-950" to={`/boarding-houses/${house.id}/edit`}>
+                      <Link className="inline-flex min-h-11 min-w-11 items-center gap-1 lg:min-h-0 lg:min-w-0 text-slate-700 hover:text-slate-950" to={`/boarding-houses/${house.id}/edit`}>
                         <Pencil size={16} /> Sửa
                       </Link>
                       {confirmingId === house.id ? (
-                        <span className="flex items-center gap-2">
+                        <span className="flex flex-wrap items-center gap-2">
                           <button
                             onClick={() => deleteMutation.mutate(house.id)}
                             disabled={deleteMutation.isPending}
-                            className="font-medium text-red-700 disabled:opacity-60"
+                            className="min-h-11 min-w-11 font-medium text-red-700 disabled:opacity-60 lg:min-h-0 lg:min-w-0"
                           >
                             {deleteMutation.isPending ? 'Đang xóa...' : 'Xác nhận'}
                           </button>
-                          <button onClick={() => setConfirmingId(null)} className="text-slate-500">Hủy</button>
+                          <button onClick={() => setConfirmingId(null)} className="min-h-11 min-w-11 px-2 text-slate-500 lg:min-h-0 lg:min-w-0">Hủy</button>
                         </span>
                       ) : (
-                        <button onClick={() => requestDelete(house.id)} className="inline-flex items-center gap-1 text-red-700 hover:text-red-900">
+                        <button onClick={() => requestDelete(house.id)} className="inline-flex min-h-11 min-w-11 items-center gap-1 lg:min-h-0 lg:min-w-0 text-red-700 hover:text-red-900">
                           <Trash2 size={16} /> Xóa
                         </button>
                       )}

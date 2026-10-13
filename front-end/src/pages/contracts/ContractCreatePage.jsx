@@ -18,7 +18,7 @@ export default function ContractCreatePage() {
   if (roomQuery.isError) return <p className="text-red-600">{getApiErrorMessage(roomQuery.error)}</p>
 
   const room = roomQuery.data.data.data
-  if (room.monthly_rent == null) return <section className="max-w-3xl"><Link to={"/rooms/" + roomId} className="text-sm text-slate-600">← Quay lại phòng</Link><h2 className="mt-3 text-2xl font-bold">Thêm hợp đồng</h2><p className="mt-4 rounded-lg bg-amber-50 p-4 text-sm text-amber-900">Phòng chưa được thiết lập giá thuê. Vui lòng cập nhật giá thuê trước.</p><Link to={"/rooms/" + roomId + "/edit"} className="mt-4 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">Cập nhật giá thuê</Link></section>
+  if (room.monthly_rent == null) return <section className="min-w-0 w-full max-w-3xl"><Link to={"/rooms/" + roomId} className="text-sm text-slate-600 inline-flex min-h-11 items-center lg:min-h-0">← Quay lại phòng</Link><h2 className="mt-3 break-words text-xl font-bold sm:text-2xl">Thêm hợp đồng</h2><p className="mt-4 rounded-lg bg-amber-50 p-4 text-sm text-amber-900">Phòng chưa được thiết lập giá thuê. Vui lòng cập nhật giá thuê trước.</p><Link to={"/rooms/" + roomId + "/edit"} className="mt-4 inline-block min-h-11 sm:min-h-0 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">Cập nhật giá thuê</Link></section>
   const submit = async (payload) => {
     await createMutation.mutateAsync(payload)
     await Promise.all([
@@ -28,5 +28,5 @@ export default function ContractCreatePage() {
     navigate(`/rooms/${roomId}`, { replace: true, state: { message: 'Thêm hợp đồng thành công.' } })
   }
 
-  return <section className="max-w-3xl"><Link to={`/rooms/${roomId}`} className="text-sm text-slate-600">← Quay lại phòng</Link><h2 className="mt-3 text-2xl font-bold">Thêm hợp đồng</h2><div className="mb-6 mt-3 rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">Phòng đang chọn: <span className="font-semibold">{room.room_code}{room.room_name ? ` — ${room.room_name}` : ''}</span></div><ContractForm initialValues={{ monthly_rent: room.monthly_rent }} onSubmit={submit} submitLabel="Thêm hợp đồng" /></section>
+  return <section className="min-w-0 w-full max-w-3xl"><Link to={`/rooms/${roomId}`} className="text-sm text-slate-600 inline-flex min-h-11 items-center lg:min-h-0">← Quay lại phòng</Link><h2 className="mt-3 break-words text-xl font-bold sm:text-2xl">Thêm hợp đồng</h2><div className="mb-6 mt-3 rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">Phòng đang chọn: <span className="font-semibold">{room.room_code}{room.room_name ? ` — ${room.room_name}` : ''}</span></div><ContractForm initialValues={{ monthly_rent: room.monthly_rent }} onSubmit={submit} submitLabel="Thêm hợp đồng" /></section>
 }

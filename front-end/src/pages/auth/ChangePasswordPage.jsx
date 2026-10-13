@@ -50,11 +50,11 @@ export default function ChangePasswordPage() {
 
   return (
     <section className="max-w-xl">
-      <h2 className="text-2xl font-bold">Đổi mật khẩu</h2>
+      <h2 className="text-xl sm:text-2xl font-bold">Đổi mật khẩu</h2>
       <p className="mt-2 text-sm text-slate-600">Đặt mật khẩu mới để bảo vệ tài khoản BeeHouse của bạn.</p>
 
-      <form className="mt-6 rounded-xl bg-white p-6 shadow-sm" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
-        <div className="space-y-4">
+      <form className="mt-6 rounded-xl bg-white p-4 sm:p-6 shadow-sm" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
+        <div className="min-w-0 break-words space-y-4">
           {passwordFields.map(([name, label, autoComplete]) => (
             <label key={name} className="block text-sm font-medium">
               {label} <span className="text-red-600">*</span>
@@ -76,7 +76,7 @@ export default function ChangePasswordPage() {
 
         <button
           disabled={mutation.isPending}
-          className="mt-6 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full sm:w-auto min-h-11 sm:min-h-0 mt-6 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
         >
           {mutation.isPending ? 'Đang cập nhật...' : 'Đổi mật khẩu'}
         </button>

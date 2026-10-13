@@ -25,9 +25,9 @@ export default function BoardingHouseEditPage() {
   if (query.isError) return <p className="text-red-600">{getApiErrorMessage(query.error)}</p>
 
   return (
-    <section className="max-w-2xl">
-      <Link to={`/boarding-houses/${id}`} className="text-sm text-slate-600 hover:text-slate-950">← Quay lại chi tiết</Link>
-      <h2 className="mb-6 mt-3 text-2xl font-bold">Sửa nhà trọ</h2>
+    <section className="min-w-0 w-full max-w-2xl">
+      <Link to={`/boarding-houses/${id}`} className="text-sm text-slate-600 hover:text-slate-950 inline-flex min-h-11 items-center lg:min-h-0">← Quay lại chi tiết</Link>
+      <h2 className="mb-6 mt-3 break-words text-xl font-bold sm:text-2xl">Sửa nhà trọ</h2>
       <BoardingHouseForm initialValues={query.data.data.data} onSubmit={handleSubmit} submitLabel="Lưu thay đổi" />
     </section>
   )

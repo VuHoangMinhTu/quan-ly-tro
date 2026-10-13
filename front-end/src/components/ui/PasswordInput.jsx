@@ -10,7 +10,7 @@ const PasswordInput = forwardRef(function PasswordInput({ className = '', ...pro
         {...props}
         ref={ref}
         type={isVisible ? 'text' : 'password'}
-        className={'w-full rounded-lg border border-slate-300 px-3 py-2 pr-11 outline-none transition focus:border-slate-600 focus:ring-2 focus:ring-slate-200 ' + className}
+        className={'min-h-11 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 pr-11 text-base outline-none transition focus:border-slate-600 focus:ring-2 focus:ring-slate-200 sm:min-h-0 sm:text-sm ' + className}
       />
       <button
         type="button"

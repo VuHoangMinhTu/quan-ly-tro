@@ -46,12 +46,12 @@ export default function LoginPage() {
   const error = mutation.error ? getApiErrorMessage(mutation.error) : ''
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
+    <main className="flex min-h-dvh items-center justify-center p-4">
       <form
         onSubmit={form.handleSubmit((data) => mutation.mutate(data))}
-        className="w-full max-w-md rounded-xl bg-white p-8 shadow"
+        className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 sm:p-8 shadow"
       >
-        <h1 className="mb-6 text-2xl font-bold">Đăng nhập</h1>
+        <h1 className="mb-6 text-xl sm:text-2xl font-bold">Đăng nhập</h1>
 
         {location.state?.message && (
           <p className="mb-3 text-sm text-green-700">{location.state.message}</p>
@@ -61,7 +61,7 @@ export default function LoginPage() {
 
         <label>
           Email
-          <input className="mt-1 mb-1 w-full rounded border p-2" {...form.register('email')} />
+          <input className="min-h-11 sm:min-h-0 mt-1 mb-1 w-full min-w-0 rounded border p-2" {...form.register('email')} />
         </label>
         <p className="mb-3 text-sm text-red-600">{form.formState.errors.email?.message}</p>
 
@@ -69,18 +69,18 @@ export default function LoginPage() {
           Mật khẩu
           <input
             type="password"
-            className="mt-1 mb-1 w-full rounded border p-2"
+            className="min-h-11 sm:min-h-0 mt-1 mb-1 w-full min-w-0 rounded border p-2"
             {...form.register('password')}
           />
         </label>
         <p className="mb-2 text-sm text-red-600">{form.formState.errors.password?.message}</p>
-        <p className="mb-4 text-right text-sm"><Link className="font-medium text-slate-700 underline" to="/forgot-password">Quên mật khẩu?</Link></p>
+        <p className="mb-4 text-right text-sm"><Link className="inline-flex min-h-11 items-center font-medium text-slate-700 underline lg:min-h-0" to="/forgot-password">Quên mật khẩu?</Link></p>
 
         {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
         <button
           disabled={mutation.isPending}
-          className="w-full rounded bg-slate-900 p-2 text-white disabled:opacity-60"
+          className="min-h-11 sm:min-h-0 w-full min-w-0 rounded bg-slate-900 p-2 text-white disabled:opacity-60"
         >
           {mutation.isPending ? 'Đang đăng nhập...' : 'Đăng nhập'}
         </button>
@@ -99,7 +99,7 @@ export default function LoginPage() {
 
         <p className="mt-4 text-center text-sm">
           Chưa có tài khoản?{' '}
-          <Link className="font-medium underline" to="/register">
+          <Link className="inline-flex min-h-11 items-center font-medium underline lg:min-h-0" to="/register">
             Đăng ký
           </Link>
         </p>

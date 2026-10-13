@@ -30,5 +30,5 @@ export default function InvoiceEditPage() {
     navigate(`/invoices/${id}`)
   }
 
-  return <section className="max-w-3xl"><Link to={`/invoices/${id}`}>← Quay lại</Link><h2 className="my-5 text-2xl font-bold">Sửa hóa đơn</h2><InvoiceForm roomId={invoice.room_id} initialValues={invoice} contractOptions={contractsQuery.data.data.data || []} canEditFinancials={editableFinancials} onSubmit={submit} label="Lưu thay đổi" /></section>
+  return <section className="w-full min-w-0 max-w-3xl"><Link to={`/invoices/${id}`} className="inline-flex min-h-11 items-center">← Quay lại</Link><h2 className="my-5 text-xl font-bold sm:text-2xl">Sửa hóa đơn</h2><InvoiceForm roomId={invoice.room_id} initialValues={invoice} contractOptions={contractsQuery.data.data.data || []} canEditFinancials={editableFinancials} onSubmit={submit} label="Lưu thay đổi" /></section>
 }

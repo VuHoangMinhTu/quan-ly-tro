@@ -36,29 +36,29 @@ function ServicePricing({ service, tiersQuery }) {
   const tiers = tiersQuery.data?.data?.data || []
 
   return (
-    <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div>
+    <div className="mt-5 min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Loại</p>
-          <p className="mt-1 font-semibold text-slate-900">{SERVICE_TYPE_LABELS[service?.type] || service?.type || '—'}</p>
+          <p className="mt-1 break-words font-semibold text-slate-900">{SERVICE_TYPE_LABELS[service?.type] || service?.type || '—'}</p>
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Cách tính</p>
-          <p className="mt-1 font-semibold text-slate-900">{BILLING_METHOD_LABELS[service?.billing_method] || service?.billing_method || '—'}</p>
+          <p className="mt-1 break-words font-semibold text-slate-900">{BILLING_METHOD_LABELS[service?.billing_method] || service?.billing_method || '—'}</p>
         </div>
         {!isTiered && (
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Đơn giá hiện tại</p>
-            <p className="mt-1 font-semibold text-slate-900">
+            <p className="mt-1 break-words font-semibold text-slate-900">
               {service?.base_price === null || service?.base_price === undefined
                 ? 'Chưa cập nhật'
                 : `${formatCurrency(service.base_price)}${unit ? ` / ${unit}` : ''}`}
             </p>
           </div>
         )}
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Đơn vị</p>
-          <p className="mt-1 font-semibold text-slate-900">{unit || 'Chưa cập nhật'}</p>
+          <p className="mt-1 break-words font-semibold text-slate-900">{unit || 'Chưa cập nhật'}</p>
         </div>
       </div>
 
@@ -73,8 +73,8 @@ function ServicePricing({ service, tiersQuery }) {
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {tiers.map((tier) => (
                 <div key={tier.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-                  <p className="font-medium text-slate-800">{TierRange({ tier, unit })}</p>
-                  <p className="mt-1 text-slate-600">{formatCurrency(tier.unit_price)}{unit ? ` / ${unit}` : ''}</p>
+                  <p className="break-words font-medium text-slate-800">{TierRange({ tier, unit })}</p>
+                  <p className="mt-1 break-words text-slate-600">{formatCurrency(tier.unit_price)}{unit ? ` / ${unit}` : ''}</p>
                 </div>
               ))}
             </div>
@@ -130,20 +130,20 @@ export default function UtilityMeterDetailPage() {
   const unit = meter.service?.unit || ''
 
   return (
-    <section>
-      <Link to={`/rooms/${meter.room_id}`} className="text-sm text-slate-600">← Quay lại phòng</Link>
+    <section className="min-w-0">
+      <Link to={`/rooms/${meter.room_id}`} className="inline-flex min-h-11 items-center text-sm text-slate-600">← Quay lại phòng</Link>
 
-      <div className="my-5 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">{meter.service?.name || 'Đồng hồ dịch vụ'}</h2>
-          <p className="mt-1 text-sm text-slate-600">
+      <div className="my-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="break-words text-xl font-bold text-slate-900 sm:text-2xl">{meter.service?.name || 'Đồng hồ dịch vụ'}</h2>
+          <p className="mt-1 break-words text-sm text-slate-600">
             Mã đồng hồ: {meter.meter_code || 'Chưa cập nhật'} · Chỉ số đầu: {formatQuantity(meter.initial_reading, unit)}
           </p>
         </div>
         <button
           type="button"
           onClick={() => setEditingReading({})}
-          className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+          className="min-h-11 shrink-0 rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white"
         >
           Thêm chỉ số
         </button>
@@ -154,8 +154,8 @@ export default function UtilityMeterDetailPage() {
       {readingsQuery.isError && <p className="mt-3 text-sm text-red-600">{getApiErrorMessage(readingsQuery.error)}</p>}
       {deleteReading.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(deleteReading.error)}</p>}
 
-      <div className="mt-6 overflow-x-auto rounded-xl bg-white shadow-sm">
-        <table className="min-w-full text-sm">
+      <div className="mt-6 min-w-0 max-w-full overflow-x-auto rounded-xl bg-white shadow-sm">
+        <table className="min-w-[640px] w-full text-sm">
           <thead className="bg-slate-50">
             <tr>
               {['Ngày ghi', 'Chỉ số công tơ hiện tại', 'Mức tiêu thụ', 'Ghi chú', ''].map((label) => (
@@ -170,16 +170,16 @@ export default function UtilityMeterDetailPage() {
 
               return (
                 <tr key={reading.id} className="border-t border-slate-100">
-                  <td className="px-4 py-3">{formatDate(reading.reading_date)}</td>
-                  <td className="px-4 py-3 font-medium">{formatQuantity(reading.reading_value, unit)}</td>
-                  <td className="px-4 py-3">{formatQuantity(consumption, unit)}</td>
-                  <td className="px-4 py-3 text-slate-600">{reading.note || '—'}</td>
+                  <td className="whitespace-nowrap px-4 py-3">{formatDate(reading.reading_date)}</td>
+                  <td className="whitespace-nowrap px-4 py-3 font-medium">{formatQuantity(reading.reading_value, unit)}</td>
+                  <td className="whitespace-nowrap px-4 py-3">{formatQuantity(consumption, unit)}</td>
+                  <td className="max-w-64 break-words px-4 py-3 text-slate-600">{reading.note || '—'}</td>
                   <td className="whitespace-nowrap px-4 py-3">
-                    <button type="button" onClick={() => setEditingReading(reading)} className="mr-3 text-slate-700 underline underline-offset-2">Sửa</button>
+                    <button type="button" onClick={() => setEditingReading(reading)} className="mr-2 min-h-11 px-2 text-slate-700 underline underline-offset-2">Sửa</button>
                     <button
                       type="button"
                       onClick={() => window.confirm('Bạn có chắc muốn xóa chỉ số này?') && deleteReading.mutate(reading.id)}
-                      className="text-red-700 underline underline-offset-2"
+                      className="min-h-11 px-2 text-red-700 underline underline-offset-2"
                     >
                       Xóa
                     </button>
@@ -193,11 +193,11 @@ export default function UtilityMeterDetailPage() {
       </div>
 
       {editingReading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6">
-            <div className="mb-4 flex justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4" role="dialog" aria-modal="true" aria-label={editingReading.id ? 'Sửa chỉ số' : 'Thêm chỉ số'}>
+          <div className="max-h-[90dvh] w-full min-w-0 max-w-md overflow-y-auto rounded-xl bg-white p-4 sm:p-6">
+            <div className="mb-4 flex items-center justify-between gap-2">
               <h3 className="font-semibold">{editingReading.id ? 'Sửa chỉ số' : 'Thêm chỉ số'}</h3>
-              <button type="button" onClick={() => setEditingReading(null)} aria-label="Đóng">✕</button>
+              <button type="button" onClick={() => setEditingReading(null)} aria-label="Đóng" className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center">✕</button>
             </div>
             <UtilityReadingForm
               initialValues={editingReading}

@@ -7,10 +7,10 @@ export default function VerifyEmailSentPage() {
   const mutation = useMutation({ mutationFn: () => resendVerification(email) })
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
-      <section className="w-full max-w-md rounded-xl bg-white p-8 text-center shadow">
-        <h1 className="text-2xl font-bold">Đăng ký thành công</h1>
-        <p className="mt-3">
+    <main className="flex min-h-dvh items-center justify-center p-4">
+      <section className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 sm:p-8 text-center shadow">
+        <h1 className="text-xl sm:text-2xl font-bold">Đăng ký thành công</h1>
+        <p className="mt-3 break-words">
           Email xác minh đã được gửi đến: <b>{email || 'địa chỉ email của bạn'}</b>
         </p>
         <p className="mt-4 rounded-lg bg-slate-50 p-3 text-left text-sm leading-relaxed text-slate-600">
@@ -21,12 +21,12 @@ export default function VerifyEmailSentPage() {
         <button
           disabled={!email || mutation.isPending}
           onClick={() => mutation.mutate()}
-          className="mt-6 rounded bg-slate-900 px-4 py-2 text-white"
+          className="w-full sm:w-auto min-h-11 sm:min-h-0 mt-6 rounded bg-slate-900 px-4 py-2 text-white"
         >
           {mutation.isPending ? 'Đang gửi...' : 'Gửi lại email xác minh'}
         </button>
         <p className="mt-4">
-          <Link className="underline" to="/login">Quay về đăng nhập</Link>
+          <Link className="inline-flex min-h-11 items-center underline lg:min-h-0" to="/login">Quay về đăng nhập</Link>
         </p>
       </section>
     </main>

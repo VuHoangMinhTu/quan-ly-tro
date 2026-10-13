@@ -30,20 +30,20 @@ export default function ForgotPasswordPage() {
   const successMessage = mutation.data?.data?.message
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
-      <section className="w-full max-w-md rounded-xl bg-white p-8 shadow">
-        <h1 className="text-2xl font-bold">Quên mật khẩu</h1>
+    <main className="flex min-h-dvh items-center justify-center p-4">
+      <section className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 sm:p-8 shadow">
+        <h1 className="text-xl sm:text-2xl font-bold">Quên mật khẩu</h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">
           Nhập địa chỉ email đã đăng ký. BeeHouse sẽ gửi cho bạn liên kết để đặt lại mật khẩu.
         </p>
 
-        <form className="mt-6 space-y-4" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
+        <form className="min-w-0 break-words mt-6 space-y-4" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
           <label className="block text-sm font-medium">
             Email <span className="text-red-600">*</span>
             <input
               type="email"
               autoComplete="email"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-600 focus:ring-2 focus:ring-slate-200"
+              className="mt-1 min-h-11 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-base outline-none transition focus:border-slate-600 focus:ring-2 focus:ring-slate-200 sm:min-h-0 sm:text-sm"
               aria-invalid={Boolean(form.formState.errors.email)}
               {...form.register('email', {
                 onChange: () => form.clearErrors('email'),
@@ -62,13 +62,13 @@ export default function ForgotPasswordPage() {
 
           <button
             disabled={mutation.isPending}
-            className="w-full rounded-lg bg-slate-900 px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 sm:min-h-0 w-full min-w-0 rounded-lg bg-slate-900 px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             {mutation.isPending ? 'Đang gửi...' : 'Gửi liên kết đặt lại mật khẩu'}
           </button>
         </form>
 
-        <Link to="/login" className="mt-5 inline-block text-sm font-medium text-slate-700 underline">
+        <Link to="/login" className="mt-5 inline-flex min-h-11 items-center sm:min-h-0 text-sm font-medium text-slate-700 underline">
           ← Quay lại đăng nhập
         </Link>
       </section>

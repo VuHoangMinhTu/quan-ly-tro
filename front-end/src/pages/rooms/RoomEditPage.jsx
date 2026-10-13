@@ -27,9 +27,9 @@ export default function RoomEditPage() {
 
   const room = roomQuery.data.data.data
   return (
-    <section className="max-w-3xl">
-      <Link to={`/rooms/${id}`} className="text-sm text-slate-600 hover:text-slate-950">← Quay lại chi tiết phòng</Link>
-      <h2 className="mb-6 mt-3 text-2xl font-bold">Sửa phòng {room.room_code}</h2>
+    <section className="min-w-0 w-full max-w-3xl">
+      <Link to={`/rooms/${id}`} className="text-sm text-slate-600 hover:text-slate-950 inline-flex min-h-11 items-center lg:min-h-0">← Quay lại chi tiết phòng</Link>
+      <h2 className="mb-6 mt-3 break-words text-xl font-bold sm:text-2xl">Sửa phòng {room.room_code}</h2>
       <RoomForm initialValues={room} onSubmit={handleSubmit} submitLabel="Lưu thay đổi" />
     </section>
   )

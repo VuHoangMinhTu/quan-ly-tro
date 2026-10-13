@@ -47,13 +47,13 @@ export default function ResetPasswordPage() {
 
   if (!token || !email) {
     return (
-      <main className="flex min-h-screen items-center justify-center p-4">
-        <section className="w-full max-w-md rounded-xl bg-white p-8 shadow">
-          <h1 className="text-2xl font-bold">Liên kết không hợp lệ</h1>
+      <main className="flex min-h-dvh items-center justify-center p-4">
+        <section className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 sm:p-8 shadow">
+          <h1 className="text-xl sm:text-2xl font-bold">Liên kết không hợp lệ</h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">
             Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu liên kết mới.
           </p>
-          <Link to="/forgot-password" className="mt-6 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+          <Link to="/forgot-password" className="w-full sm:w-auto min-h-11 sm:min-h-0 mt-6 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
             Yêu cầu liên kết mới
           </Link>
         </section>
@@ -62,20 +62,20 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
-      <section className="w-full max-w-md rounded-xl bg-white p-8 shadow">
-        <h1 className="text-2xl font-bold">Đặt lại mật khẩu</h1>
+    <main className="flex min-h-dvh items-center justify-center p-4">
+      <section className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 sm:p-8 shadow">
+        <h1 className="text-xl sm:text-2xl font-bold">Đặt lại mật khẩu</h1>
         <p className="mt-3 text-sm text-slate-600">Chọn mật khẩu mới cho tài khoản BeeHouse của bạn.</p>
 
         <form
-          className="mt-6 space-y-4"
+          className="min-w-0 break-words mt-6 space-y-4"
           onSubmit={form.handleSubmit((values) => mutation.mutate({ ...values, token }))}
         >
           <label className="block text-sm font-medium">
             Email
             <input
               readOnly
-              className="mt-1 w-full cursor-default rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-600"
+              className="mt-1 min-h-11 w-full min-w-0 cursor-default rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-base text-slate-600 sm:min-h-0 sm:text-sm"
               {...form.register('email')}
             />
           </label>
@@ -109,7 +109,7 @@ export default function ResetPasswordPage() {
           {generalError && (
             <div role="alert" className="rounded-lg bg-red-50 p-3 text-sm leading-6 text-red-700">
               <p>{generalError}</p>
-              <Link to="/forgot-password" className="mt-1 inline-block font-medium underline">
+              <Link to="/forgot-password" className="mt-1 inline-flex min-h-11 items-center sm:min-h-0 font-medium underline">
                 Yêu cầu liên kết mới
               </Link>
             </div>
@@ -117,7 +117,7 @@ export default function ResetPasswordPage() {
 
           <button
             disabled={mutation.isPending}
-            className="w-full rounded-lg bg-slate-900 px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-11 sm:min-h-0 w-full min-w-0 rounded-lg bg-slate-900 px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             {mutation.isPending ? 'Đang đặt lại mật khẩu...' : 'Đặt lại mật khẩu'}
           </button>
