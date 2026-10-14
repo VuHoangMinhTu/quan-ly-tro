@@ -86,6 +86,8 @@ class PayOSApiTest extends TestCase
     public static function tenantDescriptionLimits(): array
     {
         return [
+            'Minh Tu full name at fifty' => ['Minh Tú', 50, 'MINH TU CK'],
+            'Nguyen Van An full name at fifty' => ['Nguyễn Văn An', 50, 'NGUYEN VAN AN CK'],
             'Minh Tu fits exactly at ten' => ['Minh Tú', 10, 'MINH TU CK'],
             'Minh Tu needs abbreviation at nine' => ['Minh Tú', 9, 'MTU CK'],
             'full Vietnamese name fits exactly' => ['Nguyễn Văn An', 16, 'NGUYEN VAN AN CK'],
@@ -100,6 +102,34 @@ class PayOSApiTest extends TestCase
         [, $invoice] = $this->ownerAndInvoiceWithTenant('Minh Tú');
 
         $this->assertSame('MINH TU CK', app(PayOSService::class)->buildPaymentDescription($invoice));
+    }
+
+    public function test_new_request_at_fifty_snapshots_and_returns_the_full_name_sent_to_payos(): void
+    {
+        config(['services.payos.description_max_length' => 50]);
+        [$user, $invoice] = $this->ownerAndInvoiceWithTenant('Minh Tú');
+        $service = $this->reconciliationService();
+        $service->shouldReceive('createPaymentLink')->once()->withArgs(
+            function (Invoice $createdInvoice, PayOSPaymentRequest $request) use ($invoice): bool {
+                $this->assertTrue($createdInvoice->is($invoice));
+                $this->assertSame('MINH TU CK', $request->description);
+
+                return true;
+            },
+        )->andReturn($this->createdLink(9_000_000_001, 1_000_000));
+        $this->app->instance(PayOSService::class, $service);
+
+        $this->withToken($user->createToken('test')->plainTextToken)
+            ->postJson("/api/invoices/{$invoice->id}/payos")
+            ->assertOk()
+            ->assertJsonPath('data.payment_request.description', 'MINH TU CK');
+
+        $this->assertDatabaseCount('payos_payment_requests', 1);
+        $this->assertDatabaseHas('payos_payment_requests', [
+            'invoice_id' => $invoice->id,
+            'description' => 'MINH TU CK',
+            'status' => 'PENDING',
+        ]);
     }
 
     #[DataProvider('descriptionEnvironmentValues')]
