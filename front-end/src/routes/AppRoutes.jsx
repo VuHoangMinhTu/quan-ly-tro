@@ -33,6 +33,10 @@ import InvoiceListPage from '../pages/invoices/InvoiceListPage'
 import InvoicePrintPage from '../pages/invoices/InvoicePrintPage'
 import ModuleNavigationPage from '../pages/navigation/ModuleNavigationPage'
 import PayOSReturnPage from '../pages/payments/PayOSReturnPage'
+import ResidenceDeclarationListPage from '../pages/residence/ResidenceDeclarationListPage'
+import ResidenceDeclarationEditPage from '../pages/residence/ResidenceDeclarationEditPage'
+import ResidenceDeclarationDetailPage from '../pages/residence/ResidenceDeclarationDetailPage'
+import ResidenceCt01PrintPage from '../pages/residence/ResidenceCt01PrintPage'
 import MainLayout from '../layouts/MainLayout'
 import ProtectedRoute from './ProtectedRoute'
 
@@ -50,8 +54,13 @@ export default function AppRoutes() {
 
         <Route element={<ProtectedRoute />}>
           <Route path="/invoices/:id/print" element={<InvoicePrintPage />} />
+          <Route path="/residence-declarations/:id/print" element={<ResidenceCt01PrintPage />} />
           <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/residence-declarations" element={<ResidenceDeclarationListPage />} />
+            <Route path="/residence-declarations/new" element={<ResidenceDeclarationEditPage />} />
+            <Route path="/residence-declarations/:id/edit" element={<ResidenceDeclarationEditPage />} />
+            <Route path="/residence-declarations/:id" element={<ResidenceDeclarationDetailPage />} />
             <Route path="/change-password" element={<ChangePasswordPage />} />
             <Route path="/rooms" element={<ModuleNavigationPage module="rooms" />} />
             <Route path="/contracts" element={<ModuleNavigationPage module="contracts" />} />

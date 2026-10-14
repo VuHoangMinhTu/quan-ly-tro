@@ -13,6 +13,7 @@ const schema = z.object({
   billing_method: z.enum(BILLING_METHODS),
   unit: z.string({ error: 'Đơn vị phải là nội dung văn bản.' }).max(50, 'Đơn vị không được quá 50 ký tự').optional(),
   base_price: z.any(),
+  vat_rate: z.coerce.number({ error: 'Vui lòng nhập mức VAT hợp lệ từ 0 đến 100%.' }).min(0, 'VAT phải từ 0 đến 100%.').max(100, 'VAT phải từ 0 đến 100%.').refine(value => Math.abs(value * 100 - Math.round(value * 100)) < 0.0000001, 'VAT chỉ được có tối đa 2 chữ số thập phân.'),
   is_active: z.boolean(),
 }).superRefine((values, context) => {
   if (values.billing_method !== 'TIERED' && (values.base_price === '' || Number(values.base_price) < 0)) {
@@ -20,11 +21,11 @@ const schema = z.object({
   }
 })
 
-const defaults = { name: '', type: 'ELECTRICITY', billing_method: 'FIXED', unit: '', base_price: '', is_active: true }
+const defaults = { name: '', type: 'ELECTRICITY', billing_method: 'FIXED', unit: '', base_price: '', vat_rate: 0, is_active: true }
 const inputClass = 'mt-1 min-h-11 w-full min-w-0 sm:min-h-0 rounded border p-2'
 
 export default function ServiceForm({ initialValues = defaults, onSubmit, label }) {
-  const values = { ...defaults, ...initialValues, unit: toFormString(initialValues.unit), base_price: initialValues.base_price ?? '', is_active: initialValues.is_active ?? true }
+  const values = { ...defaults, ...initialValues, unit: toFormString(initialValues.unit), base_price: initialValues.base_price ?? '', vat_rate: initialValues.vat_rate ?? 0, is_active: initialValues.is_active ?? true }
   const form = useForm({ resolver: zodResolver(schema), defaultValues: values })
   const [submitError, setSubmitError] = useState('')
   const [billingMethod, setBillingMethod] = useState(values.billing_method)
@@ -49,6 +50,7 @@ export default function ServiceForm({ initialValues = defaults, onSubmit, label 
         ...formValues,
         unit: formValues.unit || null,
         base_price: billingMethod === 'TIERED' ? null : Number(formValues.base_price),
+        vat_rate: Number(formValues.vat_rate || 0),
       })
     } catch (error) {
       applyApiFieldErrors(error, form.setError)
@@ -66,6 +68,7 @@ export default function ServiceForm({ initialValues = defaults, onSubmit, label 
     {billingMethod !== 'TIERED' && <div><label className="block text-sm font-medium">{getBasePriceLabel(billingMethod)}</label><Controller name="base_price" control={form.control} render={({ field }) => <MoneyInput {...field} className={inputClass} placeholder="0" />} />{errors.base_price && <p className="mt-1 text-sm text-red-600">{errors.base_price.message}</p>}</div>}
     <div><label className="block text-sm font-medium">Đơn vị</label><input placeholder={getSuggestedServiceUnit(serviceType, billingMethod) || 'VD: tháng'} className={inputClass} {...unitRegistration} onChange={(event) => { unitRegistration.onChange(event); if (event.target.value !== autoUnitRef.current) autoUnitRef.current = '' }} />{errors.unit && <p className="mt-1 text-sm text-red-600">{errors.unit.message}</p>}</div>
     <label className="flex min-h-11 items-center gap-2 text-sm sm:min-h-0"><input className="h-4 w-4 shrink-0" type="checkbox" {...form.register('is_active')} /> Đang áp dụng</label>{errors.is_active && <p className="mt-1 text-sm text-red-600">{errors.is_active.message}</p>}
+    <div><label htmlFor="service-vat" className="block text-sm font-medium">Thuế VAT (%)</label><input id="service-vat" type="number" min="0" max="100" step="0.01" placeholder="0" className={inputClass} {...form.register('vat_rate')} />{errors.vat_rate && <p className="mt-1 text-sm text-red-600">{errors.vat_rate.message}</p>}<p className="mt-1 text-xs text-slate-500">Mức VAT do chủ trọ cấu hình. Để trống là 0%, không có dòng thuế.</p></div>
     {submitError && <p role="alert" className="text-sm text-red-600">{submitError}</p>}
     <button disabled={form.formState.isSubmitting} className="w-full sm:w-auto min-h-11 sm:min-h-0 rounded bg-slate-900 px-4 py-2 text-sm text-white">{label}</button>
   </form>

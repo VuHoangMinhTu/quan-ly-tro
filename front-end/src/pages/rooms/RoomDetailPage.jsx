@@ -88,6 +88,7 @@ export default function RoomDetailPage() {
       <RoomOccupantsSection roomId={id} />
 
       <RoomServicesSection key={`room-services-${room.id}`} room={room} />
+      <section className="mt-6 min-w-0 rounded-xl bg-white p-4 shadow-sm sm:p-6"><h3 className="text-lg font-semibold">Khai báo cư trú</h3><p className="mt-1 text-sm text-slate-500">Tự điền CT01 từ hồ sơ những người đang ở trong phòng.</p><div className="mt-3 flex flex-wrap gap-3"><Link to={`/residence-declarations/new?room_id=${room.id}`} className="inline-flex min-h-11 items-center rounded-lg bg-slate-900 px-3 text-sm text-white">Tạo hồ sơ tạm trú</Link><Link to={`/residence-declarations?room_id=${room.id}`} className="inline-flex min-h-11 items-center rounded-lg border px-3 text-sm">Xem hồ sơ của phòng</Link></div></section>
 
       <RoomUtilitiesSection room={room} />
 

@@ -17,11 +17,13 @@ class Service extends Model
         'billing_method',
         'unit',
         'base_price',
+        'vat_rate',
         'is_active',
     ];
 
     protected $casts = [
         'base_price' => 'decimal:2',
+        'vat_rate' => 'decimal:2',
         'is_active' => 'boolean',
     ];
 

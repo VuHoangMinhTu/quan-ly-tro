@@ -3,12 +3,15 @@
 use App\Http\Controllers\Api\AmenityController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BoardingHouseController;
+use App\Http\Controllers\Api\BoardingHouseManagerController;
 use App\Http\Controllers\Api\ContractController;
 use App\Http\Controllers\Api\GoogleAuthController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\InvoiceItemController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PayOSPaymentController;
+use App\Http\Controllers\Api\ResidenceDeclarationController;
+use App\Http\Controllers\Api\ResidenceProfileController;
 use App\Http\Controllers\Api\RoomController;
 use App\Http\Controllers\Api\RoomServiceController;
 use App\Http\Controllers\Api\RoomTenantController;
@@ -40,6 +43,20 @@ Route::get('/email/verify/{id}/{hash}', function (int $id, string $hash) {
 })->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
 
 Route::middleware('auth:sanctum')->group(function (): void {
+    Route::get('/residence/boarding-houses', [ResidenceDeclarationController::class, 'houses']);
+    Route::get('/residence/boarding-houses/{id}/rooms', [ResidenceDeclarationController::class, 'rooms']);
+    Route::get('/residence/rooms/{id}/context', [ResidenceDeclarationController::class, 'context']);
+    Route::get('/boarding-houses/{id}/residence-profile', [ResidenceProfileController::class, 'show']);
+    Route::put('/boarding-houses/{id}/residence-profile', [ResidenceProfileController::class, 'update']);
+    Route::get('/boarding-houses/{id}/managers', [BoardingHouseManagerController::class, 'index']);
+    Route::put('/boarding-houses/{id}/managers', [BoardingHouseManagerController::class, 'update']);
+    Route::get('/residence-declarations', [ResidenceDeclarationController::class, 'index']);
+    Route::post('/residence-declarations', [ResidenceDeclarationController::class, 'store']);
+    Route::get('/residence-declarations/{id}', [ResidenceDeclarationController::class, 'show']);
+    Route::put('/residence-declarations/{id}', [ResidenceDeclarationController::class, 'update']);
+    Route::put('/residence-declarations/{id}/status', [ResidenceDeclarationController::class, 'status']);
+    Route::get('/residence-declarations/{id}/export', [ResidenceDeclarationController::class, 'export']);
+    Route::delete('/residence-declarations/{id}', [ResidenceDeclarationController::class, 'destroy']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/auth/password', [AuthController::class, 'changePassword']);

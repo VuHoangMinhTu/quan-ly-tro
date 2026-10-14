@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class BoardingHouse extends Model
@@ -29,5 +31,15 @@ class BoardingHouse extends Model
     public function services()
     {
         return $this->hasMany(Service::class);
+    }
+
+    public function managers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'boarding_house_managers')->withTimestamps();
+    }
+
+    public function residenceProfile(): HasOne
+    {
+        return $this->hasOne(BoardingHouseResidenceProfile::class);
     }
 }

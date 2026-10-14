@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Validation\ValidationException;
@@ -76,11 +77,14 @@ class Invoice extends Model
 
     public function recalculateTotals(): void
     {
-        $subtotal = $this->items()->sum('amount');
-        if ($this->discount_amount > $subtotal) {
+        $subtotal = BigDecimal::of(0);
+        foreach ($this->items()->pluck('amount') as $amount) {
+            $subtotal = $subtotal->plus((string) $amount);
+        }
+        if (BigDecimal::of($this->discount_amount)->isGreaterThan($subtotal)) {
             throw ValidationException::withMessages(['discount_amount' => 'Số tiền giảm giá không được vượt quá tạm tính.']);
         }
-        $this->update(['subtotal' => $subtotal, 'total_amount' => $subtotal - $this->discount_amount]);
+        $this->update(['subtotal' => (string) $subtotal, 'total_amount' => (string) $subtotal->minus($this->discount_amount)]);
     }
 
     /**

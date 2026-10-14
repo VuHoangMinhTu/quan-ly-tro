@@ -4,6 +4,9 @@ namespace App\Services;
 
 use App\Exceptions\InvoiceFinancialEditException;
 use App\Models\Invoice;
+use App\Models\Service;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -11,11 +14,14 @@ class BillingService
 {
     public function generateForInvoice(Invoice $invoice): void
     {
-        if (! $invoice->canEditFinancials()) {
-            throw new InvoiceFinancialEditException('Hóa đơn đã có thanh toán nên không thể chỉnh sửa các khoản thu.');
-        }
-        $oldRemaining = (float) $invoice->total_amount - (float) $invoice->paid_amount;
-        DB::transaction(function () use ($invoice) {
+        $oldRemaining = DB::transaction(function () use ($invoice): float {
+            // Recheck persisted financial state under the same lock used by payments:
+            // a previously loaded invoice may already have been paid by another request.
+            $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
+            if (! $invoice->canEditFinancials()) {
+                throw new InvoiceFinancialEditException('Hóa đơn đã có thanh toán nên không thể chỉnh sửa các khoản thu.');
+            }
+            $oldRemaining = (float) $invoice->total_amount - (float) $invoice->paid_amount;
             $invoice->items()->where('source', 'AUTO')->delete();
             $start = $invoice->billing_period->copy()->startOfMonth();
             $end = $start->copy()->endOfMonth();
@@ -36,12 +42,12 @@ class BillingService
 
             foreach ($services as $service) {
                 if ($service->billing_method === 'FIXED' && $service->base_price !== null) {
-                    $this->item($invoice, $service->type, $service->name, 1, $service->base_price, $service->base_price);
+                    $this->item($invoice, $service->type, $service->name, 1, $service->base_price, $service->base_price, $service);
                 }
                 if ($service->billing_method === 'PER_PERSON' && $service->base_price !== null) {
                     $count = $invoice->room->roomTenants()->where('status', 'ACTIVE')->whereDate('move_in_date', '<=', $end)->where(fn ($q) => $q->whereNull('move_out_date')->orWhereDate('move_out_date', '>=', $start))->count();
                     if ($count) {
-                        $this->item($invoice, $service->type, $service->name, $count, $service->base_price, $count * $service->base_price);
+                        $this->item($invoice, $service->type, $service->name, $count, $service->base_price, BigDecimal::of($service->base_price)->multipliedBy($count), $service);
                     }
                 }
                 if (in_array($service->billing_method, ['PER_UNIT', 'TIERED'], true)) {
@@ -61,32 +67,35 @@ class BillingService
                         ])]);
                     }
                     $previous = $meter->readings()->whereDate('reading_date', '<', $start)->reorder('reading_date', 'desc')->first();
-                    $consumption = $current->reading_value - ($previous ? $previous->reading_value : $meter->initial_reading);
-                    if ($consumption < 0) {
+                    $consumption = BigDecimal::of($current->reading_value)->minus($previous ? $previous->reading_value : $meter->initial_reading)->strippedOfTrailingZeros();
+                    if ($consumption->isLessThan(0)) {
                         throw ValidationException::withMessages(['reading_value' => 'Mức tiêu thụ điện/nước không được âm. Vui lòng kiểm tra lại chỉ số công tơ.']);
                     }
                     if ($service->billing_method === 'PER_UNIT') {
                         if ($service->base_price === null) {
                             throw ValidationException::withMessages(['service_id' => 'Dịch vụ chưa có đơn giá. Vui lòng cập nhật đơn giá trước khi tạo khoản thu.']);
                         }
-                        $this->item($invoice, $service->type, $service->name.' '.$consumption, $consumption, $service->base_price, $consumption * $service->base_price);
+                        $this->item($invoice, $service->type, $service->name.' '.$consumption, $consumption, $service->base_price, $consumption->multipliedBy($service->base_price), $service);
                     } else {
                         $tiers = $service->priceTiers;
                         if ($tiers->isEmpty()) {
                             throw ValidationException::withMessages(['service_id' => 'Dịch vụ chưa có bảng giá bậc thang. Vui lòng thêm bậc giá trước khi tạo khoản thu.']);
                         }
-                        $amount = 0;
+                        $amount = BigDecimal::of(0);
                         foreach ($tiers as $tier) {
-                            $width = $tier->to_quantity === null ? $consumption - $tier->from_quantity : min($consumption, $tier->to_quantity) - $tier->from_quantity;
-                            if ($width > 0) {
-                                $amount += $width * $tier->unit_price;
+                            $upper = $tier->to_quantity === null ? $consumption : BigDecimal::min($consumption, $tier->to_quantity);
+                            $width = $upper->minus($tier->from_quantity);
+                            if ($width->isGreaterThan(0)) {
+                                $amount = $amount->plus($width->multipliedBy($tier->unit_price));
                             }
                         }
-                        $this->item($invoice, $service->type, $service->name.' '.$consumption, $consumption, 0, $amount);
+                        $this->item($invoice, $service->type, $service->name.' '.$consumption, $consumption, 0, $amount, $service);
                     }
                 }
             }
             $invoice->recalculateTotals();
+
+            return $oldRemaining;
         });
 
         $updatedInvoice = $invoice->fresh();
@@ -97,8 +106,24 @@ class BillingService
         );
     }
 
-    private function item(Invoice $invoice, string $type, string $description, $quantity, $price, $amount): void
+    private function item(Invoice $invoice, string $type, string $description, BigDecimal|int|string $quantity, BigDecimal|int|string $price, BigDecimal|int|string $amount, ?Service $service = null): void
     {
-        $invoice->items()->create(['type' => $type, 'description' => $description, 'quantity' => $quantity, 'unit_price' => $price, 'amount' => $amount, 'source' => 'AUTO']);
+        $amount = BigDecimal::of($amount)->toScale(2, RoundingMode::HalfUp);
+        $invoice->items()->create(['type' => $type, 'description' => $description, 'quantity' => (string) $quantity, 'unit_price' => (string) $price, 'amount' => (string) $amount, 'source' => 'AUTO']);
+        $rate = BigDecimal::of($service?->vat_rate ?? 0);
+        if ($rate->isZero()) {
+            return;
+        }
+
+        // Tax is a service configuration, not a legal default. Snapshot the rate
+        // and round half-up to a whole dong; regeneration replaces only AUTO items.
+        $tax = $amount->multipliedBy($rate)->dividedBy(100, 0, RoundingMode::HalfUp);
+        $label = mb_strtolower(__('services.types.'.$service->type));
+        $rateLabel = str_contains((string) $rate, '.') ? rtrim(rtrim((string) $rate, '0'), '.') : (string) $rate;
+        $invoice->items()->create([
+            'type' => 'SERVICE_TAX', 'description' => 'VAT tiền '.$label.' ('.$rateLabel.'%)',
+            'quantity' => 1, 'unit_price' => (string) $tax, 'amount' => (string) $tax,
+            'source' => 'AUTO', 'tax_rate' => (string) $rate,
+        ]);
     }
 }

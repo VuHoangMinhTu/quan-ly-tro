@@ -7,9 +7,21 @@ use Illuminate\Validation\Rule;
 
 class StoreServiceRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('vat_rate') && $this->input('vat_rate') === null) {
+            $this->merge(['vat_rate' => 0]);
+        }
+    }
+
     public function authorize(): bool
     {
         return true;
+    }
+
+    public function attributes(): array
+    {
+        return ['vat_rate' => 'thuế VAT'];
     }
 
     /** @return array<string, array<int, mixed>> */
@@ -22,6 +34,7 @@ class StoreServiceRequest extends FormRequest
             'unit' => ['nullable', 'string', 'max:50'],
             'base_price' => ['nullable', 'numeric', 'min:0', 'required_unless:billing_method,TIERED'],
             'is_active' => ['boolean'],
+            'vat_rate' => ['sometimes', 'numeric', 'between:0,100', 'decimal:0,2'],
         ];
     }
 }
