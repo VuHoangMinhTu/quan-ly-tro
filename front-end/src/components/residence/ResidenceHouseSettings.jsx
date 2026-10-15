@@ -33,7 +33,7 @@ function ManagersForm({ houseId, initial }) {
     await Promise.all([client.invalidateQueries({ queryKey: residenceKeys.managers(houseId) }), client.invalidateQueries({ queryKey: residenceKeys.houses })])
   } })
   return <form onSubmit={event => { event.preventDefault(); setMessage(''); save.mutate({ manager_emails: [...new Set(emails.split(/[,;\n]/).map(email => email.trim().toLowerCase()).filter(Boolean))] }) }} className="space-y-3">
-    <h3 className="font-semibold">Phân công MANAGER</h3><p className="text-sm text-slate-500">Nhập email tài khoản BeeHouse đã đăng ký, mỗi email một dòng. Quản lý chỉ được thao tác hồ sơ cư trú của nhà trọ được phân công. Để trống rồi lưu để thu hồi tất cả phân công.</p>
+    <h3 className="font-semibold">Phân công MANAGER</h3><p className="text-sm text-slate-500">Nhập email tài khoản BeeHouse đã đăng ký, mỗi email một dòng. Quản lý được thao tác hợp đồng và hồ sơ cư trú của nhà trọ được phân công. Để trống rồi lưu để thu hồi tất cả phân công.</p>
     <label htmlFor="manager-emails" className="block text-sm">Email quản lý</label><textarea id="manager-emails" rows={3} className={inputClass} value={emails} onChange={event => setEmails(event.target.value)} />
     {save.isError && <p role="alert" className="text-sm text-red-700">{getApiErrorMessage(save.error)}</p>}{message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
     <button disabled={save.isPending} className={buttonClass}>{save.isPending ? 'Đang lưu...' : 'Lưu phân công'}</button>

@@ -110,6 +110,11 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::delete('/room-tenants/{id}', [RoomTenantController::class, 'destroy']);
 
     Route::get('/rooms/{roomId}/contracts', [ContractController::class, 'index']);
+    Route::get('/rooms/{roomId}/contract-context', [ContractController::class, 'context']);
+    Route::put('/boarding-houses/{id}/contract-schedule', [ContractController::class, 'schedule']);
+    Route::put('/contracts/{id}/status', [ContractController::class, 'status']);
+    Route::put('/contracts/{id}/room', [ContractController::class, 'changeRoom']);
+    Route::put('/contracts/{id}/occupants/{occupantId}/move-out', [ContractController::class, 'moveOut']);
     Route::post('/rooms/{roomId}/contracts', [ContractController::class, 'store']);
     Route::get('/contracts/{id}', [ContractController::class, 'show']);
     Route::put('/contracts/{id}', [ContractController::class, 'update']);

@@ -16,6 +16,9 @@ class BoardingHouse extends Model
         'name',
         'address',
         'description',
+        'default_invoice_issue_day_from',
+        'default_invoice_issue_day_to',
+        'default_payment_due_day',
     ];
 
     public function landlord()

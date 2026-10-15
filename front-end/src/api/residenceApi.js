@@ -3,7 +3,7 @@ import client from './axiosClient'
 export const residenceKeys = {
   houses: ['residence-houses'],
   rooms: id => ['residence-rooms', String(id)],
-  context: id => ['residence-context', String(id)],
+  context: (id, contractId) => contractId ? ['residence-context', String(id), String(contractId)] : ['residence-context', String(id)],
   list: ['residence-declarations'],
   detail: id => ['residence-declaration', String(id)],
   profile: id => ['residence-profile', String(id)],
@@ -11,7 +11,7 @@ export const residenceKeys = {
 }
 export const getResidenceHouses = () => client.get('/residence/boarding-houses')
 export const getResidenceRooms = id => client.get(`/residence/boarding-houses/${id}/rooms`)
-export const getResidenceContext = id => client.get(`/residence/rooms/${id}/context`)
+export const getResidenceContext = (id, contractId) => client.get(`/residence/rooms/${id}/context`, { params: contractId ? { contract_id: contractId } : {} })
 export const getResidenceDeclarations = roomId => client.get('/residence-declarations', { params: roomId ? { room_id: roomId } : {} })
 export const getResidenceDeclaration = id => client.get(`/residence-declarations/${id}`)
 export const createResidenceDeclaration = data => client.post('/residence-declarations', data)

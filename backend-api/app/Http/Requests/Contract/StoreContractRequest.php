@@ -2,53 +2,61 @@
 
 namespace App\Http\Requests\Contract;
 
-use App\Http\Requests\Concerns\ValidatesActiveContractOverlap;
-use App\Models\Room;
+use App\Services\BoardingHouseAccessService;
+use App\Services\ContractService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Validator;
 
 class StoreContractRequest extends FormRequest
 {
-    use ValidatesActiveContractOverlap;
-
     public function authorize(): bool
     {
+        if ($this->route('id') !== null) {
+            app(ContractService::class)->find($this->user(), (int) $this->route('id'));
+        } else {
+            app(BoardingHouseAccessService::class)->room($this->user(), (int) $this->route('roomId'));
+        }
+
         return true;
     }
 
-    /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
+        $updating = $this->route('id') !== null;
+
         return [
-            'tenant_id' => ['required', 'integer', 'exists:tenants,id'],
-            'contract_code' => ['required', 'string', 'max:100', Rule::unique('contracts', 'contract_code')],
-            'start_date' => ['required', 'date'],
-            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'signed_date' => ['nullable', 'date'],
-            'monthly_rent' => ['required', 'numeric', 'min:0'],
-            'deposit_amount' => ['required', 'numeric', 'min:0'],
-            'status' => ['required', Rule::in(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED'])],
+            'tenant_id' => [$updating ? 'sometimes' : 'required', 'integer', 'min:1', 'exists:tenants,id'],
+            'contract_code' => [$updating ? 'sometimes' : 'required', 'string', 'max:100', Rule::unique('contracts', 'contract_code')->ignore($this->route('id'))],
+            'start_date' => ['nullable', 'date_format:Y-m-d'],
+            'end_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:start_date'],
+            'signed_date' => ['nullable', 'date_format:Y-m-d'],
+            'monthly_rent' => ['nullable', 'numeric', 'min:0', 'max:9999999999999.99'],
+            'deposit_amount' => ['sometimes', 'numeric', 'min:0', 'max:9999999999999.99'],
+            'status' => ['sometimes', Rule::in(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED'])],
             'note' => ['nullable', 'string'],
+            'lessor_representative_user_id' => ['nullable', 'integer', 'min:1'],
+            'invoice_issue_day_from' => ['nullable', 'integer', 'between:1,31'],
+            'invoice_issue_day_to' => ['nullable', 'integer', 'between:1,31'],
+            'payment_due_day' => ['nullable', 'integer', 'between:1,31'],
+            'occupant_tenant_ids' => ['sometimes', 'array', 'max:100'],
+            'occupant_tenant_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
+            'service_ids' => ['sometimes', 'array', 'max:100'],
+            'service_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
+            'utility_openings' => ['sometimes', 'array', 'max:100'],
+            'utility_openings.*.utility_meter_id' => ['required', 'integer', 'min:1', 'distinct'],
+            'utility_openings.*.opening_reading' => ['required', 'numeric', 'min:0', 'max:9999999999999.99'],
+            'utility_openings.*.reading_date' => ['required', 'date_format:Y-m-d'],
+            'move_out_date' => ['nullable', 'date_format:Y-m-d'],
         ];
     }
 
-    public function withValidator(Validator $validator): void
+    public function attributes(): array
     {
-        $validator->after(function (Validator $validator): void {
-            $room = $this->ownedRoom();
-            if ($room && $room->monthly_rent === null) {
-                $validator->errors()->add('monthly_rent', 'Phòng chưa được thiết lập giá thuê. Vui lòng cập nhật giá thuê trước.');
-            }
-            $this->validateActiveContractOverlap($validator, $room);
-        });
-    }
-
-    private function ownedRoom(): ?Room
-    {
-        return Room::query()
-            ->whereKey($this->route('roomId'))
-            ->whereHas('boardingHouse', fn ($query) => $query->where('landlord_id', $this->user()?->landlord?->id))
-            ->first();
+        return ['tenant_id' => 'người thuê', 'contract_code' => 'mã hợp đồng', 'start_date' => 'ngày bắt đầu',
+            'end_date' => 'ngày kết thúc', 'signed_date' => 'ngày ký', 'monthly_rent' => 'giá thuê thỏa thuận',
+            'deposit_amount' => 'tiền cọc thỏa thuận', 'lessor_representative_user_id' => 'đại diện Bên A',
+            'occupant_tenant_ids' => 'người ở cùng', 'service_ids' => 'dịch vụ', 'utility_openings' => 'chỉ số đầu',
+            'invoice_issue_day_from' => 'ngày bắt đầu gửi hóa đơn', 'invoice_issue_day_to' => 'ngày cuối gửi hóa đơn',
+            'payment_due_day' => 'ngày hạn thanh toán'];
     }
 }

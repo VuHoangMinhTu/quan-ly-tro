@@ -128,16 +128,17 @@ class BoardingHouseWithRoomsApiTest extends TestCase
         $this->assertDatabaseHas('rooms', ['id' => $id, 'monthly_rent' => null]);
     }
 
-    public function test_unconfigured_rent_blocks_new_contract_with_a_specific_422_message_but_zero_is_valid(): void
+    public function test_contract_agreed_rent_is_independent_of_unconfigured_room_rent_and_zero_is_valid(): void
     {
         $landlord = $this->owner();
         $room = $this->house($landlord)->rooms()->create(['room_code' => '101', 'monthly_rent' => null, 'status' => 'AVAILABLE']);
         $tenant = Tenant::create(['landlord_id' => $landlord->id, 'full_name' => 'Nguyễn Văn A']);
         $payload = $this->contractPayload($tenant);
         $this->actingAsOwner($landlord)->postJson("/api/rooms/{$room->id}/contracts", $payload)
-            ->assertUnprocessable()->assertJsonPath('errors.monthly_rent.0', 'Phòng chưa được thiết lập giá thuê. Vui lòng cập nhật giá thuê trước.');
-        $this->assertDatabaseCount('contracts', 0);
+            ->assertCreated();
+        $this->assertDatabaseHas('contracts', ['room_id' => $room->id, 'monthly_rent' => 2500000]);
         $room->update(['monthly_rent' => 0]);
+        $payload['contract_code'] = 'HD102';
         $this->postJson("/api/rooms/{$room->id}/contracts", $payload)->assertCreated();
         $this->assertDatabaseHas('contracts', ['room_id' => $room->id, 'monthly_rent' => 2500000]);
     }

@@ -35,7 +35,19 @@ class ResidenceDeclarationController extends Controller
 
     public function context(Request $request, int $id): JsonResponse
     {
-        return ApiResponse::success($this->declarations->context($request->user(), $id), 'Lấy dữ liệu khai báo cư trú thành công.');
+        $context = $this->declarations->context($request->user(), $id);
+        if ($request->filled('contract_id')) {
+            $contract = $context['room']->contracts()->findOrFail($request->integer('contract_id'));
+            $active = $contract->occupants()->where('status', 'ACTIVE')->pluck('tenant_id')->map(fn ($value) => (int) $value);
+            $context['suggested_declaration'] = [
+                'contract_id' => $contract->id,
+                'declarant_tenant_id' => $active->contains((int) $contract->tenant_id) ? $contract->tenant_id : null,
+                'request_content' => 'Đăng ký tạm trú',
+                'members' => $active->reject(fn ($value) => $value === (int) $contract->tenant_id)->map(fn ($tenant) => ['tenant_id' => $tenant, 'relationship_to_household_head' => ''])->values(),
+            ];
+        }
+
+        return ApiResponse::success($context, 'Lấy dữ liệu khai báo cư trú thành công.');
     }
 
     public function index(Request $request): JsonResponse

@@ -12,11 +12,13 @@ namespace App\Models;
  */
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class RoomTenant extends Model
 {
     protected $fillable = [
         'room_id',
+        'contract_id',
         'tenant_id',
         'is_primary',
         'move_in_date',
@@ -38,5 +40,10 @@ class RoomTenant extends Model
     public function tenant()
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function contract(): BelongsTo
+    {
+        return $this->belongsTo(Contract::class);
     }
 }

@@ -20,7 +20,7 @@ class InvoiceController extends Controller
 {
     public function index(Request $r, int $roomId): JsonResponse
     {
-        return ApiResponse::success($this->room($r, $roomId)->invoices()->with('contract')->orderByDesc('billing_period')->get(), 'Lấy danh sách hóa đơn thành công.');
+        return ApiResponse::success($this->room($r, $roomId)->invoices()->with('contract:id,room_id,tenant_id,contract_code,status')->orderByDesc('billing_period')->get(), 'Lấy danh sách hóa đơn thành công.');
     }
 
     public function store(StoreInvoiceRequest $r, int $roomId): JsonResponse

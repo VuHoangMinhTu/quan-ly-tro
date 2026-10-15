@@ -27,6 +27,9 @@ class BillingService
             $end = $start->copy()->endOfMonth();
             if ($invoice->contract) {
                 $c = $invoice->contract;
+                if ($c->monthly_rent === null || $c->start_date === null) {
+                    throw ValidationException::withMessages(['contract_id' => 'Hợp đồng chưa đủ ngày bắt đầu và giá thuê thỏa thuận. Vui lòng hoàn thiện hợp đồng trước khi tạo tiền phòng.']);
+                }
                 if ($c->room_id !== $invoice->room_id || $c->start_date > $end || ($c->end_date && $c->end_date < $start)) {
                     throw ValidationException::withMessages(['contract_id' => 'Hợp đồng không có hiệu lực trong kỳ hóa đơn này.']);
                 } $this->item($invoice, 'RENT', 'Tiền phòng tháng '.$start->format('m/Y'), 1, $c->monthly_rent, $c->monthly_rent);

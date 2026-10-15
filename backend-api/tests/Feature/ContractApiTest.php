@@ -172,11 +172,11 @@ class ContractApiTest extends TestCase
         ]);
 
         $this->withBearerToken($landlord)->postJson("/api/rooms/{$room->id}/contracts", $this->contractPayload([
-            'tenant_id' => $tenant->id, 'contract_code' => 'HD-OVERLAP', 'status' => 'ACTIVE', 'start_date' => '2026-09-15', 'end_date' => '2026-10-15',
+            'tenant_id' => $tenant->id, 'lessor_representative_user_id' => $landlord->user_id, 'contract_code' => 'HD-OVERLAP', 'status' => 'ACTIVE', 'start_date' => '2026-09-15', 'end_date' => '2026-10-15',
         ]))->assertStatus(422)->assertJsonValidationErrors('start_date');
 
         $this->withBearerToken($landlord)->postJson("/api/rooms/{$room->id}/contracts", $this->contractPayload([
-            'tenant_id' => $tenant->id, 'contract_code' => 'HD-NEXT', 'status' => 'ACTIVE', 'start_date' => '2026-10-01', 'end_date' => '2026-10-31',
+            'tenant_id' => $tenant->id, 'lessor_representative_user_id' => $landlord->user_id, 'contract_code' => 'HD-NEXT', 'status' => 'ACTIVE', 'start_date' => '2026-10-01', 'end_date' => '2026-10-31',
         ]))->assertCreated()->assertJsonPath('data', null);
 
         $this->withBearerToken($landlord)->postJson("/api/rooms/{$room->id}/contracts", $this->contractPayload([
@@ -208,7 +208,7 @@ class ContractApiTest extends TestCase
         ]);
 
         $this->withBearerToken($landlord)->postJson("/api/rooms/{$room->id}/contracts", $this->contractPayload([
-            'tenant_id' => $tenant->id, 'contract_code' => 'HD-LATER', 'status' => 'ACTIVE', 'start_date' => '2027-01-01', 'end_date' => null,
+            'tenant_id' => $tenant->id, 'lessor_representative_user_id' => $landlord->user_id, 'contract_code' => 'HD-LATER', 'status' => 'ACTIVE', 'start_date' => '2027-01-01', 'end_date' => null,
         ]))->assertStatus(422)->assertJsonValidationErrors('start_date');
     }
 
@@ -279,7 +279,7 @@ class ContractApiTest extends TestCase
             ->assertJsonValidationErrors('tenant_id');
     }
 
-    public function test_start_date_is_required(): void
+    public function test_start_date_is_required_when_activating(): void
     {
         $landlord = $this->createLandlord();
         $room = $this->createRoom($this->createBoardingHouse($landlord));
@@ -288,6 +288,8 @@ class ContractApiTest extends TestCase
         $this->withBearerToken($landlord)
             ->postJson("/api/rooms/{$room->id}/contracts", collect($this->contractPayload([
                 'tenant_id' => $tenant->id,
+                'status' => 'ACTIVE',
+                'lessor_representative_user_id' => $landlord->user_id,
             ]))->except('start_date')->all())
             ->assertStatus(422)
             ->assertJsonValidationErrors('start_date');

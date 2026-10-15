@@ -56,7 +56,7 @@ class ApiMessageTest extends TestCase
             ->assertJsonPath('message', 'Người thuê đã chọn không hợp lệ.')
             ->assertJsonPath('errors.tenant_id.0', 'Người thuê đã chọn không hợp lệ.');
 
-        $this->postJson("/api/rooms/{$room->id}/contracts", collect($this->contractPayload($tenant))->except('start_date')->all())
+        $this->postJson("/api/rooms/{$room->id}/contracts", collect([...$this->contractPayload($tenant), 'status' => 'ACTIVE', 'lessor_representative_user_id' => $room->boardingHouse->landlord->user_id])->except('start_date')->all())
             ->assertUnprocessable()
             ->assertJsonPath('message', 'Vui lòng nhập ngày bắt đầu.')
             ->assertJsonPath('errors.start_date.0', 'Vui lòng nhập ngày bắt đầu.');

@@ -24,6 +24,7 @@ import ContractCreatePage from '../pages/contracts/ContractCreatePage'
 import ContractDetailPage from '../pages/contracts/ContractDetailPage'
 import ContractEditPage from '../pages/contracts/ContractEditPage'
 import ContractListPage from '../pages/contracts/ContractListPage'
+import ContractNavigationPage from '../pages/contracts/ContractNavigationPage'
 import ServiceListPage from '../pages/services/ServiceListPage'
 import UtilityMeterDetailPage from '../pages/utilities/UtilityMeterDetailPage'
 import InvoiceCreatePage from '../pages/invoices/InvoiceCreatePage'
@@ -63,7 +64,7 @@ export default function AppRoutes() {
             <Route path="/residence-declarations/:id" element={<ResidenceDeclarationDetailPage />} />
             <Route path="/change-password" element={<ChangePasswordPage />} />
             <Route path="/rooms" element={<ModuleNavigationPage module="rooms" />} />
-            <Route path="/contracts" element={<ModuleNavigationPage module="contracts" />} />
+            <Route path="/contracts" element={<ContractNavigationPage />} />
             <Route path="/services" element={<ModuleNavigationPage module="services" />} />
             <Route path="/utilities" element={<ModuleNavigationPage module="utilities" />} />
             <Route path="/invoices" element={<ModuleNavigationPage module="invoices" />} />
