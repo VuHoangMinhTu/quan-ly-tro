@@ -31,6 +31,8 @@ export default function GoogleCallbackPage() {
         const token = response.data.data.token
 
         debug('Google exchange success')
+        await queryClient.cancelQueries({ queryKey: ['dashboard'] })
+        queryClient.removeQueries({ queryKey: ['dashboard'] })
         localStorage.setItem('access_token', token)
         debug('Token saved')
 

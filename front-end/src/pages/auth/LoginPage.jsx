@@ -23,6 +23,8 @@ export default function LoginPage() {
   const mutation = useMutation({
     mutationFn: async (data) => {
       const response = await login(data)
+      await client.cancelQueries({ queryKey: ['dashboard'] })
+      client.removeQueries({ queryKey: ['dashboard'] })
       localStorage.setItem('access_token', response.data.data.token)
 
       try {

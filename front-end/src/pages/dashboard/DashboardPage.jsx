@@ -1,31 +1,10 @@
-import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useQuery } from '@tanstack/react-query'
-import { Building2, UserRound } from 'lucide-react'
-import { Link } from 'react-router-dom'
-import { getMe } from '../../api/authApi'
-import { APP_NAME } from '../../utils/brand'
+import { dashboardKey, getDashboard } from '../../api/dashboardApi'
+import DashboardContent from '../../components/dashboard/DashboardContent'
 
 export default function DashboardPage() {
-  const { data, isError, error } = useQuery({ queryKey: ['me'], queryFn: getMe })
-  if (isError) return <p className="text-red-600">{getApiErrorMessage(error)}</p>
-  const profile = data?.data?.data
-
-  return <section className="min-w-0">
-    <h2 className="text-xl font-bold sm:text-2xl">Dashboard</h2>
-    <p className="mt-2 text-sm text-slate-600 sm:text-base">Chào mừng quay lại {APP_NAME}</p>
-    <div className="mt-5 grid gap-4 rounded-xl bg-white p-4 shadow-sm sm:grid-cols-2 lg:p-5">
-      <div className="flex min-w-0 items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700"><UserRound size={21} /></span>
-        <div className="min-w-0"><p className="text-sm text-slate-500">Người dùng</p><p className="mt-1 font-semibold [overflow-wrap:anywhere]">{profile?.user?.name || 'Chưa cập nhật'}</p>{profile?.user?.email && <p className="mt-1 text-sm text-slate-600 [overflow-wrap:anywhere]">{profile.user.email}</p>}</div>
-      </div>
-      <div className="flex min-w-0 items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700"><Building2 size={21} /></span>
-        <div className="min-w-0"><p className="text-sm text-slate-500">Chủ nhà</p><p className="mt-1 font-semibold [overflow-wrap:anywhere]">{profile?.landlord?.full_name || 'Chưa cập nhật'}</p>{profile?.landlord?.phone && <p className="mt-1 text-sm text-slate-600">{profile.landlord.phone}</p>}</div>
-      </div>
-    </div>
-    <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-      <Link to="/boarding-houses" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"><Building2 size={18} />Quản lý nhà trọ</Link>
-      <Link to="/tenants" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700"><UserRound size={18} />Danh sách người thuê</Link>
-    </div>
-  </section>
+  const query = useQuery({ queryKey: dashboardKey, queryFn: getDashboard, staleTime: 0, refetchOnWindowFocus: true, refetchInterval: 30000 })
+  if (query.isPending) return <section aria-label="Đang tải tổng quan" role="status" className="min-w-0 space-y-5"><p className="text-sm text-slate-500">Đang tải dữ liệu tổng quan...</p><div aria-hidden="true" className="grid animate-pulse grid-cols-2 gap-4 lg:grid-cols-4">{Array.from({ length: 8 }, (_, index) => <div key={index} className="h-32 rounded-xl bg-slate-200" />)}</div><div aria-hidden="true" className="h-72 animate-pulse rounded-xl bg-slate-200" /></section>
+  if (query.isError) return <section role="alert" className="space-y-4 rounded-xl bg-white p-5 shadow-sm"><p className="text-sm text-slate-700">Không thể tải dữ liệu tổng quan. Vui lòng thử lại.</p><button type="button" disabled={query.isFetching} onClick={() => query.refetch()} className="min-h-11 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">Thử lại</button></section>
+  return <section className="min-w-0"><DashboardContent data={query.data.data.data} /></section>
 }

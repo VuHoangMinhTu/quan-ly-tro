@@ -17,7 +17,7 @@ class RoomController extends Controller
     public function index(Request $request, int $boardingHouseId): JsonResponse
     {
         $boardingHouse = $this->findOwnedBoardingHouse($request, $boardingHouseId);
-        $rooms = $boardingHouse->rooms()->with('amenities')->latest()->get();
+        $rooms = $boardingHouse->rooms()->with('amenities')->withActiveOccupancy()->latest()->get();
 
         return ApiResponse::success($rooms, 'Lấy danh sách phòng thành công.');
     }
@@ -42,7 +42,7 @@ class RoomController extends Controller
     public function show(Request $request, int $id): JsonResponse
     {
         return ApiResponse::success(
-            $this->findOwnedRoom($request, $id)->load('amenities'),
+            $this->findOwnedRoom($request, $id)->load('amenities')->loadCount(['roomTenants as active_occupants_count' => fn ($occupants) => $occupants->where('status', 'ACTIVE')->whereHas('tenant')]),
             'Lấy thông tin phòng thành công.'
         );
     }

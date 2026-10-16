@@ -54,6 +54,7 @@ export default function MainLayout() {
     onSettled: (_, error) => {
       localStorage.removeItem('access_token')
       client.removeQueries({ queryKey: ['me'] })
+      client.removeQueries({ queryKey: ['dashboard'] })
       navigate('/login', { state: error ? { error: getApiErrorMessage(error) } : undefined })
     },
   })

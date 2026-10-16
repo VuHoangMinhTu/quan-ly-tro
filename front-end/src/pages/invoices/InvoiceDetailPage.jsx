@@ -77,10 +77,11 @@ export default function InvoiceDetailPage() {
   if (invoiceQuery.isError) return <p className="text-red-600">{getApiErrorMessage(invoiceQuery.error)}</p>
 
   const invoice = invoiceQuery.data.data.data
-  const draft = invoice.status === 'DRAFT'
+  const canManage = invoice.can_manage !== false
+  const draft = canManage && invoice.status === 'DRAFT'
   const canEditFinancials = canEditInvoiceFinancials(invoice)
   const remaining = Number(invoice.total_amount) - Number(invoice.paid_amount)
-  const canPay = ['UNPAID', 'PARTIALLY_PAID'].includes(invoice.status) && Number(invoice.total_amount) > 0
+  const canPay = canManage && ['UNPAID', 'PARTIALLY_PAID'].includes(invoice.status) && Number(invoice.total_amount) > 0
   const payments = paymentsQuery.data?.data?.data || []
   const activePayosRequest = payosRequest || invoice.payos_payment_request
   const payosError = payosMutation.error ? getApiErrorMessage(payosMutation.error) : ''
@@ -92,7 +93,7 @@ export default function InvoiceDetailPage() {
     payosMutation.mutate()
   }
 
-  const renderPaymentActions = (currentPayment) => currentPayment.payment_source !== 'PAYOS_WEBHOOK' && (
+  const renderPaymentActions = (currentPayment) => canManage && currentPayment.payment_source !== 'PAYOS_WEBHOOK' && (
     <div className="flex flex-wrap gap-2">
       <button type="button" onClick={() => setPayment(currentPayment)} className="inline-flex min-h-11 items-center px-2 underline">Sửa</button>
       <button type="button" onClick={() => window.confirm('Bạn có chắc muốn xóa lần thanh toán này?') && deletePaymentMutation.mutate(currentPayment.id)} className="inline-flex min-h-11 items-center px-2 text-red-700">Xóa</button>
@@ -100,14 +101,14 @@ export default function InvoiceDetailPage() {
   )
 
   return <section className="min-w-0">
-    <div className="print-hide min-w-0"><Link to={`/rooms/${invoice.room_id}/invoices`} className="inline-flex min-h-11 items-center">← Quay lại</Link>
+    <div className="print-hide min-w-0"><Link to={canManage ? `/rooms/${invoice.room_id}/invoices` : '/dashboard'} className="inline-flex min-h-11 items-center">← Quay lại</Link>
     {deleteInvoiceMutation.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(deleteInvoiceMutation.error)}</p>}
     {deleteItemMutation.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(deleteItemMutation.error)}</p>}
     {deletePaymentMutation.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(deletePaymentMutation.error)}</p>}
     {paymentsQuery.isError && <p className="mt-3 text-sm text-red-600">{getApiErrorMessage(paymentsQuery.error)}</p>}
     <div className="my-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0"><h2 className="break-words text-xl font-bold sm:text-2xl">{invoice.invoice_code}</h2><p className="mt-1 flex flex-wrap items-center gap-2">Kỳ {invoice.billing_period?.slice(5, 7)}/{invoice.billing_period?.slice(0, 4)} · <InvoiceStatusBadge status={invoice.status} /></p></div>
-      <div className="flex shrink-0 flex-wrap gap-3"><Link to={`/invoices/${id}/print`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center underline">In hóa đơn</Link><Link to={`/invoices/${id}/edit`} className="inline-flex min-h-11 min-w-11 items-center justify-center underline lg:min-w-0">Sửa</Link>{draft && <button onClick={() => window.confirm('Bạn có chắc muốn xóa hóa đơn này?') && deleteInvoiceMutation.mutate(id)} className="min-h-11 px-2 text-red-700">Xóa</button>}</div>
+      <div className="flex shrink-0 flex-wrap gap-3"><Link to={`/invoices/${id}/print`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center underline">In hóa đơn</Link>{canManage && <Link to={`/invoices/${id}/edit`} className="inline-flex min-h-11 min-w-11 items-center justify-center underline lg:min-w-0">Sửa</Link>}{draft && <button onClick={() => window.confirm('Bạn có chắc muốn xóa hóa đơn này?') && deleteInvoiceMutation.mutate(id)} className="min-h-11 px-2 text-red-700">Xóa</button>}</div>
     </div>
     <div className="grid min-w-0 gap-4 md:grid-cols-2">
       <div className="min-w-0 rounded-xl bg-white p-4 shadow sm:p-5"><h3 className="font-semibold">Thông tin hóa đơn</h3><p className="mt-3">Ngày phát hành: {formatDate(invoice.issued_at)}</p><p>Hạn thanh toán: {formatDate(invoice.due_date)}</p><p className="break-words">Ghi chú: {invoice.note || '—'}</p></div>

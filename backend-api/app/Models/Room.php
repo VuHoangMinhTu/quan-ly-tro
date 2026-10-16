@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -26,6 +27,11 @@ class Room extends Model
         'monthly_rent' => 'decimal:2',
         'max_tenants' => 'integer',
     ];
+
+    public function scopeWithActiveOccupancy(Builder $query): void
+    {
+        $query->withCount(['roomTenants as active_occupants_count' => fn ($occupants) => $occupants->where('status', 'ACTIVE')->whereHas('tenant')]);
+    }
 
     public function boardingHouse()
     {

@@ -21,6 +21,7 @@ export default function InvoiceEditPage() {
   if (invoiceQuery.isError || contractsQuery.isError || !invoice) return <p>{getApiErrorMessage(invoiceQuery.error || contractsQuery.error)}</p>
 
   const editableFinancials = canEditInvoiceFinancials(invoice)
+  if (invoice.can_manage === false) return <section className="space-y-3"><p>Bạn chỉ có quyền xem hóa đơn này.</p><Link to={`/invoices/${id}`} className="inline-flex min-h-11 items-center underline">Quay lại chi tiết hóa đơn</Link></section>
   const submit = async (payload) => {
     if (editableFinancials && invoice.payos_payment_request && hasInvoiceFinancialChanges(invoice, payload) && !window.confirm('Việc thay đổi số tiền hóa đơn sẽ làm mã QR thanh toán hiện tại hết hiệu lực. Bạn sẽ cần tạo mã QR mới.')) return
 

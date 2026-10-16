@@ -11,6 +11,7 @@ use App\Models\Contract;
 use App\Models\Invoice;
 use App\Models\Room;
 use App\Services\BillingService;
+use App\Services\BoardingHouseAccessService;
 use App\Services\PayOSService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,9 +19,9 @@ use Illuminate\Validation\ValidationException;
 
 class InvoiceController extends Controller
 {
-    public function index(Request $r, int $roomId): JsonResponse
+    public function index(Request $r, int $roomId, BoardingHouseAccessService $access): JsonResponse
     {
-        return ApiResponse::success($this->room($r, $roomId)->invoices()->with('contract:id,room_id,tenant_id,contract_code,status')->orderByDesc('billing_period')->get(), 'Lấy danh sách hóa đơn thành công.');
+        return ApiResponse::success($access->room($r->user(), $roomId)->invoices()->with('contract:id,room_id,tenant_id,contract_code,status')->orderByDesc('billing_period')->get(), 'Lấy danh sách hóa đơn thành công.');
     }
 
     public function store(StoreInvoiceRequest $r, int $roomId): JsonResponse
@@ -35,9 +36,13 @@ class InvoiceController extends Controller
         return ApiResponse::success(null, 'Tạo hóa đơn thành công.', 201);
     }
 
-    public function show(Request $r, int $id): JsonResponse
+    public function show(Request $r, int $id, BoardingHouseAccessService $access): JsonResponse
     {
-        return ApiResponse::success($this->invoice($r, $id)->load(['room.boardingHouse', 'contract.tenant', 'items', 'payosPaymentRequest']), 'Lấy thông tin hóa đơn thành công.');
+        $invoice = Invoice::query()->whereHas('room', fn ($query) => $query->whereIn('boarding_house_id', $access->houses($r->user())->select('boarding_houses.id')))
+            ->with(['room.boardingHouse', 'contract.tenant', 'items', 'payosPaymentRequest'])->findOrFail($id);
+        $invoice->setAttribute('can_manage', $access->isOwner($r->user(), $invoice->room->boardingHouse));
+
+        return ApiResponse::success($invoice, 'Lấy thông tin hóa đơn thành công.');
     }
 
     public function update(UpdateInvoiceRequest $r, int $id): JsonResponse
@@ -96,12 +101,12 @@ class InvoiceController extends Controller
 
     private function room(Request $r, int $id): Room
     {
-        return Room::whereHas('boardingHouse', fn ($q) => $q->where('landlord_id', $r->user()->landlord->id))->findOrFail($id);
+        return Room::whereHas('boardingHouse', fn ($q) => $q->where('landlord_id', $r->user()->landlord?->id))->findOrFail($id);
     }
 
     private function invoice(Request $r, int $id): Invoice
     {
-        return Invoice::whereHas('room.boardingHouse', fn ($q) => $q->where('landlord_id', $r->user()->landlord->id))->findOrFail($id);
+        return Invoice::whereHas('room.boardingHouse', fn ($q) => $q->where('landlord_id', $r->user()->landlord?->id))->findOrFail($id);
     }
 
     private function contract(Room $room, ?int $id): void

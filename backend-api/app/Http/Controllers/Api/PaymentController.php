@@ -8,6 +8,7 @@ use App\Http\Requests\Payment\StorePaymentRequest;
 use App\Http\Requests\Payment\UpdatePaymentRequest;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Services\BoardingHouseAccessService;
 use App\Services\InvoicePaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,9 +17,11 @@ use Illuminate\Validation\ValidationException;
 
 class PaymentController extends Controller
 {
-    public function index(Request $r, int $invoiceId): JsonResponse
+    public function index(Request $r, int $invoiceId, BoardingHouseAccessService $access): JsonResponse
     {
-        return ApiResponse::success($this->invoice($r, $invoiceId)->findOrFail($invoiceId)->payments, 'Lấy danh sách thanh toán thành công.');
+        $invoice = Invoice::query()->whereHas('room', fn ($query) => $query->whereIn('boarding_house_id', $access->houses($r->user())->select('boarding_houses.id')))->findOrFail($invoiceId);
+
+        return ApiResponse::success($invoice->payments, 'Lấy danh sách thanh toán thành công.');
     }
 
     public function store(StorePaymentRequest $r, int $invoiceId): JsonResponse
@@ -67,12 +70,12 @@ class PaymentController extends Controller
 
     private function invoice(Request $r, int $id)
     {
-        return Invoice::whereHas('room.boardingHouse', fn ($q) => $q->where('landlord_id', $r->user()->landlord->id))->whereKey($id);
+        return Invoice::whereHas('room.boardingHouse', fn ($q) => $q->where('landlord_id', $r->user()->landlord?->id))->whereKey($id);
     }
 
     private function payment(Request $r, int $id): Payment
     {
-        return Payment::whereHas('invoice.room.boardingHouse', fn ($q) => $q->where('landlord_id', $r->user()->landlord->id))->findOrFail($id);
+        return Payment::whereHas('invoice.room.boardingHouse', fn ($q) => $q->where('landlord_id', $r->user()->landlord?->id))->findOrFail($id);
     }
 
     private function allowed(Invoice $i, $amount, ?int $ignore = null): void

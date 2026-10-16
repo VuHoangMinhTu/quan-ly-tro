@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BoardingHouseController;
 use App\Http\Controllers\Api\BoardingHouseManagerController;
 use App\Http\Controllers\Api\ContractController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\GoogleAuthController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\InvoiceItemController;
@@ -43,6 +44,7 @@ Route::get('/email/verify/{id}/{hash}', function (int $id, string $hash) {
 })->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
 
 Route::middleware('auth:sanctum')->group(function (): void {
+    Route::get('/dashboard', DashboardController::class);
     Route::get('/residence/boarding-houses', [ResidenceDeclarationController::class, 'houses']);
     Route::get('/residence/boarding-houses/{id}/rooms', [ResidenceDeclarationController::class, 'rooms']);
     Route::get('/residence/rooms/{id}/context', [ResidenceDeclarationController::class, 'context']);

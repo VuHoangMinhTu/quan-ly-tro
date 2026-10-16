@@ -1,4 +1,5 @@
 export function canEditInvoiceFinancials(invoice) {
+  if (invoice?.can_manage === false) return false
   return invoice?.status === 'DRAFT'
     || (invoice?.status === 'UNPAID' && Number(invoice?.paid_amount || 0) === 0)
 }
