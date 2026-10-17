@@ -24,8 +24,6 @@ class Contract extends Model
         'status',
         'note',
         'lessor_representative_user_id',
-        'invoice_issue_day_from',
-        'invoice_issue_day_to',
         'payment_due_day',
         'occupant_tenant_ids',
     ];

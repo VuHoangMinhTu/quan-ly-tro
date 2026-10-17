@@ -60,7 +60,62 @@ test('wizard prefill uses latest meter reading and submitting is delayed until f
   nodes(page.render()).find(node => node.props.id === 'contract-representative').props.onChange({ target: { value: '9' } })
   page.button('Tiếp tục').props.onClick()
   await page.button('Kích hoạt hợp đồng').props.onClick()
-  assert.deepEqual(page.payloads[0], { ...coreValues, status: 'ACTIVE', lessor_representative_user_id: 9, occupant_tenant_ids: [2], service_ids: [3], invoice_issue_day_from: 25, invoice_issue_day_to: 28, payment_due_day: 5, utility_openings: [{ utility_meter_id: 4, opening_reading: 1800, reading_date: '2026-10-01' }] })
+  assert.deepEqual(page.payloads[0], { ...coreValues, status: 'ACTIVE', lessor_representative_user_id: 9, occupant_tenant_ids: [2], service_ids: [3], payment_due_day: 5, utility_openings: [{ utility_meter_id: 4, opening_reading: 1800, reading_date: '2026-10-01' }] })
+})
+
+test('step three only offers representative and monthly payment day, preserves custom selection and submits numeric day', async () => {
+  const page = await wizard()
+  await page.core(coreValues)
+  page.button('Tiếp tục').props.onClick()
+  assert.doesNotMatch(text(page.render()), /Ngày bắt đầu gửi hóa đơn|Ngày cuối gửi hóa đơn/)
+  assert.match(text(page.render()), /Ngày thanh toán hàng tháng/)
+  assert.match(text(page.render()), /ngày 05 hàng tháng/)
+  const day = () => nodes(page.render()).find(node => node.props.id === 'contract-payment-due-day')
+  assert.equal(day().props.value, 5)
+  day().props.onChange({ target: { value: '31' } })
+  assert.equal(day().props.value, '31')
+  page.button('Tiếp tục').props.onClick()
+  page.button('← Quay lại').props.onClick()
+  assert.equal(day().props.value, '31')
+  page.button('Tiếp tục').props.onClick()
+  await page.button('Lưu nháp').props.onClick()
+  assert.equal(page.payloads[0].payment_due_day, 31)
+  assert.equal('invoice_issue_day_from' in page.payloads[0], false)
+  assert.equal('invoice_issue_day_to' in page.payloads[0], false)
+})
+
+test('edit keeps its own nullable payment day instead of reapplying house defaults and never resends legacy issue range', async () => {
+  for (const savedDay of [null, 12]) {
+    const legacy = { ...coreValues, payment_due_day: savedDay, invoice_issue_day_from: 25, invoice_issue_day_to: 28 }
+    const page = await wizard(legacy)
+    await page.core(legacy)
+    page.button('Tiếp tục').props.onClick()
+    assert.equal(nodes(page.render()).find(node => node.props.id === 'contract-payment-due-day').props.value, savedDay ?? '')
+    page.button('Tiếp tục').props.onClick()
+    await page.button('Lưu nháp').props.onClick()
+    assert.equal(page.payloads[0].payment_due_day, savedDay)
+    assert.equal('invoice_issue_day_from' in page.payloads[0], false)
+    assert.equal('invoice_issue_day_to' in page.payloads[0], false)
+  }
+})
+
+test('monthly payment day rejects out of range or fractional input and allows clearing to null', async () => {
+  const page = await wizard()
+  await page.core(coreValues)
+  page.button('Tiếp tục').props.onClick()
+  const setDay = value => nodes(page.render()).find(node => node.props.id === 'contract-payment-due-day').props.onChange({ target: { value } })
+  for (const invalid of ['0', '32', '1.5']) {
+    setDay(invalid)
+    page.button('Tiếp tục').props.onClick()
+    await page.button('Lưu nháp').props.onClick()
+    assert.equal(page.payloads.length, 0)
+    assert.match(text(page.render()), /số nguyên từ 1 đến 31/)
+    page.button('← Quay lại').props.onClick()
+  }
+  setDay('')
+  page.button('Tiếp tục').props.onClick()
+  await page.button('Lưu nháp').props.onClick()
+  assert.equal(page.payloads[0].payment_due_day, null)
 })
 
 test('draft with null rent can be saved but cannot be activated without mandatory information', async () => {

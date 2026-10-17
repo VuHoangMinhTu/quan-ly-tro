@@ -35,8 +35,6 @@ class StoreContractRequest extends FormRequest
             'status' => ['sometimes', Rule::in(['DRAFT', 'ACTIVE', 'EXPIRED', 'TERMINATED'])],
             'note' => ['nullable', 'string'],
             'lessor_representative_user_id' => ['nullable', 'integer', 'min:1'],
-            'invoice_issue_day_from' => ['nullable', 'integer', 'between:1,31'],
-            'invoice_issue_day_to' => ['nullable', 'integer', 'between:1,31'],
             'payment_due_day' => ['nullable', 'integer', 'between:1,31'],
             'occupant_tenant_ids' => ['sometimes', 'array', 'max:100'],
             'occupant_tenant_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
@@ -56,7 +54,6 @@ class StoreContractRequest extends FormRequest
             'end_date' => 'ngày kết thúc', 'signed_date' => 'ngày ký', 'monthly_rent' => 'giá thuê thỏa thuận',
             'deposit_amount' => 'tiền cọc thỏa thuận', 'lessor_representative_user_id' => 'đại diện Bên A',
             'occupant_tenant_ids' => 'người ở cùng', 'service_ids' => 'dịch vụ', 'utility_openings' => 'chỉ số đầu',
-            'invoice_issue_day_from' => 'ngày bắt đầu gửi hóa đơn', 'invoice_issue_day_to' => 'ngày cuối gửi hóa đơn',
-            'payment_due_day' => 'ngày hạn thanh toán'];
+            'payment_due_day' => 'ngày thanh toán hàng tháng'];
     }
 }

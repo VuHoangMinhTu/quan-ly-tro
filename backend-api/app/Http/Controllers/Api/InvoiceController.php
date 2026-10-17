@@ -12,6 +12,7 @@ use App\Models\Invoice;
 use App\Models\Room;
 use App\Services\BillingService;
 use App\Services\BoardingHouseAccessService;
+use App\Services\ContractService;
 use App\Services\PayOSService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,12 +25,16 @@ class InvoiceController extends Controller
         return ApiResponse::success($access->room($r->user(), $roomId)->invoices()->with('contract:id,room_id,tenant_id,contract_code,status')->orderByDesc('billing_period')->get(), 'Lấy danh sách hóa đơn thành công.');
     }
 
-    public function store(StoreInvoiceRequest $r, int $roomId): JsonResponse
+    public function store(StoreInvoiceRequest $r, int $roomId, ContractService $contracts): JsonResponse
     {
         $room = $this->room($r, $roomId);
         $d = $r->validated();
-        $this->contract($room, $d['contract_id'] ?? null);
+        $contract = $this->contract($room, $d['contract_id'] ?? null);
         $d['billing_period'] = date('Y-m-01', strtotime($d['billing_period']));
+        // Explicit invoice dates win; the contract supplies only a creation default.
+        if (($d['due_date'] ?? null) === null && $contract !== null) {
+            $d['due_date'] = $contracts->scheduleDate($d['billing_period'], $contract->payment_due_day);
+        }
         $this->period($room, $d['billing_period']);
         $room->invoices()->create([...$d, 'subtotal' => 0, 'total_amount' => 0, 'paid_amount' => 0]);
 
@@ -109,11 +114,17 @@ class InvoiceController extends Controller
         return Invoice::whereHas('room.boardingHouse', fn ($q) => $q->where('landlord_id', $r->user()->landlord?->id))->findOrFail($id);
     }
 
-    private function contract(Room $room, ?int $id): void
+    private function contract(Room $room, ?int $id): ?Contract
     {
-        if ($id && ! Contract::where('room_id', $room->id)->whereKey($id)->exists()) {
+        if ($id === null) {
+            return null;
+        }
+        $contract = $room->contracts()->find($id);
+        if ($contract === null) {
             throw ValidationException::withMessages(['contract_id' => 'Hợp đồng phải thuộc phòng này.']);
         }
+
+        return $contract;
     }
 
     private function period(Room $room, string $date, ?int $ignore = null): void

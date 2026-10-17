@@ -17,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 
 class ContractService
 {
-    private const CORE = ['tenant_id', 'contract_code', 'start_date', 'end_date', 'signed_date', 'monthly_rent', 'deposit_amount', 'lessor_representative_user_id', 'invoice_issue_day_from', 'invoice_issue_day_to', 'payment_due_day', 'occupant_tenant_ids'];
+    private const CORE = ['tenant_id', 'contract_code', 'start_date', 'end_date', 'signed_date', 'monthly_rent', 'deposit_amount', 'lessor_representative_user_id', 'payment_due_day', 'occupant_tenant_ids'];
 
     public function __construct(private BoardingHouseAccessService $access) {}
 
@@ -100,12 +100,8 @@ class ContractService
             $tenantId = $data['tenant_id'] ?? $contract->tenant_id;
             Tenant::query()->where('landlord_id', $house->landlord_id)->findOrFail($tenantId);
             $isNew = ! $contract->exists;
-            if ($isNew) {
-                foreach (['invoice_issue_day_from', 'invoice_issue_day_to', 'payment_due_day'] as $key) {
-                    if (! array_key_exists($key, $data)) {
-                        $data[$key] = $house->{'default_'.$key};
-                    }
-                }
+            if ($isNew && ! array_key_exists('payment_due_day', $data)) {
+                $data['payment_due_day'] = $house->default_payment_due_day;
             }
             $contract->fill(Arr::only($data, [...self::CORE, 'note']));
             $selectedPeople = $contract->occupant_tenant_ids ?? [];
@@ -209,9 +205,6 @@ class ContractService
         if (! $representative) {
             throw ValidationException::withMessages(['lessor_representative_user_id' => 'Vui lòng chọn người đại diện hợp lệ.']);
         }
-        if ($contract->invoice_issue_day_from && $contract->invoice_issue_day_to && $contract->invoice_issue_day_from > $contract->invoice_issue_day_to) {
-            throw ValidationException::withMessages(['invoice_issue_day_to' => 'Ngày cuối gửi hóa đơn phải từ ngày bắt đầu trở đi.']);
-        }
         $overlaps = $room->contracts()->whereKeyNot($contract->id)->where('status', 'ACTIVE')
             ->whereDate('start_date', '<=', $contract->end_date?->format('Y-m-d') ?? '9999-12-31')
             ->where(fn ($query) => $query->whereNull('end_date')->orWhereDate('end_date', '>=', $contract->start_date->format('Y-m-d')))->exists();
@@ -254,7 +247,9 @@ class ContractService
         $contract->signing_snapshot = [
             'schema_version' => 1, 'finalized_at' => now()->toIso8601String(),
             'lessor' => $representative, 'tenant' => $this->person($tenant),
-            'contract' => $contract->only(['contract_code', 'start_date', 'end_date', 'signed_date', 'monthly_rent', 'deposit_amount', 'invoice_issue_day_from', 'invoice_issue_day_to', 'payment_due_day']),
+            // Retired issue-day columns remain nullable for production compatibility;
+            // new signing evidence records only the agreed monthly payment day.
+            'contract' => $contract->only(['contract_code', 'start_date', 'end_date', 'signed_date', 'monthly_rent', 'deposit_amount', 'payment_due_day']),
             'room' => ['room_id' => $room->id, 'room_code' => $room->room_code, 'boarding_house_name' => $house->name, 'address' => $house->address, 'max_tenants' => $room->max_tenants],
             'services' => $contract->agreedServices()->get()->toArray(), 'occupants' => $occupants,
             'utility_openings' => $contract->utilityOpenings()->get()->toArray(),

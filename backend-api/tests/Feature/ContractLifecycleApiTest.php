@@ -11,6 +11,7 @@ use App\Models\UtilityMeter;
 use App\Models\UtilityReading;
 use App\Services\ContractService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
 class ContractLifecycleApiTest extends TestCase
@@ -211,6 +212,9 @@ class ContractLifecycleApiTest extends TestCase
         $created = Contract::where('contract_code', 'POLICY')->sole();
         $house->update(['default_payment_due_day' => 5]);
         $this->assertSame(31, $created->fresh()->signing_snapshot['contract']['payment_due_day']);
+        $this->assertDatabaseHas('contracts', ['id' => $created->id, 'invoice_issue_day_from' => null, 'invoice_issue_day_to' => null]);
+        $this->assertArrayNotHasKey('invoice_issue_day_from', $created->signing_snapshot['contract']);
+        $this->assertArrayNotHasKey('invoice_issue_day_to', $created->signing_snapshot['contract']);
         $this->assertSame('2026-02-28', app(ContractService::class)->scheduleDate('2026-02-01', 31));
         $this->assertSame('2028-02-29', app(ContractService::class)->scheduleDate('2028-02-01', 31));
         $this->assertNull(app(ContractService::class)->scheduleDate('2026-02-01', null));
@@ -319,5 +323,70 @@ class ContractLifecycleApiTest extends TestCase
         $this->login($owner)->putJson("/api/boarding-houses/{$houseId}/contract-schedule", ['default_invoice_issue_day_from' => null, 'default_invoice_issue_day_to' => 28, 'default_payment_due_day' => null])->assertOk();
         $this->assertDatabaseHas('boarding_houses', ['id' => $houseId, 'default_invoice_issue_day_from' => null, 'default_invoice_issue_day_to' => 28, 'default_payment_due_day' => null]);
         $this->putJson("/api/boarding-houses/{$houseId}/contract-schedule", ['default_invoice_issue_day_from' => 28, 'default_invoice_issue_day_to' => 25])->assertUnprocessable()->assertJsonValidationErrors('default_invoice_issue_day_to');
+    }
+
+    #[TestWith([null])]
+    #[TestWith([1])]
+    #[TestWith([31])]
+    public function test_contract_monthly_payment_day_can_override_house_default_and_draft_can_clear_it(?int $day): void
+    {
+        [$contract, $owner] = $this->fixture();
+        $contract->room->boardingHouse->update(['default_payment_due_day' => 5]);
+
+        $this->login($owner)->postJson("/api/rooms/{$contract->room_id}/contracts", [
+            'tenant_id' => $contract->tenant_id, 'contract_code' => 'CUSTOM-DAY', 'status' => 'DRAFT',
+            'payment_due_day' => $day, 'invoice_issue_day_from' => 28, 'invoice_issue_day_to' => 25,
+        ])->assertCreated();
+
+        $created = Contract::where('contract_code', 'CUSTOM-DAY')->sole();
+        $this->assertDatabaseHas('contracts', ['id' => $created->id, 'payment_due_day' => $day, 'invoice_issue_day_from' => null, 'invoice_issue_day_to' => null]);
+        $this->putJson("/api/contracts/{$created->id}", ['payment_due_day' => null])->assertOk();
+        $this->assertDatabaseHas('contracts', ['id' => $created->id, 'payment_due_day' => null]);
+    }
+
+    #[TestWith([0])]
+    #[TestWith([32])]
+    #[TestWith([1.5])]
+    public function test_invalid_monthly_payment_day_returns_422_without_changing_contract(int|float $day): void
+    {
+        [$contract, $owner] = $this->fixture();
+
+        $this->login($owner)->putJson("/api/contracts/{$contract->id}", ['payment_due_day' => $day])
+            ->assertUnprocessable()->assertJsonValidationErrors('payment_due_day');
+
+        $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'payment_due_day' => null]);
+    }
+
+    public function test_legacy_issue_range_does_not_block_activation_or_change_old_columns(): void
+    {
+        [$contract, $owner] = $this->fixture();
+        $contract->forceFill(['invoice_issue_day_from' => 28, 'invoice_issue_day_to' => 25])->save();
+
+        $this->login($owner)->putJson("/api/contracts/{$contract->id}", $this->activate($contract, $owner, ['payment_due_day' => null]))->assertOk();
+
+        $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'status' => 'ACTIVE', 'payment_due_day' => null, 'invoice_issue_day_from' => 28, 'invoice_issue_day_to' => 25]);
+        $snapshot = $contract->fresh()->signing_snapshot['contract'];
+        $this->assertArrayNotHasKey('invoice_issue_day_from', $snapshot);
+        $this->assertArrayNotHasKey('invoice_issue_day_to', $snapshot);
+        $this->assertNull($snapshot['payment_due_day']);
+    }
+
+    #[TestWith(['2026-02-01', 31, null, '2026-02-28'])]
+    #[TestWith(['2028-02-01', 31, null, '2028-02-29'])]
+    #[TestWith(['2026-04-01', 31, null, '2026-04-30'])]
+    #[TestWith(['2026-10-01', 5, null, '2026-10-05'])]
+    #[TestWith(['2026-10-01', 5, '2026-11-10', '2026-11-10'])]
+    #[TestWith(['2026-10-01', null, null, null])]
+    public function test_invoice_creation_uses_contract_due_day_with_month_end_clamp_and_preserves_explicit_date(string $period, ?int $day, ?string $explicitDate, ?string $expected): void
+    {
+        [$contract, $owner] = $this->fixture();
+        $contract->update(['payment_due_day' => $day]);
+
+        $this->login($owner)->postJson("/api/rooms/{$contract->room_id}/invoices", [
+            'contract_id' => $contract->id, 'invoice_code' => 'DUE-DAY', 'billing_period' => $period,
+            'status' => 'DRAFT', 'due_date' => $explicitDate, 'issued_at' => '2026-01-25',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('invoices', ['invoice_code' => 'DUE-DAY', 'contract_id' => $contract->id, 'billing_period' => $period, 'due_date' => $expected, 'issued_at' => '2026-01-25']);
     }
 }
