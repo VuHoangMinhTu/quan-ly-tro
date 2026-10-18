@@ -6,6 +6,8 @@ use Database\Factories\ContractDocumentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ContractDocument extends Model
 {
@@ -25,5 +27,20 @@ class ContractDocument extends Model
     {
         static::updating(fn () => throw new \LogicException('Finalized contract documents are immutable.'));
         static::deleting(fn () => throw new \LogicException('Finalized contract documents must be preserved.'));
+    }
+
+    public function signing(): HasOne
+    {
+        return $this->hasOne(ContractDocumentSigning::class);
+    }
+
+    public function signingRequests(): HasMany
+    {
+        return $this->hasMany(ContractSigningRequest::class);
+    }
+
+    public function signatures(): HasMany
+    {
+        return $this->hasMany(ContractSignature::class);
     }
 }

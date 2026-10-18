@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\BoardingHouseManagerController;
 use App\Http\Controllers\Api\ContractController;
 use App\Http\Controllers\Api\ContractDocumentController;
 use App\Http\Controllers\Api\ContractServiceController;
+use App\Http\Controllers\Api\ContractSigningController;
 use App\Http\Controllers\Api\ContractTemplateController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\GoogleAuthController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\InvoiceItemController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PayOSPaymentController;
+use App\Http\Controllers\Api\PublicContractSigningController;
 use App\Http\Controllers\Api\ResidenceDeclarationController;
 use App\Http\Controllers\Api\ResidenceProfileController;
 use App\Http\Controllers\Api\RoomController;
@@ -24,10 +26,19 @@ use App\Http\Controllers\Api\ServicePriceTierController;
 use App\Http\Controllers\Api\TenantController;
 use App\Http\Controllers\Api\UtilityMeterController;
 use App\Http\Controllers\Api\UtilityReadingController;
+use App\Http\Middleware\SigningPrivacy;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
+Route::middleware([SigningPrivacy::class, 'throttle:signing-public'])->prefix('sign/{token}')->group(function (): void {
+    Route::get('/', [PublicContractSigningController::class, 'show']);
+    Route::post('/request-otp', [PublicContractSigningController::class, 'requestOtp'])->middleware('throttle:signing-otp');
+    Route::post('/verify-otp', [PublicContractSigningController::class, 'verifyOtp'])->middleware('throttle:signing-verify');
+    Route::post('/', [PublicContractSigningController::class, 'sign']);
+    Route::post('/decline', [PublicContractSigningController::class, 'decline']);
+    Route::get('/signatures/{signatureId}', [PublicContractSigningController::class, 'image']);
+});
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect']);
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback']);
@@ -47,6 +58,19 @@ Route::get('/email/verify/{id}/{hash}', function (int $id, string $hash) {
 })->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
 
 Route::middleware('auth:sanctum')->group(function (): void {
+    Route::middleware([SigningPrivacy::class, 'throttle:signing-public'])->group(function (): void {
+        Route::get('/contracts/{id}/signing', [ContractSigningController::class, 'status']);
+        Route::get('/contracts/{id}/signature-events', [ContractSigningController::class, 'status']);
+        Route::post('/contracts/{id}/signing-requests', [ContractSigningController::class, 'store'])->middleware('throttle:signing-otp');
+        Route::post('/contracts/{id}/signing-requests/resend', [ContractSigningController::class, 'resend'])->middleware('throttle:signing-otp');
+        Route::get('/contracts/{id}/sign/lessor', [ContractSigningController::class, 'context']);
+        Route::post('/contracts/{id}/sign/lessor/request-otp', [ContractSigningController::class, 'requestOtp'])->middleware('throttle:signing-otp');
+        Route::post('/contracts/{id}/sign/lessor/verify-otp', [ContractSigningController::class, 'verifyOtp'])->middleware('throttle:signing-verify');
+        Route::post('/contracts/{id}/sign/lessor', [ContractSigningController::class, 'sign']);
+        Route::post('/contracts/{id}/signing/void', [ContractSigningController::class, 'void']);
+        Route::get('/contracts/{id}/document/signed', [ContractSigningController::class, 'signed']);
+        Route::get('/contracts/{id}/signatures/{signatureId}/image', [ContractSigningController::class, 'image']);
+    });
     Route::get('/contract-templates', [ContractTemplateController::class, 'index']);
     Route::post('/contract-templates', [ContractTemplateController::class, 'store']);
     Route::post('/contract-templates/preview', [ContractTemplateController::class, 'preview']);

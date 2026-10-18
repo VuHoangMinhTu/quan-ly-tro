@@ -181,7 +181,7 @@ test('contract detail renders signing snapshots rather than changed live parties
   const source = (await readFile(new URL('../../pages/contracts/ContractDetailPage.jsx', import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
   const contract = { id: 1, room_id: 7, contract_code: 'HD101', status: 'ACTIVE', operational_role: 'MANAGER', tenant: { full_name: 'Tên mới', phone: 'Số mới' }, room: { room_code: 'Phòng mới', max_tenants: 3 }, signing_snapshot: { lessor: { full_name: 'Đại diện lúc ký', title: 'Quản lý' }, tenant: { full_name: 'Người thuê lúc ký', phone: '0900000000' }, room: { room_code: '101', boarding_house_name: 'Nhà lúc ký' }, contract: { monthly_rent: '3800000.00', deposit_amount: '5000000.00', start_date: '2026-09-28' }, services: [{ id: 3, service_name: 'Điện lúc ký', billing_method: 'PER_UNIT', base_price: 4000, vat_rate: 8 }] } }
   const bindings = { ...dates, contractKeys, BILLING_METHOD_LABELS, residenceStatusLabels, getApiErrorMessage,
-    ContractServicesSection: () => null, ContractDocumentSection: () => null,
+    ContractServicesSection: () => null, ContractDocumentSection: () => null, ContractSigningSection: () => null,
     formatCurrency: value => `${value} đ`, formatDate: dates.formatDateForDisplay, formatUtilityValue: String, genderLabels: {}, DateInput: Input,
     useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}],
     useParams: () => ({ id: '1' }), useNavigate: () => () => {}, useQueryClient: () => ({}),

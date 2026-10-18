@@ -23,12 +23,15 @@ class ContractDocumentService
         $contract->contract_template_id = $template->id;
         $contract->save();
 
-        return ContractDocument::create([
+        $document = ContractDocument::create([
             'contract_id' => $contract->id, 'contract_template_id' => $template->id,
             'template_key' => $template->template_key, 'template_version' => $template->version, 'template_name' => $template->name,
             'source_snapshot' => $snapshot, 'rendered_html' => $rendered,
             'document_hash' => hash('sha256', $rendered), 'finalized_at' => now(),
         ]);
+        app(ContractSigningAudit::class)->record($document, 'DOCUMENT_FINALIZED');
+
+        return $document;
     }
 
     public function document(User $user, int $id): ContractDocument

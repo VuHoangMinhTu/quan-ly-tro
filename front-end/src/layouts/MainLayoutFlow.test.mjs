@@ -76,7 +76,7 @@ test('mobile logout retains token removal, me-cache clearing and login navigatio
     assert.equal(layout.button('Menu tài khoản').props['aria-expanded'], false)
     layout.settle(null, null)
     assert.deepEqual(removedTokens, ['access_token'])
-    assert.deepEqual(layout.removedQueries, ['me', 'dashboard', 'contract-document', 'contract-document-preview', 'contract-template', 'contract-templates'].map(prefix => ({ queryKey: [prefix] })))
+    assert.deepEqual(layout.removedQueries, ['me', 'dashboard', 'contract-document', 'contract-document-preview', 'contract-template', 'contract-templates', 'contract-signing'].map(prefix => ({ queryKey: [prefix] })))
     assert.deepEqual(layout.navigation, [['/login', { state: undefined }]])
   } finally {
     globalThis.localStorage = previousStorage

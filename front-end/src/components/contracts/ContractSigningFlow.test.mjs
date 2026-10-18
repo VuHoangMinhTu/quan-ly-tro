@@ -1,0 +1,89 @@
+import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+import { test } from 'node:test'
+import React from 'react'
+import { transformWithOxc } from 'vite'
+import { buildSignaturePayload, SIGNING_EVENT_LABELS, SIGNING_STATUS_LABELS } from '../../utils/contractSigning.js'
+
+function nodes(node) {
+  if (Array.isArray(node)) return node.flatMap(nodes)
+  if (!React.isValidElement(node)) return []
+  return [node, ...nodes(node.props.children)]
+}
+function text(node) {
+  if (Array.isArray(node)) return node.map(text).join(' ')
+  if (React.isValidElement(node)) return text(node.props.children)
+  return node == null || typeof node === 'boolean' ? '' : String(node)
+}
+const context = { contract_code: 'HD101', room_code: '101', boarding_house_name: 'BeeHouse', signer_name: 'Nguyễn Văn A', signer_role: 'TENANT', request_status: 'PENDING', signing_status: 'PENDING', masked_email: 'n***@example.test', rendered_html: '<p>Nội dung đã chốt</p>', content_hash: 'a'.repeat(64), consent_version: 'BEEHOUSE_SIGN_V1', consent_text: 'Tôi xác nhận đã đọc và đồng ý với nội dung hợp đồng này.', otp_verified: false }
+
+async function form(initial = context) {
+  const source = (await readFile(new URL('../../pages/contracts/ContractSigningPage.jsx', import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
+  const { code } = await transformWithOxc(source, 'ContractSigningPage.jsx', { jsx: { runtime: 'classic' } })
+  const states = [initial, false]
+  const refs = []
+  const sent = []
+  let stateIndex = 0, refIndex = 0, latest = initial
+  const canvas = { clear: () => {}, exportPng: async () => new Blob(['png'], { type: 'image/png' }) }
+  const bindings = {
+    useState(value) { const index = stateIndex++; if (!(index in states)) states[index] = value; return [states[index], next => { states[index] = typeof next === 'function' ? next(states[index]) : next }] },
+    useRef(value) { return refs[refIndex++] ??= { current: value === null ? canvas : value } },
+    useEffect: () => {}, useCallback: callback => callback,
+    SIGNING_STATUS_LABELS, buildSignaturePayload, beeHouseLogo: 'logo.png', SignatureCanvas: () => null, FrozenContractHtml: () => null,
+    Link: props => React.createElement('a', { href: props.to }, props.children), getApiErrorMessage: error => error.message,
+    getSigningContext: async () => ({ data: { data: latest } }),
+    requestSigningOtp: async target => sent.push(['otp', target]),
+    verifySigningOtp: async (target, otp) => { sent.push(['verify', otp]); latest = { ...latest, otp_verified: true }; return { data: { data: { verification_token: 'b'.repeat(64) } } } },
+    submitContractSignature: async (target, payload) => { sent.push(['sign', payload]); latest = { ...latest, request_status: 'SIGNED', signing_status: 'PARTIALLY_SIGNED' } },
+    declineContractSigning: async () => sent.push(['decline']),
+  }
+  const Component = new Function('React', ...Object.keys(bindings), `${code}\nreturn SigningForm`)(React, ...Object.values(bindings))
+  return { states, sent, render() { stateIndex = 0; refIndex = 0; return Component({ token: 'opaque-token' }) } }
+}
+const button = (tree, label) => nodes(tree).find(node => node.type === 'button' && text(node) === label)
+
+test('signature payload binds consent/version/hash and sends a PNG file, never an image string', () => {
+  const payload = buildSignaturePayload(context, new Blob(['png'], { type: 'image/png' }), 'b'.repeat(64))
+  assert.equal(payload.get('consent'), '1')
+  assert.equal(payload.get('content_hash'), context.content_hash)
+  assert.equal(payload.get('verification_token'), 'b'.repeat(64))
+  assert.equal(payload.get('consent_version'), 'BEEHOUSE_SIGN_V1')
+  assert.equal(payload.get('signature').name, 'signature.png')
+  assert.equal(payload.get('signature').type, 'image/png')
+})
+
+test('tenant must verify OTP, consent and draw before signing; success shows partial completion', async () => {
+  const ui = await form()
+  assert.equal(button(ui.render(), 'Xác nhận ký hợp đồng').props.disabled, true)
+  await button(ui.render(), 'Gửi / Gửi lại mã OTP').props.onClick()
+  const otp = nodes(ui.render()).find(node => node.type === 'input' && node.props.autoComplete === 'one-time-code')
+  otp.props.onChange({ target: { value: '12a3456' } })
+  await button(ui.render(), 'Xác thực OTP').props.onClick()
+  const checkbox = nodes(ui.render()).find(node => node.type === 'input' && node.props.type === 'checkbox')
+  checkbox.props.onChange({ target: { checked: true } })
+  ui.states[7] = true // Canvas onChange updates the same form ink state.
+  assert.equal(button(ui.render(), 'Xác nhận ký hợp đồng').props.disabled, false)
+  await button(ui.render(), 'Xác nhận ký hợp đồng').props.onClick()
+  assert.deepEqual(ui.sent.map(value => value[0]), ['otp', 'verify', 'sign'])
+  assert.equal(ui.sent[1][1], '123456')
+  assert.match(text(ui.render()), /Bạn đã xác nhận ký hợp đồng/)
+  assert.equal(button(ui.render(), 'Xác nhận ký hợp đồng'), undefined)
+})
+
+test('signed state hides OTP/canvas controls; completed state offers print only when images ready', async () => {
+  const ui = await form({ ...context, request_status: 'SIGNED', signing_status: 'COMPLETED', signed_rendered_html: '<p>Bản đã ký</p>' })
+  assert.equal(button(ui.render(), 'Gửi / Gửi lại mã OTP'), undefined)
+  assert.equal(button(ui.render(), 'In hợp đồng / Lưu PDF').props.disabled, true)
+  assert.match(text(ui.render()), /Hợp đồng đã hoàn tất ký/)
+})
+
+test('public signing is outside authentication and uses a separate client without Sanctum interceptor', async () => {
+  const routes = await readFile(new URL('../../routes/AppRoutes.jsx', import.meta.url), 'utf8')
+  assert.ok(routes.indexOf('path="/sign/:token"') < routes.indexOf('<Route element={<ProtectedRoute />}'))
+  const api = await readFile(new URL('../../api/contractSigningApi.js', import.meta.url), 'utf8')
+  assert.match(api, /const publicClient = axios.create/)
+  assert.match(api, /target.token \? publicClient : client/)
+  assert.doesNotMatch(api, /localStorage|console\.log/)
+  assert.equal(SIGNING_STATUS_LABELS.COMPLETED, 'Đã hoàn tất ký')
+  assert.equal(SIGNING_EVENT_LABELS.OTP_VERIFIED, 'Đã xác thực OTP')
+})

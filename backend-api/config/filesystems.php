@@ -30,6 +30,14 @@ return [
 
     'disks' => [
 
+        'contract_signatures' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/contract-signatures'),
+            'visibility' => 'private',
+            'serve' => false,
+            'throw' => true,
+        ],
+
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),

@@ -28,6 +28,8 @@ import ContractNavigationPage from '../pages/contracts/ContractNavigationPage'
 import ContractTemplateListPage from '../pages/contracts/ContractTemplateListPage'
 import ContractTemplateEditorPage from '../pages/contracts/ContractTemplateEditorPage'
 import ContractDocumentPage from '../pages/contracts/ContractDocumentPage'
+import ContractSigningPage from '../pages/contracts/ContractSigningPage'
+import SignedContractDocumentPage from '../pages/contracts/SignedContractDocumentPage'
 import ServiceListPage from '../pages/services/ServiceListPage'
 import UtilityMeterDetailPage from '../pages/utilities/UtilityMeterDetailPage'
 import InvoiceCreatePage from '../pages/invoices/InvoiceCreatePage'
@@ -49,6 +51,7 @@ export default function AppRoutes() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/sign/:token" element={<ContractSigningPage publicSigning />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -57,6 +60,8 @@ export default function AppRoutes() {
         <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
 
         <Route element={<ProtectedRoute />}>
+          <Route path="/contracts/:id/sign" element={<ContractSigningPage />} />
+          <Route path="/contracts/:id/document/signed" element={<SignedContractDocumentPage />} />
           <Route path="/contracts/:id/document" element={<ContractDocumentPage />} />
           <Route path="/invoices/:id/print" element={<InvoicePrintPage />} />
           <Route path="/residence-declarations/:id/print" element={<ResidenceCt01PrintPage />} />

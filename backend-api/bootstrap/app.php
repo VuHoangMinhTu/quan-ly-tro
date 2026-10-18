@@ -4,6 +4,7 @@ use App\Custom\ApiResponse;
 use App\Exceptions\InvoiceFinancialEditException;
 use App\Exceptions\PayOSReconciliationException;
 use App\Http\Middleware\SetApiLocale;
+use App\Http\Middleware\SigningPrivacy;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -12,6 +13,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Exceptions\InvalidSignatureException;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -26,9 +28,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->prependToPriorityList(ThrottleRequests::class, SigningPrivacy::class);
         $middleware->api(prepend: [SetApiLocale::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->dontFlash(['otp', 'signature', 'token', 'verification_token']);
         // Laravel normally ignores every HTTP exception, including abort(500).
         // Keep expected 4xx quiet, but log full diagnostics for unexpected 5xx.
         $exceptions->stopIgnoring(HttpException::class);
