@@ -6,6 +6,7 @@ use App\Models\ContractDocument;
 use App\Models\ContractDocumentSigning;
 use App\Models\ContractSignatureEvent;
 use App\Models\ContractSigningRequest;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -82,6 +83,16 @@ class ContractSigningService
         return $person;
     }
 
+    /** Delivery contact may change; legal identity and rendered document remain frozen. */
+    private function tenantEmail(ContractDocument $document): string
+    {
+        $contract = $document->contract;
+        $tenant = Tenant::query()->where('landlord_id', $contract->room->boardingHouse->landlord_id)
+            ->lockForUpdate()->find($contract->tenant_id);
+
+        return trim((string) $tenant?->email);
+    }
+
     public function start(Request $http, int $id, bool $resend = false): void
     {
         DB::transaction(function () use ($http, $id, $resend): void {
@@ -89,15 +100,16 @@ class ContractSigningService
             $workflow = $this->workflow($document);
             $this->writable($workflow);
             $representative = $this->representative($document);
-            $email = (string) data_get($document->source_snapshot, 'tenant.email');
+            $email = $this->tenantEmail($document);
             $tenant = $document->signingRequests()->where('signer_role', 'TENANT')->latest('id')->lockForUpdate()->first();
+            $destinationChanged = $tenant && trim($tenant->delivery_destination_snapshot) !== $email;
             if ($tenant?->status !== 'SIGNED' && ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                $this->fail('Người thuê chưa có email trong bản đã chốt. Vui lòng cập nhật email và lập tài liệu mới trước khi gửi yêu cầu ký.', 'email');
+                $this->fail('Người thuê chưa có email hợp lệ. Vui lòng cập nhật email người thuê trước khi gửi yêu cầu ký.', 'email');
             }
-            if ($tenant && ! $resend && $tenant->active_key && $tenant->token_expires_at > now()) {
+            if ($tenant && ! $resend && ! $destinationChanged && $tenant->active_key && $tenant->token_expires_at > now()) {
                 return;
             }
-            if ($tenant && $tenant->status !== 'SIGNED' && $tenant->created_at->copy()->addSeconds(max(1, config('signing.request_resend_seconds'))) > now()) {
+            if ($tenant && ! $destinationChanged && $tenant->status !== 'SIGNED' && $tenant->created_at->copy()->addSeconds(max(1, config('signing.request_resend_seconds'))) > now()) {
                 $this->fail('Bạn đã gửi yêu cầu quá nhiều lần. Vui lòng thử lại sau.');
             }
             if ($tenant?->active_key && $tenant->status !== 'SIGNED') {
@@ -185,6 +197,12 @@ class ContractSigningService
         if (! $signing || $signing->token_expires_at <= now() || in_array($signing->status, ['REVOKED', 'DECLINED', 'EXPIRED'], true)
             || ! $workflow || in_array($workflow->status, ['VOID', 'DECLINED'], true)) {
             $this->fail($id === null ? self::INVALID_LINK : 'Yêu cầu ký không còn hiệu lực. Vui lòng gửi lại yêu cầu ký.');
+        }
+        // Defense in depth for contacts changed outside TenantController: never send
+        // another OTP, disclose the document, or accept an old receipt at the old address.
+        if ($signing->signer_role === 'TENANT' && $signing->status !== 'SIGNED'
+            && trim($signing->delivery_destination_snapshot) !== $this->tenantEmail($document)) {
+            $this->fail(self::INVALID_LINK);
         }
 
         return [$document, $signing, $workflow];

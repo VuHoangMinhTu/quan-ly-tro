@@ -12,6 +12,7 @@ use App\Models\Landlord;
 use App\Models\Room;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\TenantSigningContactService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\JsonResponse;
@@ -124,10 +125,10 @@ class TenantController extends Controller
         );
     }
 
-    public function update(UpdateTenantRequest $request, int $id): JsonResponse
+    public function update(UpdateTenantRequest $request, int $id, TenantSigningContactService $contact): JsonResponse
     {
         $tenant = $this->findOwnedTenant($request, $id);
-        $tenant->update($request->validated());
+        $contact->update($request, $tenant, $request->validated());
 
         return ApiResponse::success(null, 'Cập nhật người thuê thành công.');
     }

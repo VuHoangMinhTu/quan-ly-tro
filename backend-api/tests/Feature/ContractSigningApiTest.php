@@ -348,15 +348,19 @@ class ContractSigningApiTest extends TestCase
         $this->assertSame([], Storage::disk('contract_signatures')->allFiles());
     }
 
-    public function test_missing_frozen_email_is_not_silently_replaced_by_live_email(): void
+    public function test_delivery_uses_current_email_without_rewriting_the_frozen_document(): void
     {
         [$contract, , $document] = $this->fixture();
         $snapshot = $document->source_snapshot;
         $snapshot['tenant']['email'] = null;
         DB::table('contract_documents')->where('id', $document->id)->update(['source_snapshot' => json_encode($snapshot)]);
-        $this->postJson("/api/contracts/{$contract->id}/signing-requests")->assertUnprocessable()->assertJsonValidationErrors('email');
-        $this->assertDatabaseCount('contract_signing_requests', 0);
-        Notification::assertNothingSent();
+        $this->putJson("/api/tenants/{$contract->tenant_id}", ['full_name' => 'Nguyễn Văn A', 'email' => 'new@example.test'])->assertOk();
+        $this->start($contract);
+        $this->assertDatabaseHas('contract_signing_requests', ['signer_role' => 'TENANT', 'delivery_destination_snapshot' => 'new@example.test']);
+        Notification::assertSentOnDemand(ContractSigningNotification::class, fn ($mail, $channels, $recipient) => $mail->kind === 'REQUEST' && $recipient->routes['mail'] === 'new@example.test');
+        $this->assertSame($snapshot, $document->fresh()->source_snapshot);
+        $this->assertSame($document->rendered_html, $document->fresh()->rendered_html);
+        $this->assertSame($document->document_hash, $document->fresh()->document_hash);
     }
 
     public function test_partial_signature_keeps_exact_content_and_append_only_evidence(): void
@@ -460,5 +464,129 @@ class ContractSigningApiTest extends TestCase
             ->assertJsonMissing(['message' => 'private transport diagnostic']);
         $this->assertDatabaseCount('contract_signing_requests', 0);
         $this->assertDatabaseMissing('contract_signature_events', ['event' => 'SIGN_REQUEST_SENT']);
+    }
+
+    public function test_email_change_revokes_old_link_and_receipt_but_preserves_lessor_signature(): void
+    {
+        [$contract, , $document] = $this->fixture();
+        $oldToken = $this->start($contract);
+        $lessor = "/api/contracts/{$contract->id}/sign/lessor";
+        $this->verify($lessor);
+        $this->post($lessor, $this->payload($document->document_hash), ['Accept' => 'application/json'])->assertOk();
+        $signature = ContractSignature::firstOrFail();
+        $oldPrefix = '/api/sign/'.$oldToken;
+        $oldOtp = $this->verify($oldPrefix);
+        $oldRequest = ContractSigningRequest::where('signer_role', 'TENANT')->firstOrFail();
+
+        $this->putJson("/api/tenants/{$contract->tenant_id}", ['full_name' => 'Nguyễn Văn A', 'email' => 'new@example.test'])->assertOk();
+
+        $oldRequest->refresh();
+        $this->assertSame('REVOKED', $oldRequest->status);
+        $this->assertNull($oldRequest->active_key);
+        $this->assertNull($oldRequest->otp_verified_at);
+        $this->assertNull($oldRequest->verification_hash);
+        $this->getJson($oldPrefix)->assertUnprocessable()->assertJsonPath('message', ContractSigningService::INVALID_LINK);
+        $this->postJson($oldPrefix.'/request-otp')->assertUnprocessable();
+        $this->postJson($oldPrefix.'/verify-otp', ['otp' => $oldOtp])->assertUnprocessable();
+        $this->post($oldPrefix, $this->payload($document->document_hash), ['Accept' => 'application/json'])->assertUnprocessable();
+        $this->assertModelExists($signature);
+        $this->assertDatabaseCount('contract_signatures', 1);
+        $this->assertSame('PARTIALLY_SIGNED', $document->signing()->firstOrFail()->status);
+        $this->assertSame($document->source_snapshot, $document->fresh()->source_snapshot);
+        Storage::disk('contract_signatures')->assertExists($signature->signature_file_path);
+
+        Notification::fake();
+        $this->postJson("/api/contracts/{$contract->id}/signing-requests/resend")->assertOk();
+        $newToken = '';
+        Notification::assertSentOnDemand(ContractSigningNotification::class, function ($mail, $channels, $recipient) use (&$newToken): bool {
+            if ($mail->kind === 'REQUEST' && $recipient->routes['mail'] === 'new@example.test') {
+                $newToken = basename($mail->details['url']);
+
+                return true;
+            }
+
+            return false;
+        });
+        $this->assertNotSame($oldToken, $newToken);
+        $newPrefix = '/api/sign/'.$newToken;
+        $this->getJson($newPrefix)->assertOk()->assertJsonPath('data.masked_email', 'n***@example.test')->assertJsonPath('data.otp_verified', false);
+        $this->travel(61)->seconds();
+        $this->verify($newPrefix);
+        Notification::assertSentOnDemand(ContractSigningNotification::class, fn ($mail, $channels, $recipient) => $mail->kind === 'OTP' && $recipient->routes['mail'] === 'new@example.test');
+        $this->post($newPrefix, $this->payload($document->document_hash), ['Accept' => 'application/json'])->assertOk();
+        $this->assertSame('COMPLETED', $document->signing()->firstOrFail()->status);
+        $this->assertDatabaseCount('contract_signatures', 2);
+    }
+
+    public function test_public_actions_recheck_current_email_even_if_contact_was_updated_outside_tenant_api(): void
+    {
+        [$contract, , $document] = $this->fixture();
+        $prefix = '/api/sign/'.$this->start($contract);
+        $this->verify($prefix);
+        DB::table('tenants')->where('id', $contract->tenant_id)->update(['email' => 'new@example.test']);
+
+        $this->getJson($prefix)->assertUnprocessable()->assertJsonPath('message', ContractSigningService::INVALID_LINK);
+        $this->postJson($prefix.'/request-otp')->assertUnprocessable();
+        $this->post($prefix, $this->payload($document->document_hash), ['Accept' => 'application/json'])->assertUnprocessable();
+        $this->assertDatabaseCount('contract_signatures', 0);
+    }
+
+    public function test_removing_email_revokes_pending_request_and_never_falls_back_to_old_snapshot(): void
+    {
+        [$contract] = $this->fixture();
+        $prefix = '/api/sign/'.$this->start($contract);
+        Notification::fake();
+        $this->putJson("/api/tenants/{$contract->tenant_id}", ['full_name' => 'Nguyễn Văn A', 'email' => null])->assertOk();
+        $this->getJson($prefix)->assertUnprocessable();
+        $this->postJson("/api/contracts/{$contract->id}/signing-requests/resend")->assertUnprocessable()->assertJsonValidationErrors('email');
+        Notification::assertNothingSent();
+    }
+
+    public function test_non_email_profile_edit_does_not_revoke_or_reactivate_an_old_link(): void
+    {
+        [$contract] = $this->fixture();
+        $prefix = '/api/sign/'.$this->start($contract);
+        $this->putJson("/api/tenants/{$contract->tenant_id}", ['full_name' => 'Tên cập nhật', 'phone' => '0909999999', 'email' => 'tenant@example.test'])->assertOk();
+        $this->getJson($prefix)->assertOk();
+        $this->putJson("/api/tenants/{$contract->tenant_id}", ['full_name' => 'Tên cập nhật', 'email' => 'new@example.test'])->assertOk();
+        $this->putJson("/api/tenants/{$contract->tenant_id}", ['full_name' => 'Tên cập nhật', 'email' => 'tenant@example.test'])->assertOk();
+        $this->getJson($prefix)->assertUnprocessable();
+        $this->assertSame(1, ContractSignatureEvent::where('event', 'REQUEST_REVOKED')->count());
+    }
+
+    public function test_changing_email_after_completion_preserves_all_signed_evidence(): void
+    {
+        [$contract, , $document] = $this->fixture();
+        $prefix = '/api/sign/'.$this->start($contract);
+        $this->verify($prefix);
+        $this->post($prefix, $this->payload($document->document_hash), ['Accept' => 'application/json'])->assertOk();
+        $lessor = "/api/contracts/{$contract->id}/sign/lessor";
+        $this->verify($lessor);
+        $this->post($lessor, $this->payload($document->document_hash), ['Accept' => 'application/json'])->assertOk();
+        $workflow = $document->signing()->firstOrFail();
+        $signatures = ContractSignature::orderBy('id')->get()->toArray();
+
+        $this->putJson("/api/tenants/{$contract->tenant_id}", ['full_name' => 'Nguyễn Văn A', 'email' => 'new@example.test'])->assertOk();
+
+        $this->assertSame($workflow->signed_document_hash, $workflow->fresh()->signed_document_hash);
+        $this->assertSame($workflow->signed_rendered_html, $workflow->fresh()->signed_rendered_html);
+        $this->assertSame($signatures, ContractSignature::orderBy('id')->get()->toArray());
+        $this->assertDatabaseMissing('contract_signature_events', ['event' => 'REQUEST_REVOKED']);
+        $this->assertSame($document->source_snapshot, $document->fresh()->source_snapshot);
+    }
+
+    public function test_email_change_and_revocation_roll_back_together_if_audit_cannot_be_saved(): void
+    {
+        [$contract] = $this->fixture();
+        $prefix = '/api/sign/'.$this->start($contract);
+        Event::listen('eloquent.creating: '.ContractSignatureEvent::class, fn () => throw new \RuntimeException('simulated audit failure'));
+        try {
+            $this->putJson("/api/tenants/{$contract->tenant_id}", ['full_name' => 'Nguyễn Văn A', 'email' => 'new@example.test'])->assertServerError();
+        } finally {
+            Event::forget('eloquent.creating: '.ContractSignatureEvent::class);
+        }
+        $this->assertDatabaseHas('tenants', ['id' => $contract->tenant_id, 'email' => 'tenant@example.test']);
+        $this->assertDatabaseHas('contract_signing_requests', ['signer_role' => 'TENANT', 'status' => 'PENDING']);
+        $this->getJson($prefix)->assertOk();
     }
 }
