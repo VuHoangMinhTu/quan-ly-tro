@@ -29,6 +29,7 @@ const context = {
   services: [{ id: 3, name: 'Điện', billing_method: 'PER_UNIT', unit: 'kWh', base_price: 4000, vat_rate: 8 }],
   utility_openings: [{ utility_meter_id: 4, service_name: 'Điện', opening_reading: '1800.00', reading_date: '2026-10-01', unit: 'kWh' }],
   representatives: [{ user_id: 9, full_name: 'Ngô Đức Bình', title: 'Quản lý' }],
+  templates: [{ id: 1, name: 'Mẫu minh họa', version: 1, is_active: true }],
 }
 async function wizard(initial) {
   let cursor = 0
@@ -64,7 +65,20 @@ test('wizard prefill uses latest meter reading and submitting is delayed until f
   nodes(page.render()).find(node => node.props.id === 'contract-representative').props.onChange({ target: { value: '9' } })
   page.button('Tiếp tục').props.onClick()
   await page.button('Kích hoạt hợp đồng').props.onClick()
-  assert.deepEqual(page.payloads[0], { ...coreValues, status: 'ACTIVE', lessor_representative_user_id: 9, occupant_tenant_ids: [2], services: [{ service_id: 3, base_price: 4000, vat_rate: 8, pricing_snapshot: null }], payment_due_day: 5, utility_openings: [{ utility_meter_id: 4, opening_reading: 1800, reading_date: '2026-10-01' }] })
+  assert.deepEqual(page.payloads[0], { ...coreValues, status: 'ACTIVE', lessor_representative_user_id: 9, occupant_tenant_ids: [2], services: [{ service_id: 3, base_price: 4000, vat_rate: 8, pricing_snapshot: null }], payment_due_day: 5, contract_template_id: 1, utility_openings: [{ utility_meter_id: 4, opening_reading: 1800, reading_date: '2026-10-01' }] })
+})
+
+test('template selector prefills create but preserves the exact saved edit version until explicitly changed', async () => {
+  const create = await wizard()
+  assert.equal(nodes(create.render()).find(node => node.props.id === 'contract-template').props.value, '1')
+  const edit = await wizard({ ...coreValues, contract_template_id: 8, contract_template: { id: 8, name: 'Mẫu cũ', version: 2, is_active: false } })
+  assert.equal(nodes(edit.render()).find(node => node.props.id === 'contract-template').props.value, '8')
+  assert.equal(nodes(edit.render()).find(node => node.props.id === 'contract-template').props.value, '8')
+  nodes(edit.render()).find(node => node.props.id === 'contract-template').props.onChange({ target: { value: '1' } })
+  await edit.core(coreValues)
+  edit.button('Tiếp tục').props.onClick(); edit.button('Tiếp tục').props.onClick()
+  await edit.button('Lưu nháp').props.onClick()
+  assert.equal(edit.payloads[0].contract_template_id, 1)
 })
 
 test('step three only offers representative and monthly payment day, preserves custom selection and submits numeric day', async () => {
@@ -167,7 +181,7 @@ test('contract detail renders signing snapshots rather than changed live parties
   const source = (await readFile(new URL('../../pages/contracts/ContractDetailPage.jsx', import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
   const contract = { id: 1, room_id: 7, contract_code: 'HD101', status: 'ACTIVE', operational_role: 'MANAGER', tenant: { full_name: 'Tên mới', phone: 'Số mới' }, room: { room_code: 'Phòng mới', max_tenants: 3 }, signing_snapshot: { lessor: { full_name: 'Đại diện lúc ký', title: 'Quản lý' }, tenant: { full_name: 'Người thuê lúc ký', phone: '0900000000' }, room: { room_code: '101', boarding_house_name: 'Nhà lúc ký' }, contract: { monthly_rent: '3800000.00', deposit_amount: '5000000.00', start_date: '2026-09-28' }, services: [{ id: 3, service_name: 'Điện lúc ký', billing_method: 'PER_UNIT', base_price: 4000, vat_rate: 8 }] } }
   const bindings = { ...dates, contractKeys, BILLING_METHOD_LABELS, residenceStatusLabels, getApiErrorMessage,
-    ContractServicesSection: () => null,
+    ContractServicesSection: () => null, ContractDocumentSection: () => null,
     formatCurrency: value => `${value} đ`, formatDate: dates.formatDateForDisplay, formatUtilityValue: String, genderLabels: {}, DateInput: Input,
     useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}],
     useParams: () => ({ id: '1' }), useNavigate: () => () => {}, useQueryClient: () => ({}),

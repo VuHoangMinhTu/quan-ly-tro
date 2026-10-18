@@ -17,9 +17,9 @@ use Illuminate\Validation\ValidationException;
 
 class ContractService
 {
-    private const CORE = ['tenant_id', 'contract_code', 'start_date', 'end_date', 'signed_date', 'monthly_rent', 'deposit_amount', 'lessor_representative_user_id', 'payment_due_day', 'occupant_tenant_ids'];
+    private const CORE = ['tenant_id', 'contract_code', 'start_date', 'end_date', 'signed_date', 'monthly_rent', 'deposit_amount', 'lessor_representative_user_id', 'payment_due_day', 'occupant_tenant_ids', 'contract_template_id'];
 
-    public function __construct(private BoardingHouseAccessService $access, private ContractServiceTerms $terms) {}
+    public function __construct(private BoardingHouseAccessService $access, private ContractServiceTerms $terms, private ContractTemplateService $templates, private ContractDocumentService $documents) {}
 
     public function find(User $user, int $id): Contract
     {
@@ -38,6 +38,7 @@ class ContractService
             'tenants' => Tenant::query()->where('landlord_id', $room->boardingHouse->landlord_id)->orderBy('full_name')->get(['id', 'full_name', 'phone']),
             'representatives' => $this->representatives($room->boardingHouse),
             'services' => $services,
+            'templates' => $this->templates->available($room->boardingHouse->landlord_id)->get(['id', 'name', 'version', 'template_key', 'landlord_id', 'is_active']),
             'occupants' => $room->roomTenants()->where('status', 'ACTIVE')->with('tenant:id,full_name')->get(),
             'utility_openings' => $meters->map(fn ($meter) => [
                 'utility_meter_id' => $meter->id, 'service_id' => $meter->service_id, 'service_name' => $meter->service->name,
@@ -74,7 +75,9 @@ class ContractService
             $house = $this->access->house($user, $room->boarding_house_id, true);
             // All activation decisions for this room share a lock, including overlap/capacity.
             $room = Room::query()->lockForUpdate()->findOrFail($roomId);
-            $contract = $id === null ? new Contract(['room_id' => $roomId, 'status' => 'DRAFT', 'deposit_amount' => 0]) : $this->find($user, $id);
+            // A locking read also avoids a stale REPEATABLE READ snapshot after
+            // another finalize request commits while this one waits for the room.
+            $contract = $id === null ? new Contract(['room_id' => $roomId, 'status' => 'DRAFT', 'deposit_amount' => 0]) : Contract::query()->where('room_id', $roomId)->lockForUpdate()->findOrFail($id);
             abort_unless((int) $contract->room_id === $roomId, 404);
             if ($contract->exists && $contract->status !== 'DRAFT') {
                 foreach (self::CORE as $key) {
@@ -100,6 +103,13 @@ class ContractService
             $tenantId = $data['tenant_id'] ?? $contract->tenant_id;
             Tenant::query()->where('landlord_id', $house->landlord_id)->findOrFail($tenantId);
             $isNew = ! $contract->exists;
+            if (array_key_exists('contract_template_id', $data) && $data['contract_template_id'] !== null
+                && (int) $data['contract_template_id'] !== (int) $contract->contract_template_id) {
+                $this->templates->select($house->landlord_id, (int) $data['contract_template_id']);
+            }
+            if ($isNew && ($data['contract_template_id'] ?? null) === null) {
+                $data['contract_template_id'] = $this->templates->select($house->landlord_id, null)->id;
+            }
             if ($isNew && ! array_key_exists('payment_due_day', $data)) {
                 $data['payment_due_day'] = $house->default_payment_due_day;
             }
@@ -228,27 +238,40 @@ class ContractService
             }
             $membership->fill(['contract_id' => $contract->id, 'status' => 'ACTIVE', 'move_out_date' => null, 'is_primary' => $tenantId === (int) $contract->tenant_id])->save();
         }
-        $tenant = Tenant::query()->findOrFail($contract->tenant_id);
-        $occupants = Tenant::query()->whereIn('id', $ids)->get()->map(fn (Tenant $person) => ['tenant_id' => $person->id, 'is_primary' => (int) $person->id === (int) $contract->tenant_id, ...$this->person($person)])->all();
         $contract->status = 'ACTIVE';
         $contract->finalized_at = now();
-        $contract->signing_snapshot = [
-            'schema_version' => 2, 'finalized_at' => now()->toIso8601String(),
-            'lessor' => $representative, 'tenant' => $this->person($tenant),
-            // Retired issue-day columns remain nullable for production compatibility;
-            // new signing evidence records only the agreed monthly payment day.
-            'contract' => $contract->only(['contract_code', 'start_date', 'end_date', 'signed_date', 'monthly_rent', 'deposit_amount', 'payment_due_day']),
-            'room' => ['room_id' => $room->id, 'room_code' => $room->room_code, 'boarding_house_name' => $house->name, 'address' => $house->address, 'max_tenants' => $room->max_tenants],
-            'services' => $contract->agreedServices()->get()->toArray(), 'occupants' => $occupants,
+        $contract->signing_snapshot = $this->sourceSnapshot($contract, $room, $house, $representative, $ids);
+        $contract->save();
+        $this->documents->capture($contract, $contract->signing_snapshot);
+    }
+
+    private function sourceSnapshot(Contract $contract, Room $room, BoardingHouse $house, ?array $representative, array $ids): array
+    {
+        $tenant = Tenant::query()->where('landlord_id', $house->landlord_id)->findOrFail($contract->tenant_id);
+        $core = $contract->only(['contract_code', 'monthly_rent', 'deposit_amount', 'payment_due_day']);
+        foreach (['start_date', 'end_date', 'signed_date'] as $key) {
+            $core[$key] = $contract->{$key}?->format('Y-m-d');
+        }
+
+        return [
+            'schema_version' => 2, 'finalized_at' => $contract->finalized_at?->toIso8601String(),
+            'lessor' => $representative, 'tenant' => $this->person($tenant), 'contract' => $core,
+            'room' => ['room_id' => $room->id, 'room_code' => $room->room_code, 'room_name' => $room->room_name, 'area' => $room->area, 'boarding_house_name' => $house->name, 'address' => $house->address, 'max_tenants' => $room->max_tenants],
+            'services' => $contract->agreedServices()->get()->toArray(),
+            'occupants' => Tenant::query()->where('landlord_id', $house->landlord_id)->whereIn('id', $ids)->get()->map(fn (Tenant $person) => ['tenant_id' => $person->id, 'is_primary' => (int) $person->id === (int) $contract->tenant_id, ...$this->person($person)])->all(),
             'utility_openings' => $contract->utilityOpenings()->get()->toArray(),
         ];
-        // Carbon instances inside JSON must not turn business DATE fields into UTC ISO.
-        foreach (['start_date', 'end_date', 'signed_date'] as $key) {
-            $snapshot = $contract->signing_snapshot;
-            $snapshot['contract'][$key] = $contract->{$key}?->format('Y-m-d');
-            $contract->signing_snapshot = $snapshot;
-        }
-        $contract->save();
+    }
+
+    public function previewSnapshot(User $user, int $id): array
+    {
+        $contract = $this->find($user, $id);
+        abort_unless($contract->status === 'DRAFT', 422);
+        $room = $contract->room;
+        $house = $room->boardingHouse;
+        $representative = collect($this->representatives($house))->firstWhere('user_id', $contract->lessor_representative_user_id);
+
+        return $this->sourceSnapshot($contract, $room, $house, $representative, [(int) $contract->tenant_id, ...($contract->occupant_tenant_ids ?? [])]);
     }
 
     private function person(Tenant $tenant): array
@@ -283,7 +306,7 @@ class ContractService
 
     public function detail(User $user, int $id): array
     {
-        $contract = $this->find($user, $id)->load(['room.boardingHouse', 'tenant', 'occupants.tenant', 'agreedServices', 'utilityOpenings', 'residenceDeclarations:id,contract_id,status']);
+        $contract = $this->find($user, $id)->load(['room.boardingHouse', 'tenant', 'occupants.tenant', 'agreedServices', 'utilityOpenings', 'residenceDeclarations:id,contract_id,status', 'contractTemplate:id,name,version,template_key,is_active', 'document:id,contract_id,template_name,template_version,finalized_at']);
 
         return [...$contract->toArray(), 'is_legacy' => $contract->status !== 'DRAFT' && $contract->signing_snapshot === null,
             'operational_role' => $this->access->role($user, $contract->room->boardingHouse),

@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import React from 'react'
 import { transformWithOxc } from 'vite'
+import { clearContractDocumentCache } from '../api/contractDocumentCache.js'
 
 async function harness(pathname = '/dashboard') {
   const states = []
@@ -14,6 +15,7 @@ async function harness(pathname = '/dashboard') {
   const icons = ['Building2', 'FileText', 'Gauge', 'KeyRound', 'LayoutDashboard', 'LogOut', 'Menu', 'Receipt', 'UserRound', 'Users', 'X']
   const source = (await readFile(new URL('./MainLayout.jsx', import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
   const bindings = {
+    clearContractDocumentCache,
     useState: (initial) => {
       const index = stateIndex++
       if (!(index in states)) states[index] = initial
@@ -74,7 +76,7 @@ test('mobile logout retains token removal, me-cache clearing and login navigatio
     assert.equal(layout.button('Menu tài khoản').props['aria-expanded'], false)
     layout.settle(null, null)
     assert.deepEqual(removedTokens, ['access_token'])
-    assert.deepEqual(layout.removedQueries, [{ queryKey: ['me'] }, { queryKey: ['dashboard'] }])
+    assert.deepEqual(layout.removedQueries, ['me', 'dashboard', 'contract-document', 'contract-document-preview', 'contract-template', 'contract-templates'].map(prefix => ({ queryKey: [prefix] })))
     assert.deepEqual(layout.navigation, [['/login', { state: undefined }]])
   } finally {
     globalThis.localStorage = previousStorage

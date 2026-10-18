@@ -25,6 +25,9 @@ import ContractDetailPage from '../pages/contracts/ContractDetailPage'
 import ContractEditPage from '../pages/contracts/ContractEditPage'
 import ContractListPage from '../pages/contracts/ContractListPage'
 import ContractNavigationPage from '../pages/contracts/ContractNavigationPage'
+import ContractTemplateListPage from '../pages/contracts/ContractTemplateListPage'
+import ContractTemplateEditorPage from '../pages/contracts/ContractTemplateEditorPage'
+import ContractDocumentPage from '../pages/contracts/ContractDocumentPage'
 import ServiceListPage from '../pages/services/ServiceListPage'
 import UtilityMeterDetailPage from '../pages/utilities/UtilityMeterDetailPage'
 import InvoiceCreatePage from '../pages/invoices/InvoiceCreatePage'
@@ -54,6 +57,7 @@ export default function AppRoutes() {
         <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
 
         <Route element={<ProtectedRoute />}>
+          <Route path="/contracts/:id/document" element={<ContractDocumentPage />} />
           <Route path="/invoices/:id/print" element={<InvoicePrintPage />} />
           <Route path="/residence-declarations/:id/print" element={<ResidenceCt01PrintPage />} />
           <Route element={<MainLayout />}>
@@ -65,6 +69,9 @@ export default function AppRoutes() {
             <Route path="/change-password" element={<ChangePasswordPage />} />
             <Route path="/rooms" element={<ModuleNavigationPage module="rooms" />} />
             <Route path="/contracts" element={<ContractNavigationPage />} />
+            <Route path="/contract-templates" element={<ContractTemplateListPage />} />
+            <Route path="/contract-templates/new" element={<ContractTemplateEditorPage />} />
+            <Route path="/contract-templates/:id" element={<ContractTemplateEditorPage />} />
             <Route path="/services" element={<ModuleNavigationPage module="services" />} />
             <Route path="/utilities" element={<ModuleNavigationPage module="utilities" />} />
             <Route path="/invoices" element={<ModuleNavigationPage module="invoices" />} />

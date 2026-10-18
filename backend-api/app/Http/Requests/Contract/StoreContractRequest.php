@@ -39,6 +39,7 @@ class StoreContractRequest extends FormRequest
             'note' => ['nullable', 'string'],
             'lessor_representative_user_id' => ['nullable', 'integer', 'min:1'],
             'payment_due_day' => ['nullable', 'integer', 'between:1,31'],
+            'contract_template_id' => ['nullable', 'integer', 'min:1'],
             'occupant_tenant_ids' => ['sometimes', 'array', 'max:100'],
             'occupant_tenant_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
             'service_ids' => ['sometimes', 'array', 'max:100'],

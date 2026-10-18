@@ -1,4 +1,5 @@
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
+import { clearContractDocumentCache } from '../../api/contractDocumentCache'
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -25,6 +26,7 @@ export default function LoginPage() {
       const response = await login(data)
       await client.cancelQueries({ queryKey: ['dashboard'] })
       client.removeQueries({ queryKey: ['dashboard'] })
+      clearContractDocumentCache(client)
       localStorage.setItem('access_token', response.data.data.token)
 
       try {

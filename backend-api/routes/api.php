@@ -5,7 +5,9 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BoardingHouseController;
 use App\Http\Controllers\Api\BoardingHouseManagerController;
 use App\Http\Controllers\Api\ContractController;
+use App\Http\Controllers\Api\ContractDocumentController;
 use App\Http\Controllers\Api\ContractServiceController;
+use App\Http\Controllers\Api\ContractTemplateController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\GoogleAuthController;
 use App\Http\Controllers\Api\InvoiceController;
@@ -45,6 +47,16 @@ Route::get('/email/verify/{id}/{hash}', function (int $id, string $hash) {
 })->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
 
 Route::middleware('auth:sanctum')->group(function (): void {
+    Route::get('/contract-templates', [ContractTemplateController::class, 'index']);
+    Route::post('/contract-templates', [ContractTemplateController::class, 'store']);
+    Route::post('/contract-templates/preview', [ContractTemplateController::class, 'preview']);
+    Route::get('/contract-templates/{id}', [ContractTemplateController::class, 'show']);
+    Route::put('/contract-templates/{id}', [ContractTemplateController::class, 'update']);
+    Route::post('/contract-templates/{id}/versions', [ContractTemplateController::class, 'version']);
+    Route::put('/contract-templates/{id}/status', [ContractTemplateController::class, 'status']);
+    Route::get('/contracts/{id}/document/preview', [ContractDocumentController::class, 'preview']);
+    Route::get('/contracts/{id}/document', [ContractDocumentController::class, 'show']);
+    Route::post('/contracts/{id}/finalize', [ContractDocumentController::class, 'finalize']);
     Route::get('/dashboard', DashboardController::class);
     Route::get('/residence/boarding-houses', [ResidenceDeclarationController::class, 'houses']);
     Route::get('/residence/boarding-houses/{id}/rooms', [ResidenceDeclarationController::class, 'rooms']);

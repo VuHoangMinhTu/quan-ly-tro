@@ -5,6 +5,7 @@ import { Building2, FileText, Gauge, KeyRound, LayoutDashboard, LogOut, Menu, Re
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { logout } from '../api/authApi'
 import { APP_NAME } from '../utils/brand'
+import { clearContractDocumentCache } from '../api/contractDocumentCache'
 import beeHouseLogo from '../assets/logo_bee_mau.png'
 
 const menus = [
@@ -13,6 +14,7 @@ const menus = [
   ['Phòng', '/rooms', Building2, (p) => p === '/rooms' || /^\/rooms\/[^/]+(\/edit)?$/.test(p) || /^\/boarding-houses\/[^/]+\/rooms/.test(p)],
   ['Người thuê', '/tenants', Users, (p) => p === '/tenants' || /^\/tenants\//.test(p)],
   ['Hợp đồng', '/contracts', FileText, (p) => p === '/contracts' || /^\/contracts\//.test(p) || /^\/rooms\/[^/]+\/contracts/.test(p)],
+  ['Mẫu hợp đồng', '/contract-templates', FileText, (p) => p.startsWith('/contract-templates')],
   ['Dịch vụ', '/services', Gauge, (p) => p === '/services' || /^\/services\//.test(p) || /^\/boarding-houses\/[^/]+\/services/.test(p)],
   ['Điện nước', '/utilities', Gauge, (p) => p === '/utilities' || /^\/utility-meters\//.test(p)],
   ['Hóa đơn', '/invoices', Receipt, (p) => p === '/invoices' || /^\/invoices\//.test(p) || /^\/rooms\/[^/]+\/invoices/.test(p)],
@@ -26,9 +28,9 @@ function Brand() {
   </div>
 }
 
-function Navigation({ pathname, onNavigate }) {
+function Navigation({ pathname, onNavigate, canManageTemplates = false }) {
   return <nav aria-label="Điều hướng chính" className="mt-8">
-    {menus.map(([name, to, Icon, matches]) => <Link
+    {menus.filter(([, to]) => to !== '/contract-templates' || canManageTemplates).map(([name, to, Icon, matches]) => <Link
       key={name}
       to={to}
       onClick={onNavigate}
@@ -55,6 +57,7 @@ export default function MainLayout() {
       localStorage.removeItem('access_token')
       client.removeQueries({ queryKey: ['me'] })
       client.removeQueries({ queryKey: ['dashboard'] })
+      clearContractDocumentCache(client)
       navigate('/login', { state: error ? { error: getApiErrorMessage(error) } : undefined })
     },
   })
@@ -103,7 +106,7 @@ export default function MainLayout() {
 
   return <div className="app-shell min-h-dvh lg:flex">
     <aside className="hidden bg-slate-900 p-5 text-white lg:sticky lg:top-0 lg:block lg:h-dvh lg:w-60 lg:shrink-0 lg:overflow-y-auto">
-      <Brand /><Navigation pathname={pathname} />
+      <Brand /><Navigation pathname={pathname} canManageTemplates={Boolean(me?.landlord)} />
     </aside>
     <dialog ref={drawerRef} id="mobile-navigation" aria-label="Menu BeeHouse" onClose={() => setDrawerOpen(false)} onCancel={() => setDrawerOpen(false)} onKeyDown={(event) => {
       if (event.key !== 'Tab') return
@@ -118,7 +121,7 @@ export default function MainLayout() {
     }} className="mobile-navigation m-0 h-dvh max-h-none w-[min(280px,85vw)] max-w-none border-0 bg-slate-900 p-0 text-white shadow-xl backdrop:bg-black/40 lg:hidden">
       <div className="flex h-full flex-col p-4 [padding-top:max(1rem,env(safe-area-inset-top))] [padding-bottom:max(1rem,env(safe-area-inset-bottom))]">
         <div className="flex items-center justify-between gap-2"><Brand /><button type="button" onClick={() => setDrawerOpen(false)} aria-label="Đóng menu" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-white"><X size={22} /></button></div>
-        <div className="min-h-0 flex-1 overflow-y-auto"><Navigation pathname={pathname} onNavigate={closeMenus} /></div>
+        <div className="min-h-0 flex-1 overflow-y-auto"><Navigation pathname={pathname} onNavigate={closeMenus} canManageTemplates={Boolean(me?.landlord)} /></div>
       </div>
     </dialog>
     <section className="min-w-0 flex-1">

@@ -1,5 +1,6 @@
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useEffect, useRef, useState } from 'react'
+import { clearContractDocumentCache } from '../../api/contractDocumentCache'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { exchangeGoogleCode, getMe } from '../../api/authApi'
@@ -33,6 +34,7 @@ export default function GoogleCallbackPage() {
         debug('Google exchange success')
         await queryClient.cancelQueries({ queryKey: ['dashboard'] })
         queryClient.removeQueries({ queryKey: ['dashboard'] })
+        clearContractDocumentCache(queryClient)
         localStorage.setItem('access_token', token)
         debug('Token saved')
 
