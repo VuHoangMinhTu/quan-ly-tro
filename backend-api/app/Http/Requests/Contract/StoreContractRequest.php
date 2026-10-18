@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Contract;
 
+use App\Http\Requests\Concerns\ContractServicePricingRules;
 use App\Services\BoardingHouseAccessService;
 use App\Services\ContractService;
 use Illuminate\Foundation\Http\FormRequest;
@@ -9,6 +10,8 @@ use Illuminate\Validation\Rule;
 
 class StoreContractRequest extends FormRequest
 {
+    use ContractServicePricingRules;
+
     public function authorize(): bool
     {
         if ($this->route('id') !== null) {
@@ -40,6 +43,9 @@ class StoreContractRequest extends FormRequest
             'occupant_tenant_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
             'service_ids' => ['sometimes', 'array', 'max:100'],
             'service_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
+            'services' => ['sometimes', 'array', 'max:100'],
+            'services.*.service_id' => ['required', 'integer', 'min:1', 'distinct'],
+            ...$this->servicePricingRules('services.*.'),
             'utility_openings' => ['sometimes', 'array', 'max:100'],
             'utility_openings.*.utility_meter_id' => ['required', 'integer', 'min:1', 'distinct'],
             'utility_openings.*.opening_reading' => ['required', 'numeric', 'min:0', 'max:9999999999999.99'],

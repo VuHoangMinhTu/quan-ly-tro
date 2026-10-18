@@ -3,10 +3,14 @@
 namespace App\Services;
 
 use App\Exceptions\InvoiceFinancialEditException;
+use App\Models\ContractService as ContractTerm;
 use App\Models\Invoice;
+use App\Models\Room;
 use App\Models\Service;
+use App\Models\UtilityMeter;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -15,6 +19,8 @@ class BillingService
     public function generateForInvoice(Invoice $invoice): void
     {
         $oldRemaining = DB::transaction(function () use ($invoice): float {
+            // Term changes and generation share this lock before touching invoices.
+            Room::query()->whereKey($invoice->room_id)->lockForUpdate()->firstOrFail();
             // Recheck persisted financial state under the same lock used by payments:
             // a previously loaded invoice may already have been paid by another request.
             $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
@@ -34,30 +40,35 @@ class BillingService
                     throw ValidationException::withMessages(['contract_id' => 'Hợp đồng không có hiệu lực trong kỳ hóa đơn này.']);
                 } $this->item($invoice, 'RENT', 'Tiền phòng tháng '.$start->format('m/Y'), 1, $c->monthly_rent, $c->monthly_rent);
             }
-            // The house catalogue is not a room subscription. Only explicitly
-            // assigned, currently enabled services participate in this generation.
-            $services = $invoice->room->services()
-                ->wherePivot('is_active', true)
-                ->where('services.is_active', true)
-                ->where('services.boarding_house_id', $invoice->room->boarding_house_id)
-                ->with('priceTiers')
-                ->get();
+            $services = $this->servicesForInvoice($invoice);
 
             foreach ($services as $service) {
+                $contractTerm = $service instanceof ContractTerm;
+                $serviceId = $contractTerm ? $service->service_id : $service->id;
+                $type = $contractTerm ? $service->service_type : $service->type;
+                $name = $contractTerm ? $service->service_name : $service->name;
                 if ($service->billing_method === 'FIXED' && $service->base_price !== null) {
-                    $this->item($invoice, $service->type, $service->name, 1, $service->base_price, $service->base_price, $service);
+                    $this->item($invoice, $type, $name, 1, $service->base_price, $service->base_price, $service);
                 }
                 if ($service->billing_method === 'PER_PERSON' && $service->base_price !== null) {
-                    $count = $invoice->room->roomTenants()->where('status', 'ACTIVE')->whereDate('move_in_date', '<=', $end)->where(fn ($q) => $q->whereNull('move_out_date')->orWhereDate('move_out_date', '>=', $start))->count();
+                    $count = $invoice->room->roomTenants()->whereIn('status', ['ACTIVE', 'MOVED_OUT'])
+                        ->when($contractTerm, fn ($query) => $query->where('contract_id', $invoice->contract_id))
+                        ->whereDate('move_in_date', '<=', $end)->where(fn ($q) => $q->whereNull('move_out_date')->orWhereDate('move_out_date', '>=', $start))->distinct()->count('tenant_id');
                     if ($count) {
-                        $this->item($invoice, $service->type, $service->name, $count, $service->base_price, BigDecimal::of($service->base_price)->multipliedBy($count), $service);
+                        $this->item($invoice, $type, $name, $count, $service->base_price, BigDecimal::of($service->base_price)->multipliedBy($count), $service);
                     }
                 }
                 if (in_array($service->billing_method, ['PER_UNIT', 'TIERED'], true)) {
-                    $meter = $invoice->room->utilityMeters()->where('service_id', $service->id)->where('is_active', true)->first();
+                    if ($serviceId === null) {
+                        throw ValidationException::withMessages(['service_id' => 'Không xác định được dịch vụ nguồn của đồng hồ. Vui lòng kiểm tra thỏa thuận dịch vụ, không thể tự dùng đồng hồ khác.']);
+                    }
+                    $opening = $contractTerm ? $invoice->contract->utilityOpenings()->where('service_id', $serviceId)->first() : null;
+                    $meter = $opening?->utility_meter_id
+                        ? UtilityMeter::withTrashed()->where('room_id', $invoice->room_id)->where('service_id', $serviceId)->find($opening->utility_meter_id)
+                        : $invoice->room->utilityMeters()->where('service_id', $serviceId)->where('is_active', true)->first();
                     if (! $meter) {
                         throw ValidationException::withMessages(['service_id' => __('services.missing_meter', [
-                            'type' => __('services.types.'.$service->type),
+                            'type' => __('services.types.'.$type),
                             'method' => __('services.billing_methods.'.$service->billing_method),
                         ])]);
                     }
@@ -66,7 +77,7 @@ class BillingService
                     $current = $meter->readings()->whereDate('reading_date', '<=', $end)->reorder('reading_date', 'desc')->first();
                     if (! $current) {
                         throw ValidationException::withMessages(['reading_date' => __('services.missing_reading', [
-                            'type' => __('services.types.'.$service->type),
+                            'type' => __('services.types.'.$type),
                         ])]);
                     }
                     $previous = $meter->readings()->whereDate('reading_date', '<', $start)->reorder('reading_date', 'desc')->first();
@@ -78,9 +89,9 @@ class BillingService
                         if ($service->base_price === null) {
                             throw ValidationException::withMessages(['service_id' => 'Dịch vụ chưa có đơn giá. Vui lòng cập nhật đơn giá trước khi tạo khoản thu.']);
                         }
-                        $this->item($invoice, $service->type, $service->name.' '.$consumption, $consumption, $service->base_price, $consumption->multipliedBy($service->base_price), $service);
+                        $this->item($invoice, $type, $name.' '.$consumption, $consumption, $service->base_price, $consumption->multipliedBy($service->base_price), $service);
                     } else {
-                        $tiers = $service->priceTiers;
+                        $tiers = $contractTerm ? collect($service->pricing_snapshot ?? [])->map(fn ($tier) => (object) $tier) : $service->priceTiers;
                         if ($tiers->isEmpty()) {
                             throw ValidationException::withMessages(['service_id' => 'Dịch vụ chưa có bảng giá bậc thang. Vui lòng thêm bậc giá trước khi tạo khoản thu.']);
                         }
@@ -92,7 +103,7 @@ class BillingService
                                 $amount = $amount->plus($width->multipliedBy($tier->unit_price));
                             }
                         }
-                        $this->item($invoice, $service->type, $service->name.' '.$consumption, $consumption, 0, $amount, $service);
+                        $this->item($invoice, $type, $name.' '.$consumption, $consumption, 0, $amount, $service);
                     }
                 }
             }
@@ -109,7 +120,40 @@ class BillingService
         );
     }
 
-    private function item(Invoice $invoice, string $type, string $description, BigDecimal|int|string $quantity, BigDecimal|int|string $price, BigDecimal|int|string $amount, ?Service $service = null): void
+    private function servicesForInvoice(Invoice $invoice): Collection
+    {
+        $contract = $invoice->contract;
+        if ($contract && $contract->service_terms_version !== null) {
+            $all = $contract->agreedServices()->get();
+            $missingBaseline = collect($contract->signing_snapshot['services'] ?? [])->contains(fn ($saved) => isset($saved['id'])
+                ? ! $all->contains('id', $saved['id'])
+                : ! $all->contains('service_id', $saved['service_id'] ?? null));
+            if ($missingBaseline || $all->contains(fn ($term) => $term->effective_from === null)) {
+                throw ValidationException::withMessages(['services' => 'Điều khoản dịch vụ của hợp đồng chưa đầy đủ. Vui lòng kiểm tra trước khi tạo hóa đơn.']);
+            }
+            // Initial terms may start mid-month. Existing rent/usage rules charge
+            // the monthly period; amendments themselves always start on day 01.
+            $lookup = max($invoice->billing_period->format('Y-m-d'), $contract->start_date->format('Y-m-d'));
+            $terms = $all->filter(fn ($term) => $term->effective_from->format('Y-m-d') <= $lookup
+                && ($term->effective_to === null || $term->effective_to->format('Y-m-d') >= $lookup));
+            if ($terms->groupBy(fn ($term) => $term->service_id ?? 'term-'.$term->id)->contains(fn ($group) => $group->count() > 1)) {
+                throw ValidationException::withMessages(['services' => 'Khoảng hiệu lực dịch vụ bị chồng lấn. Vui lòng kiểm tra trước khi tạo hóa đơn.']);
+            }
+            $pricing = app(ContractServiceTerms::class);
+            foreach ($terms->where('is_active', true) as $term) {
+                $pricing->validatePricing($term->toArray());
+            }
+
+            return $terms->where('is_active', true);
+        }
+
+        // Only genuinely unversioned legacy contracts (or invoices without a
+        // contract) may use today's room catalogue. An empty new agreement may not.
+        return $invoice->room->services()->wherePivot('is_active', true)->where('services.is_active', true)
+            ->where('services.boarding_house_id', $invoice->room->boarding_house_id)->with('priceTiers')->get();
+    }
+
+    private function item(Invoice $invoice, string $type, string $description, BigDecimal|int|string $quantity, BigDecimal|int|string $price, BigDecimal|int|string $amount, Service|ContractTerm|null $service = null): void
     {
         $amount = BigDecimal::of($amount)->toScale(2, RoundingMode::HalfUp);
         $invoice->items()->create(['type' => $type, 'description' => $description, 'quantity' => (string) $quantity, 'unit_price' => (string) $price, 'amount' => (string) $amount, 'source' => 'AUTO']);
@@ -121,7 +165,7 @@ class BillingService
         // Tax is a service configuration, not a legal default. Snapshot the rate
         // and round half-up to a whole dong; regeneration replaces only AUTO items.
         $tax = $amount->multipliedBy($rate)->dividedBy(100, 0, RoundingMode::HalfUp);
-        $label = mb_strtolower(__('services.types.'.$service->type));
+        $label = mb_strtolower(__('services.types.'.($service instanceof ContractTerm ? $service->service_type : $service->type)));
         $rateLabel = str_contains((string) $rate, '.') ? rtrim(rtrim((string) $rate, '0'), '.') : (string) $rate;
         $invoice->items()->create([
             'type' => 'SERVICE_TAX', 'description' => 'VAT tiền '.$label.' ('.$rateLabel.'%)',

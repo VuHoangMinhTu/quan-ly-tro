@@ -1,1 +1,1 @@
-export const contractKeys = { byRoom: (roomId) => ['contracts', roomId], detail: (id) => ['contract', id], context: (roomId) => ['contract-context', String(roomId)] }
+export const contractKeys = { byRoom: (roomId) => ['contracts', roomId], detail: (id) => ['contract', id], context: (roomId) => ['contract-context', String(roomId)], services: id => ['contract-services', String(id)] }

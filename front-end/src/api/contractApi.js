@@ -9,3 +9,7 @@ export const updateContractStatus = (id, payload) => client.put(`/contracts/${id
 export const changeContractRoom = (id, roomId) => client.put(`/contracts/${id}/room`, { room_id: roomId })
 export const moveOutContractOccupant = (id, occupantId, payload) => client.put(`/contracts/${id}/occupants/${occupantId}/move-out`, payload)
 export const updateContractSchedule = (houseId, payload) => client.put(`/boarding-houses/${houseId}/contract-schedule`, payload)
+export const getContractServices = id => client.get(`/contracts/${id}/services`)
+export const saveContractServices = (id, payload) => client.put(`/contracts/${id}/services`, payload)
+export const adjustContractService = (id, payload) => client.post(`/contracts/${id}/service-adjustments`, payload)
+export const stopContractService = (id, termId, payload) => client.post(`/contracts/${id}/services/${termId}/stop`, payload)

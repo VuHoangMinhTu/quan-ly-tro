@@ -19,7 +19,7 @@ class ContractService
 {
     private const CORE = ['tenant_id', 'contract_code', 'start_date', 'end_date', 'signed_date', 'monthly_rent', 'deposit_amount', 'lessor_representative_user_id', 'payment_due_day', 'occupant_tenant_ids'];
 
-    public function __construct(private BoardingHouseAccessService $access) {}
+    public function __construct(private BoardingHouseAccessService $access, private ContractServiceTerms $terms) {}
 
     public function find(User $user, int $id): Contract
     {
@@ -82,7 +82,7 @@ class ContractService
                         throw ValidationException::withMessages([$key => 'Điều khoản hợp đồng đã chốt không được thay đổi. Vui lòng lập hợp đồng mới khi cần điều chỉnh.']);
                     }
                 }
-                if (array_key_exists('service_ids', $data) || array_key_exists('utility_openings', $data)) {
+                if (array_key_exists('service_ids', $data) || array_key_exists('services', $data) || array_key_exists('utility_openings', $data)) {
                     throw ValidationException::withMessages(['status' => 'Dịch vụ và chỉ số đầu của hợp đồng đã chốt không được thay đổi.']);
                 }
                 if (! in_array($contract->status, ['ACTIVE'], true) && array_key_exists('note', $data) && $data['note'] !== $contract->note) {
@@ -124,8 +124,9 @@ class ContractService
             }
             $contract->status = 'DRAFT';
             $contract->save();
-            if ($isNew || array_key_exists('service_ids', $data)) {
-                $this->saveServices($contract, $room, $data['service_ids'] ?? $this->eligibleServices($room)->pluck('id')->all());
+            if ($isNew || array_key_exists('service_ids', $data) || array_key_exists('services', $data)) {
+                $rows = $data['services'] ?? array_map(fn ($serviceId) => ['service_id' => $serviceId], $data['service_ids'] ?? $this->eligibleServices($room)->pluck('id')->all());
+                $this->terms->replaceDraft($contract, $room, $rows, $user->id);
             }
             if ($isNew || array_key_exists('utility_openings', $data)) {
                 $this->saveOpenings($contract, $room, $data['utility_openings'] ?? $this->context($user, $roomId)['utility_openings']->all());
@@ -155,19 +156,7 @@ class ContractService
 
     private function saveServices(Contract $contract, Room $room, array $ids): void
     {
-        $services = $this->eligibleServices($room)->whereIn('id', $ids);
-        if ($services->count() !== count(array_unique($ids))) {
-            throw ValidationException::withMessages(['service_ids' => 'Chỉ được chọn dịch vụ đang áp dụng cho phòng này.']);
-        }
-        $contract->agreedServices()->delete();
-        foreach ($services as $service) {
-            $contract->agreedServices()->create([
-                'service_id' => $service->id, 'service_name' => $service->name, 'service_type' => $service->type,
-                'billing_method' => $service->billing_method, 'unit' => $service->unit, 'base_price' => $service->base_price,
-                'vat_rate' => $service->vat_rate, 'pricing_snapshot' => $service->priceTiers->map->only(['from_quantity', 'to_quantity', 'unit_price', 'tier_order'])->all(),
-                'is_active' => true,
-            ]);
-        }
+        $this->terms->replaceDraft($contract, $room, array_map(fn ($id) => ['service_id' => $id], $ids), null);
     }
 
     private function saveOpenings(Contract $contract, Room $room, array $openings): void
@@ -211,8 +200,7 @@ class ContractService
         if ($overlaps) {
             throw ValidationException::withMessages(['start_date' => 'Thời hạn hợp đồng trùng với hợp đồng đang hiệu lực của phòng. Vui lòng kiểm tra ngày bắt đầu và kết thúc.']);
         }
-        // Re-read selected prices at activation, then freeze them with the signing evidence.
-        $this->saveServices($contract, $room, $contract->agreedServices()->pluck('service_id')->all());
+        $this->terms->finalize($contract, $room);
         $this->saveOpenings($contract, $room, $contract->utilityOpenings()->get()->map(fn ($opening) => [
             'utility_meter_id' => $opening->utility_meter_id, 'opening_reading' => $opening->opening_reading,
             'reading_date' => $opening->reading_date->format('Y-m-d'),
@@ -245,7 +233,7 @@ class ContractService
         $contract->status = 'ACTIVE';
         $contract->finalized_at = now();
         $contract->signing_snapshot = [
-            'schema_version' => 1, 'finalized_at' => now()->toIso8601String(),
+            'schema_version' => 2, 'finalized_at' => now()->toIso8601String(),
             'lessor' => $representative, 'tenant' => $this->person($tenant),
             // Retired issue-day columns remain nullable for production compatibility;
             // new signing evidence records only the agreed monthly payment day.

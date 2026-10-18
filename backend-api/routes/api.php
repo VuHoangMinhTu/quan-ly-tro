@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BoardingHouseController;
 use App\Http\Controllers\Api\BoardingHouseManagerController;
 use App\Http\Controllers\Api\ContractController;
+use App\Http\Controllers\Api\ContractServiceController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\GoogleAuthController;
 use App\Http\Controllers\Api\InvoiceController;
@@ -119,6 +120,10 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::put('/contracts/{id}/occupants/{occupantId}/move-out', [ContractController::class, 'moveOut']);
     Route::post('/rooms/{roomId}/contracts', [ContractController::class, 'store']);
     Route::get('/contracts/{id}', [ContractController::class, 'show']);
+    Route::get('/contracts/{id}/services', [ContractServiceController::class, 'index']);
+    Route::put('/contracts/{id}/services', [ContractServiceController::class, 'update']);
+    Route::post('/contracts/{id}/service-adjustments', [ContractServiceController::class, 'adjust']);
+    Route::post('/contracts/{id}/services/{termId}/stop', [ContractServiceController::class, 'stop']);
     Route::put('/contracts/{id}', [ContractController::class, 'update']);
     Route::delete('/contracts/{id}', [ContractController::class, 'destroy']);
 

@@ -37,6 +37,7 @@ class Contract extends Model
         'occupant_tenant_ids' => 'array',
         'signing_snapshot' => 'array',
         'finalized_at' => 'datetime',
+        'service_terms_version' => 'integer',
     ];
 
     public function room()
