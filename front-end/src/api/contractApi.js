@@ -1,6 +1,10 @@
 import client from './axiosClient'
 export const getContractsByRoom = (roomId) => client.get(`/rooms/${roomId}/contracts`)
 export const getContract = (id) => client.get(`/contracts/${id}`)
+export const getHandoverCheckIn = id => client.get(`/contracts/${id}/handover-check-in`)
+export const createHandoverCheckIn = id => client.post(`/contracts/${id}/handover-check-in`)
+export const updateHandoverCheckIn = (id, items) => client.put(`/contracts/${id}/handover-check-in`, { items })
+export const confirmHandoverCheckIn = id => client.post(`/contracts/${id}/handover-check-in/confirm`)
 export const createContract = (roomId, payload) => client.post(`/rooms/${roomId}/contracts`, payload)
 export const updateContract = (id, payload) => client.put(`/contracts/${id}`, payload)
 export const deleteContract = (id) => client.delete(`/contracts/${id}`)

@@ -122,7 +122,11 @@ class ContractTemplateRenderer
             return '<p>Chưa có biên bản bàn giao được ghi nhận.</p>';
         }
 
-        $rows = array_map(fn ($item) => [$this->escape($item['name'] ?? null), $this->escape($item['quantity'] ?? null), $this->escape($item['condition'] ?? null)], $items);
+        $conditions = ['GOOD' => 'Tốt', 'DAMAGED' => 'Hư hỏng', 'MISSING' => 'Thiếu', 'OTHER' => 'Khác'];
+        $rows = array_map(fn ($item) => [
+            $this->escape($item['name'] ?? null), $this->escape($item['quantity'] ?? null),
+            $this->escape($conditions[$item['condition'] ?? ''] ?? ($item['condition'] ?? null)),
+        ], $items);
 
         return $this->table(['Tài sản', 'Số lượng', 'Tình trạng'], $rows);
     }

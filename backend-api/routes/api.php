@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\BoardingHouseController;
 use App\Http\Controllers\Api\BoardingHouseManagerController;
 use App\Http\Controllers\Api\ContractController;
 use App\Http\Controllers\Api\ContractDocumentController;
+use App\Http\Controllers\Api\ContractHandoverController;
 use App\Http\Controllers\Api\ContractServiceController;
 use App\Http\Controllers\Api\ContractSigningController;
 use App\Http\Controllers\Api\ContractTemplateController;
@@ -156,6 +157,10 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::put('/contracts/{id}/occupants/{occupantId}/move-out', [ContractController::class, 'moveOut']);
     Route::post('/rooms/{roomId}/contracts', [ContractController::class, 'store']);
     Route::get('/contracts/{id}', [ContractController::class, 'show']);
+    Route::get('/contracts/{id}/handover-check-in', [ContractHandoverController::class, 'show']);
+    Route::post('/contracts/{id}/handover-check-in', [ContractHandoverController::class, 'store']);
+    Route::put('/contracts/{id}/handover-check-in', [ContractHandoverController::class, 'update']);
+    Route::post('/contracts/{id}/handover-check-in/confirm', [ContractHandoverController::class, 'confirm']);
     Route::get('/contracts/{id}/services', [ContractServiceController::class, 'index']);
     Route::put('/contracts/{id}/services', [ContractServiceController::class, 'update']);
     Route::post('/contracts/{id}/service-adjustments', [ContractServiceController::class, 'adjust']);

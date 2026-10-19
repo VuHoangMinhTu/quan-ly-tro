@@ -260,6 +260,7 @@ class ContractService
             'services' => $contract->agreedServices()->get()->toArray(),
             'occupants' => Tenant::query()->where('landlord_id', $house->landlord_id)->whereIn('id', $ids)->get()->map(fn (Tenant $person) => ['tenant_id' => $person->id, 'is_primary' => (int) $person->id === (int) $contract->tenant_id, ...$this->person($person)])->all(),
             'utility_openings' => $contract->utilityOpenings()->get()->toArray(),
+            'handover_checkin' => $contract->handoverReports()->where('type', 'CHECK_IN')->where('status', 'CONFIRMED')->first()?->items ?? [],
         ];
     }
 

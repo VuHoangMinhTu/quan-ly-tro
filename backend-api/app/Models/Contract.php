@@ -87,4 +87,9 @@ class Contract extends Model
     {
         return $this->hasOne(ContractDocument::class);
     }
+
+    public function handoverReports(): HasMany
+    {
+        return $this->hasMany(ContractHandoverReport::class);
+    }
 }
