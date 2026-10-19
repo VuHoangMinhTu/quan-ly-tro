@@ -93,9 +93,9 @@ class ContractSigningService
         return trim((string) $tenant?->email);
     }
 
-    public function start(Request $http, int $id, bool $resend = false): void
+    public function start(Request $http, int $id, bool $resend = false, ?string $expectedEmail = null): array
     {
-        DB::transaction(function () use ($http, $id, $resend): void {
+        return DB::transaction(function () use ($http, $id, $resend, $expectedEmail): array {
             $document = $this->owned($http, $id, true);
             $workflow = $this->workflow($document);
             $this->writable($workflow);
@@ -103,11 +103,14 @@ class ContractSigningService
             $email = $this->tenantEmail($document);
             $tenant = $document->signingRequests()->where('signer_role', 'TENANT')->latest('id')->lockForUpdate()->first();
             $destinationChanged = $tenant && trim($tenant->delivery_destination_snapshot) !== $email;
+            if ($expectedEmail !== null && trim($expectedEmail) !== $email) {
+                $this->fail('Email người thuê đã thay đổi so với lúc xác nhận. Vui lòng tải lại tình trạng ký và kiểm tra email trước khi gửi.', 'email');
+            }
             if ($tenant?->status !== 'SIGNED' && ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 $this->fail('Người thuê chưa có email hợp lệ. Vui lòng cập nhật email người thuê trước khi gửi yêu cầu ký.', 'email');
             }
             if ($tenant && ! $resend && ! $destinationChanged && $tenant->active_key && $tenant->token_expires_at > now()) {
-                return;
+                return $this->deliveryReceipt($tenant, 'reused', false);
             }
             if ($tenant && ! $destinationChanged && $tenant->status !== 'SIGNED' && $tenant->created_at->copy()->addSeconds(max(1, config('signing.request_resend_seconds'))) > now()) {
                 $this->fail('Bạn đã gửi yêu cầu quá nhiều lần. Vui lòng thử lại sau.');
@@ -125,10 +128,10 @@ class ContractSigningService
                 if ($lessor?->active_key) {
                     $this->revoke($document, $lessor, $http);
                 }
-                $this->newRequest($document, 'LESSOR', (string) data_get($document->source_snapshot, 'lessor.full_name'), $representative->email, $http, $representative->id);
+                $lessor = $this->newRequest($document, 'LESSOR', (string) data_get($document->source_snapshot, 'lessor.full_name'), $representative->email, $http, $representative->id);
             }
             if ($tenant?->status === 'SIGNED') {
-                return;
+                return $this->deliveryReceipt($lessor, 'lessor_ready', false);
             }
             $token = bin2hex(random_bytes(32));
             $request = $this->newRequest($document, 'TENANT', (string) data_get($document->source_snapshot, 'tenant.full_name'), $email, $http, null, $token);
@@ -146,7 +149,17 @@ class ContractSigningService
             $request->update(['sent_at' => now()]);
             $this->audit->record($document, 'SIGN_REQUEST_SENT', $http, $request);
             $workflow->update(['status' => $document->signatures()->lockForUpdate()->get(['id'])->isNotEmpty() ? 'PARTIALLY_SIGNED' : 'PENDING']);
+
+            return $this->deliveryReceipt($request, 'sent', true);
         });
+    }
+
+    /** Authenticated management response only: identifies this exact transport submission, never returns the secret link. */
+    private function deliveryReceipt(ContractSigningRequest $request, string $action, bool $submitted): array
+    {
+        return ['request_id' => $request->id, 'tenant_id' => $request->signer_tenant_id,
+            'signer_role' => $request->signer_role, 'recipient_email' => $request->delivery_destination_snapshot,
+            'sent_at' => $request->sent_at, 'action' => $action, 'mail_submitted' => $submitted];
     }
 
     private function newRequest(ContractDocument $document, string $role, string $name, string $email, Request $http, ?int $userId = null, ?string $token = null): ContractSigningRequest
@@ -394,8 +407,11 @@ class ContractSigningService
     public function status(Request $http, int $id): array
     {
         $document = $this->owned($http, $id);
+        $contract = $document->contract;
+        $contact = Tenant::query()->where('landlord_id', $contract->room->boardingHouse->landlord_id)->find($contract->tenant_id);
 
         return [
+            'tenant_contact' => ['tenant_id' => $contract->tenant_id, 'name' => $contact?->full_name, 'email' => $contact?->email],
             'status' => $document->signing?->status ?? 'NOT_STARTED',
             'completed_at' => $document->signing?->signatures_completed_at,
             'void_reason' => $document->signing?->void_reason,
@@ -405,6 +421,7 @@ class ContractSigningService
                 $request = $document->signingRequests()->where('signer_role', $role)->latest('id')->first();
 
                 return ['role' => $role, 'name' => data_get($document->source_snapshot, $role === 'LESSOR' ? 'lessor.full_name' : 'tenant.full_name'),
+                    'delivery_email' => $request?->delivery_destination_snapshot, 'last_sent_at' => $request?->sent_at,
                     'status' => $request && $request->status !== 'SIGNED' && $request->token_expires_at <= now() ? 'EXPIRED' : ($request?->status ?? 'NOT_STARTED'),
                     'signed_at' => $request?->completed_at];
             }),

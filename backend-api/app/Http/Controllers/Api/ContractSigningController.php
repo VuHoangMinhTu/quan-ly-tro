@@ -23,16 +23,25 @@ class ContractSigningController extends Controller
 
     public function store(Request $request, int $id): JsonResponse
     {
-        $this->signing->start($request, $id);
-
-        return ApiResponse::success(null, 'Đã gửi yêu cầu ký hợp đồng.');
+        return $this->send($request, $id, false);
     }
 
     public function resend(Request $request, int $id): JsonResponse
     {
-        $this->signing->start($request, $id, true);
+        return $this->send($request, $id, true);
+    }
 
-        return ApiResponse::success(null, 'Đã gửi lại yêu cầu ký. Liên kết cũ không còn hiệu lực.');
+    private function send(Request $request, int $id, bool $resend): JsonResponse
+    {
+        $input = $request->validate(['expected_tenant_email' => ['sometimes', 'string', 'email', 'max:255']]);
+        $receipt = $this->signing->start($request, $id, $resend, $input['expected_tenant_email'] ?? null);
+        $message = match ($receipt['action']) {
+            'sent' => 'Đã gửi yêu cầu ký tới '.$receipt['recipient_email'].($resend ? ' Liên kết cũ không còn hiệu lực.' : ''),
+            'reused' => 'Yêu cầu ký tới '.$receipt['recipient_email'].' vẫn còn hiệu lực. Chưa gửi email mới; hãy chọn Gửi lại yêu cầu ký nếu cần.',
+            default => 'Yêu cầu ký Bên A đã sẵn sàng. Không gửi email mới cho người thuê đã ký.',
+        };
+
+        return ApiResponse::success($receipt, $message);
     }
 
     public function context(Request $request, int $id): JsonResponse

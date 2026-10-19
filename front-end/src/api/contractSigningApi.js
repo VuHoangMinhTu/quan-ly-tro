@@ -7,8 +7,8 @@ const endpoint = ({ id, token }) => token ? `/sign/${encodeURIComponent(token)}`
 const transport = target => target.token ? publicClient : client
 export const signingKeys = { detail: id => ['contract-signing', String(id)] }
 export const getContractSigning = id => client.get(`/contracts/${id}/signing`)
-export const startContractSigning = id => client.post(`/contracts/${id}/signing-requests`)
-export const resendContractSigning = id => client.post(`/contracts/${id}/signing-requests/resend`)
+export const startContractSigning = (id, expectedEmail) => client.post(`/contracts/${id}/signing-requests`, expectedEmail ? { expected_tenant_email: expectedEmail } : {})
+export const resendContractSigning = (id, expectedEmail) => client.post(`/contracts/${id}/signing-requests/resend`, expectedEmail ? { expected_tenant_email: expectedEmail } : {})
 export const voidContractSigning = (id, reason) => client.post(`/contracts/${id}/signing/void`, { reason })
 export const getSigningContext = (target, signal) => transport(target).get(endpoint(target), { signal, headers: target.verificationToken ? { 'X-Signing-Verification': target.verificationToken } : undefined })
 export const requestSigningOtp = target => transport(target).post(`${endpoint(target)}/request-otp`)

@@ -12,9 +12,11 @@ use App\Notifications\ContractSigningNotification;
 use App\Services\ContractSigningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Notifications\ChannelManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\TestWith;
@@ -47,7 +49,7 @@ class ContractSigningApiTest extends TestCase
 
     private function start(Contract $contract): string
     {
-        $this->postJson("/api/contracts/{$contract->id}/signing-requests")->assertOk()->assertJsonPath('data', null);
+        $this->postJson("/api/contracts/{$contract->id}/signing-requests")->assertOk()->assertJsonPath('data.action', 'sent')->assertJsonPath('data.mail_submitted', true);
         $token = '';
         Notification::assertSentOnDemand(ContractSigningNotification::class, function ($notification) use (&$token): bool {
             if ($notification->kind === 'REQUEST') {
@@ -60,6 +62,46 @@ class ContractSigningApiTest extends TestCase
         });
 
         return $token;
+    }
+
+    public function test_resend_uses_updated_tenant_email_in_actual_mail_envelope(): void
+    {
+        [$contract] = $this->fixture();
+        $oldToken = $this->start($contract);
+        $this->putJson("/api/tenants/{$contract->tenant_id}", ['full_name' => $contract->tenant->full_name, 'email' => 'updated@example.test'])->assertOk();
+        Notification::swap(new ChannelManager($this->app));
+        $transport = Mail::mailer('array')->getSymfonyTransport();
+        $transport->flush();
+
+        $this->postJson("/api/contracts/{$contract->id}/signing-requests/resend", ['expected_tenant_email' => 'updated@example.test'])
+            ->assertOk()->assertJsonPath('data.recipient_email', 'updated@example.test')
+            ->assertJsonPath('data.tenant_id', $contract->tenant_id)->assertJsonPath('data.mail_submitted', true);
+        $this->assertCount(1, $transport->messages());
+        $mail = $transport->messages()->last();
+        $this->assertSame(['updated@example.test'], array_map(fn ($address) => $address->getAddress(), $mail->getOriginalMessage()->getTo()));
+        $this->assertSame(['updated@example.test'], array_map(fn ($address) => $address->getAddress(), $mail->getEnvelope()->getRecipients()));
+        $this->getJson('/api/sign/'.$oldToken)->assertUnprocessable();
+
+        preg_match('~/sign/([a-f0-9]{64})~', $mail->getOriginalMessage()->getHtmlBody(), $matches);
+        $this->assertNotEmpty($matches[1] ?? null);
+        $this->postJson('/api/sign/'.$matches[1].'/request-otp')->assertOk();
+        $this->assertCount(2, $transport->messages());
+        $this->assertSame('updated@example.test', $transport->messages()->last()->getEnvelope()->getRecipients()[0]->getAddress());
+        $this->getJson("/api/contracts/{$contract->id}/signing")->assertOk()
+            ->assertJsonPath('data.tenant_contact.email', 'updated@example.test');
+    }
+
+    public function test_stale_recipient_confirmation_does_not_send_or_revoke_request(): void
+    {
+        [$contract] = $this->fixture();
+        $this->start($contract);
+        $this->postJson("/api/contracts/{$contract->id}/signing-requests/resend", ['expected_tenant_email' => 'old@example.test'])
+            ->assertUnprocessable()->assertJsonValidationErrors('email');
+        $this->assertDatabaseCount('contract_signing_requests', 2);
+        Notification::assertSentOnDemandTimes(ContractSigningNotification::class, 1);
+        $this->postJson("/api/contracts/{$contract->id}/signing-requests")->assertOk()
+            ->assertJsonPath('data.action', 'reused')->assertJsonPath('data.mail_submitted', false);
+        Notification::assertSentOnDemandTimes(ContractSigningNotification::class, 1);
     }
 
     private function verify(string $prefix): string

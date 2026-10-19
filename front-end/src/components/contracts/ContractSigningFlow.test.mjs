@@ -42,6 +42,56 @@ async function form(initial = context) {
 }
 const button = (tree, label) => nodes(tree).find(node => node.type === 'button' && text(node) === label)
 
+async function management(contact, confirmed = true) {
+  const source = (await readFile(new URL('./ContractSigningSection.jsx', import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
+  const { code } = await transformWithOxc(source, 'ContractSigningSection.jsx', { jsx: { runtime: 'classic' } })
+  const states = [], refs = [], sent = [], prompts = []
+  let index = 0, refIndex = 0, settled = Promise.resolve()
+  const cached = { status: 'PENDING', signers: [], events: [], tenant_contact: { email: 'old@example.test' } }
+  const bindings = {
+    useState(value) { const i = index++; if (!(i in states)) states[i] = value; return [states[i], next => { states[i] = next }] },
+    useRef(value) { return refs[refIndex++] ??= { current: value } },
+    useQuery: () => ({ data: { data: { data: cached } } }),
+    useQueryClient: () => ({ setQueryData() {}, invalidateQueries: async () => {} }),
+    useMutation: options => ({ mutate(action) { settled = action().then(options.onSuccess) }, isPending: false }),
+    getContractSigning: async () => ({ data: { data: { ...cached, tenant_contact: contact } } }),
+    startContractSigning: async (...args) => { sent.push(args); return { data: { message: 'sent', data: { recipient_email: contact.email } } } },
+    resendContractSigning: async (...args) => { sent.push(args); return { data: { message: 'sent', data: { recipient_email: contact.email } } } },
+    signingKeys: { detail: id => ['contract-signing', String(id)] },
+    SIGNING_STATUS_LABELS, SIGNER_STATUS_LABELS: {}, SIGNING_EVENT_LABELS,
+    formatDocumentFinalizedAt: value => value, getApiErrorMessage: error => error.message,
+    Link: props => React.createElement('a', null, props.children),
+    window: { confirm: prompt => { prompts.push(prompt); return confirmed } },
+  }
+  const Component = new Function('React', ...Object.keys(bindings), `${code}\nreturn ContractSigningSection`)(React, ...Object.values(bindings))
+  return {
+    sent, prompts,
+    render() { index = 0; refIndex = 0; return Component({ contract: { id: 14, document: {} } }) },
+    async send() { await button(this.render(), 'Gửi lại yêu cầu ký').props.onClick(); await settled },
+  }
+}
+
+test('resend confirms a fresh tenant email rather than the cached old contact', async () => {
+  const ui = await management({ tenant_id: 2, name: 'Nguyễn Văn A', email: 'new@example.test' })
+  await ui.send()
+  assert.deepEqual(ui.sent, [[14, 'new@example.test']])
+  assert.match(ui.prompts[0], /new@example.test/)
+  assert.doesNotMatch(ui.prompts[0], /old@example.test/)
+})
+
+test('cancelled confirmation does not send a signing email', async () => {
+  const ui = await management({ email: 'new@example.test' }, false)
+  await ui.send()
+  assert.deepEqual(ui.sent, [])
+})
+
+test('missing current tenant contact blocks sending instead of using an old snapshot', async () => {
+  const ui = await management(null)
+  await ui.send()
+  assert.deepEqual(ui.sent, [])
+  assert.match(text(ui.render()), /Backend chưa cung cấp email/)
+})
+
 test('signature payload binds consent/version/hash and sends a PNG file, never an image string', () => {
   const payload = buildSignaturePayload(context, new Blob(['png'], { type: 'image/png' }), 'b'.repeat(64))
   assert.equal(payload.get('consent'), '1')
