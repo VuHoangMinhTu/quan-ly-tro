@@ -17,7 +17,7 @@ function text(node) {
 }
 const context = { contract_code: 'HD101', room_code: '101', boarding_house_name: 'BeeHouse', signer_name: 'Nguyễn Văn A', signer_role: 'TENANT', request_status: 'PENDING', signing_status: 'PENDING', masked_email: 'n***@example.test', rendered_html: '<p>Nội dung đã chốt</p>', content_hash: 'a'.repeat(64), consent_version: 'BEEHOUSE_SIGN_V1', consent_text: 'Tôi xác nhận đã đọc và đồng ý với nội dung hợp đồng này.', otp_verified: false }
 
-async function form(initial = context) {
+async function form(initial = context, otpFailure = false) {
   const source = (await readFile(new URL('../../pages/contracts/ContractSigningPage.jsx', import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
   const { code } = await transformWithOxc(source, 'ContractSigningPage.jsx', { jsx: { runtime: 'classic' } })
   const states = [initial, false]
@@ -32,7 +32,7 @@ async function form(initial = context) {
     SIGNING_STATUS_LABELS, buildSignaturePayload, beeHouseLogo: 'logo.png', SignatureCanvas: () => null, FrozenContractHtml: () => null,
     Link: props => React.createElement('a', { href: props.to }, props.children), getApiErrorMessage: error => error.message,
     getSigningContext: async () => ({ data: { data: latest } }),
-    requestSigningOtp: async target => sent.push(['otp', target]),
+    requestSigningOtp: async target => { if (otpFailure) throw new Error('Chưa thể gửi mã OTP.'); sent.push(['otp', target]) },
     verifySigningOtp: async (target, otp) => { sent.push(['verify', otp]); latest = { ...latest, otp_verified: true }; return { data: { data: { verification_token: 'b'.repeat(64) } } } },
     submitContractSignature: async (target, payload) => { sent.push(['sign', payload]); latest = { ...latest, request_status: 'SIGNED', signing_status: 'PARTIALLY_SIGNED' } },
     declineContractSigning: async () => sent.push(['decline']),
@@ -118,6 +118,25 @@ test('tenant must verify OTP, consent and draw before signing; success shows par
   assert.equal(ui.sent[1][1], '123456')
   assert.match(text(ui.render()), /Bạn đã xác nhận ký hợp đồng/)
   assert.equal(button(ui.render(), 'Xác nhận ký hợp đồng'), undefined)
+})
+
+test('OTP success displays an accessible alert next to the OTP controls with the masked email', async () => {
+  const ui = await form()
+  await button(ui.render(), 'Gửi / Gửi lại mã OTP').props.onClick()
+  const tree = ui.render()
+  const notice = nodes(tree).find(node => node.props.role === 'status' && text(node).includes('Đã gửi mã xác thực'))
+  assert.ok(notice)
+  assert.match(text(notice), /Đã gửi mã OTP đến n\*\*\*@example.test/)
+  assert.match(text(notice), /Spam \/ Thư rác/)
+  assert.equal(notice.props['aria-live'], 'polite')
+  assert.ok(nodes(tree).some(node => node.type === 'div' && nodes(node.props.children).includes(notice) && nodes(node).some(child => child.props.autoComplete === 'one-time-code')))
+})
+
+test('OTP failure displays an error without announcing a successful send', async () => {
+  const ui = await form(context, true)
+  await button(ui.render(), 'Gửi / Gửi lại mã OTP').props.onClick()
+  assert.match(text(ui.render()), /Chưa thể gửi mã OTP/)
+  assert.doesNotMatch(text(ui.render()), /Đã gửi mã xác thực/)
 })
 
 test('signed state hides OTP/canvas controls; completed state offers print only when images ready', async () => {

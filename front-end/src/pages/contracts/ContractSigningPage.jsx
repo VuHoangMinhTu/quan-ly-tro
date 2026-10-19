@@ -32,6 +32,7 @@ function SigningForm({ id, token }) {
   const [reason, setReason] = useState('')
   const [showDecline, setShowDecline] = useState(false)
   const [imagesReady, setImagesReady] = useState(false)
+  const [otpNotice, setOtpNotice] = useState('')
   const canvas = useRef(null)
   const busy = useRef(false)
   const mounted = useRef(true)
@@ -48,7 +49,7 @@ function SigningForm({ id, token }) {
   }, [id, token])
   const perform = async action => {
     if (busy.current) return
-    busy.current = true; setPending(true); setError(''); setMessage('')
+    busy.current = true; setPending(true); setError(''); setMessage(''); setOtpNotice('')
     try { await action() } catch (failure) { if (mounted.current) setError(getApiErrorMessage(failure)) }
     finally { busy.current = false; if (mounted.current) setPending(false) }
   }
@@ -65,7 +66,8 @@ function SigningForm({ id, token }) {
         <section className="no-print space-y-2 rounded-xl bg-white p-4 shadow-sm sm:p-6"><h2 className="text-lg font-bold">Hợp đồng {data.contract_code}</h2><p className="break-words text-sm">Phòng {data.room_code} — {data.boarding_house_name}</p><p className="text-sm">Người ký: <strong>{data.signer_name}</strong> — {data.signer_role === 'LESSOR' ? 'Bên A' : 'Bên B'}</p><p className="text-sm font-semibold">{SIGNING_STATUS_LABELS[data.signing_status]}</p><a href="#signing-document" className="inline-flex min-h-11 items-center text-sm underline">Xem toàn bộ hợp đồng</a></section>
         <section id="signing-document" className="contract-document-sheet scroll-mt-4 !w-full !p-4 sm:!p-8"><FrozenContractHtml html={complete ? data.signed_rendered_html : data.rendered_html} id={id} token={token} onReady={ready} /></section>
         {signed ? <section className="no-print space-y-3 rounded-xl bg-green-50 p-4 text-green-900"><h2 className="font-semibold">{complete ? 'Hợp đồng đã hoàn tất ký.' : 'Bạn đã xác nhận ký hợp đồng. Đang chờ bên còn lại.'}</h2>{!complete && <button type="button" className={button} disabled={pending} onClick={() => perform(refresh)}>Cập nhật tình trạng ký</button>}{complete && <button type="button" className={button} disabled={!imagesReady} onClick={async () => { await document.fonts?.ready; window.print() }}>In hợp đồng / Lưu PDF</button>}</section> : <section className="no-print space-y-5 rounded-xl bg-white p-4 shadow-sm sm:p-6">
-          <div className="space-y-3"><h2 className="font-semibold">Xác thực danh tính</h2><p className="text-sm text-slate-600">Mã OTP sẽ được gửi tới {data.masked_email}. Không chia sẻ mã hoặc liên kết này.</p><button type="button" disabled={pending} className={button} onClick={() => perform(async () => { await requestSigningOtp(target); verification.current = ''; setMessage('Đã gửi mã OTP. Vui lòng kiểm tra email và thư mục Spam / Thư rác.'); await refresh() })}>Gửi / Gửi lại mã OTP</button>
+          <div className="space-y-3"><h2 className="font-semibold">Xác thực danh tính</h2><p className="text-sm text-slate-600">Mã OTP sẽ được gửi tới {data.masked_email}. Không chia sẻ mã hoặc liên kết này.</p><button type="button" disabled={pending} className={button} onClick={() => perform(async () => { await requestSigningOtp(target); verification.current = ''; if (!mounted.current) return; setOtpNotice(`Đã gửi mã OTP đến ${data.masked_email}. Vui lòng kiểm tra hộp thư đến hoặc Spam / Thư rác.`); await refresh() })}>Gửi / Gửi lại mã OTP</button>
+            {otpNotice && <div role="status" aria-live="polite" aria-atomic="true" className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm leading-relaxed text-green-900"><p className="font-semibold">Đã gửi mã xác thực</p><p className="mt-1 break-words">{otpNotice}</p></div>}
             <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-end"><label className="w-full max-w-xs text-sm font-medium">Mã OTP<input value={otp} onChange={event => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} autoComplete="one-time-code" inputMode="numeric" maxLength={6} placeholder="6 chữ số" className={input} disabled={pending} /></label><button type="button" disabled={pending || otp.length !== 6} className={button} onClick={() => perform(async () => { const response = await verifySigningOtp(target, otp); verification.current = response.data.data.verification_token; setOtp(''); await refresh(); setMessage('Đã xác thực OTP. Vui lòng đọc, đồng ý và vẽ chữ ký bên dưới.') })}>Xác thực OTP</button></div>
             {data.otp_verified && <p className="text-sm font-medium text-green-700">Đã xác thực OTP. Vui lòng hoàn tất ký trước khi mã hết hạn.</p>}
           </div>

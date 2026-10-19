@@ -78,6 +78,9 @@ class ContractSigningApiTest extends TestCase
             ->assertJsonPath('data.tenant_id', $contract->tenant_id)->assertJsonPath('data.mail_submitted', true);
         $this->assertCount(1, $transport->messages());
         $mail = $transport->messages()->last();
+        $this->assertStringContainsString('Yêu cầu ký hợp đồng thuê phòng', $mail->getOriginalMessage()->getHtmlBody());
+        $this->assertStringContainsString('BeeHouse - Quản lý trọ', $mail->getOriginalMessage()->getTextBody());
+        $this->assertStringContainsString('Xem và ký hợp đồng:', $mail->getOriginalMessage()->getTextBody());
         $this->assertSame(['updated@example.test'], array_map(fn ($address) => $address->getAddress(), $mail->getOriginalMessage()->getTo()));
         $this->assertSame(['updated@example.test'], array_map(fn ($address) => $address->getAddress(), $mail->getEnvelope()->getRecipients()));
         $this->getJson('/api/sign/'.$oldToken)->assertUnprocessable();
@@ -86,6 +89,8 @@ class ContractSigningApiTest extends TestCase
         $this->assertNotEmpty($matches[1] ?? null);
         $this->postJson('/api/sign/'.$matches[1].'/request-otp')->assertOk();
         $this->assertCount(2, $transport->messages());
+        $this->assertStringContainsString('Mã xác thực:', $transport->messages()->last()->getOriginalMessage()->getTextBody());
+        $this->assertStringContainsString('Không chia sẻ mã này', $transport->messages()->last()->getOriginalMessage()->getHtmlBody());
         $this->assertSame('updated@example.test', $transport->messages()->last()->getEnvelope()->getRecipients()[0]->getAddress());
         $this->getJson("/api/contracts/{$contract->id}/signing")->assertOk()
             ->assertJsonPath('data.tenant_contact.email', 'updated@example.test');
@@ -102,6 +107,24 @@ class ContractSigningApiTest extends TestCase
         $this->postJson("/api/contracts/{$contract->id}/signing-requests")->assertOk()
             ->assertJsonPath('data.action', 'reused')->assertJsonPath('data.mail_submitted', false);
         Notification::assertSentOnDemandTimes(ContractSigningNotification::class, 1);
+    }
+
+    public function test_signing_email_escapes_names_and_preserves_the_signing_link_in_both_parts(): void
+    {
+        $notification = new ContractSigningNotification('REQUEST', [
+            'name' => '<script>alert(1)</script>', 'code' => 'HD-101', 'room' => '101',
+            'house' => 'Nhà trọ Nguyễn Văn An', 'url' => 'https://example.test/sign/opaque-link',
+            'expires' => '20/10/2026 10:00 +07:00',
+        ]);
+        $mail = $notification->toMail(new \stdClass);
+        $html = view($mail->view['html'], $mail->viewData)->render();
+        $text = view($mail->view['text'], $mail->viewData)->render();
+
+        $this->assertStringNotContainsString('<script>', $html);
+        $this->assertStringContainsString('&lt;script&gt;', $html);
+        $this->assertStringContainsString('Nhà trọ Nguyễn Văn An', $html);
+        $this->assertStringContainsString('https://example.test/sign/opaque-link', $html);
+        $this->assertStringContainsString('https://example.test/sign/opaque-link', $text);
     }
 
     private function verify(string $prefix): string

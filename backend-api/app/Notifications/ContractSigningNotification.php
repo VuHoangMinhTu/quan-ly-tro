@@ -17,21 +17,16 @@ class ContractSigningNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
+        if (in_array($this->kind, ['REQUEST', 'OTP'], true)) {
+            return (new MailMessage)->mailer(config('signing.mailer'))
+                ->subject($this->kind === 'OTP' ? 'Mã xác thực ký hợp đồng - BeeHouse' : 'Yêu cầu ký hợp đồng thuê phòng - BeeHouse')
+                ->view(['html' => 'emails.contract-signing', 'text' => 'emails.contract-signing-text'], [
+                    'kind' => $this->kind,
+                    'details' => $this->details,
+                ]);
+        }
+
         $message = (new MailMessage)->mailer(config('signing.mailer'))->greeting('Xin chào '.$this->details['name'].',');
-        if ($this->kind === 'OTP') {
-            return $message->subject('Mã xác thực ký hợp đồng - BeeHouse')
-                ->line('Mã xác thực của bạn: '.$this->details['otp'])
-                ->line('Mã có hiệu lực '.$this->details['minutes'].' phút. Không chia sẻ mã này với người khác.')
-                ->line('Nếu không yêu cầu ký hợp đồng, vui lòng bỏ qua email này.');
-        }
-        if ($this->kind === 'REQUEST') {
-            return $message->subject('Yêu cầu ký hợp đồng thuê phòng - BeeHouse')
-                ->line('Hợp đồng: '.$this->details['code'])
-                ->line('Phòng '.$this->details['room'].' — '.$this->details['house'])
-                ->action('Xem và ký hợp đồng', $this->details['url'])
-                ->line('Liên kết hết hạn lúc '.$this->details['expires'].'. Vui lòng không chia sẻ liên kết.')
-                ->line('Đây là yêu cầu xác nhận ký điện tử bằng OTP và chữ ký vẽ tay.');
-        }
 
         return $message->subject('Cập nhật ký hợp đồng - BeeHouse')->line($this->details['message']);
     }
