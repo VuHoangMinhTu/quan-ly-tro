@@ -243,6 +243,9 @@ class ContractSigningApiTest extends TestCase
         $this->verify($first);
         $this->post($first, $this->payload($document->document_hash), ['Accept' => 'application/json'])->assertOk();
         $this->getJson("/api/contracts/{$contract->id}/signing")->assertOk()->assertJsonPath('data.status', 'PARTIALLY_SIGNED');
+        $partial = $this->getJson($public)->assertOk()->json('data.rendered_html');
+        $this->assertSame(1, substr_count($partial, 'data-signature-id='));
+        $this->assertSame(1, substr_count($partial, 'Chưa ký'));
         $this->verify($second);
         $this->post($second, $this->payload($document->document_hash), ['Accept' => 'application/json'])->assertOk();
         $this->post($second, $this->payload($document->document_hash), ['Accept' => 'application/json'])->assertOk();
@@ -252,7 +255,11 @@ class ContractSigningApiTest extends TestCase
         $workflow = $document->signing()->firstOrFail();
         $this->assertSame('COMPLETED', $workflow->status);
         $this->assertSame(hash('sha256', $workflow->signed_rendered_html), $workflow->signed_document_hash);
-        $this->assertStringStartsWith($document->rendered_html, $workflow->signed_rendered_html);
+        $this->assertStringContainsString('HỢP ĐỒNG CHO THUÊ PHÒNG', $workflow->signed_rendered_html);
+        $this->assertSame(1, substr_count($workflow->signed_rendered_html, 'class="document-signatures"'));
+        $this->assertStringNotContainsString('Chưa ký', $workflow->signed_rendered_html);
+        $this->assertSame(2, substr_count($workflow->signed_rendered_html, 'data-signature-id='));
+        $this->assertSame(2, substr_count($workflow->signed_rendered_html, 'Ký lúc:'));
         $this->assertStringContainsString('Nguyễn Văn A', $workflow->signed_rendered_html);
         foreach (ContractSignature::all() as $signature) {
             $this->assertSame($document->document_hash, $signature->document_hash);

@@ -108,6 +108,28 @@ test('template editor prevents unknown variables before API calls and locks cont
   assert.match(text(locked), /tạo phiên bản mới/)
 })
 
+test('global BeeHouse template is shown for viewing and owner clone opens an editable copy', async () => {
+  const navigated = []
+  const List = await load('../../pages/contracts/ContractTemplateListPage.jsx', 'ContractTemplateListPage', {
+    useNavigate: () => path => navigated.push(path),
+    useQueryClient: () => ({ invalidateQueries: async () => {} }),
+    useState: initial => [initial, () => {}],
+    useQuery: () => ({ data: { data: { data: { can_manage: true, templates: [{ id: 4, name: 'Hợp đồng cho thuê phòng tiêu chuẩn', template_key: 'ROOM_RENTAL_STANDARD', version: 1, landlord_id: null, is_active: true, documents_count: 0 }] } } } }),
+    useMutation: options => ({ mutate: async payload => options.onSuccess(await options.mutationFn(payload), payload), isPending: false }),
+    contractTemplateKeys: { all: ['contract-templates'] },
+    getContractTemplates: async () => ({}),
+    createContractTemplateVersion: async () => ({ data: { data: { id: 9 } } }),
+    setContractTemplateStatus: async () => {},
+    Link, getApiErrorMessage, formatDate: () => '19/10/2026',
+  })
+  const list = List()
+  assert.match(text(list), /Hợp đồng cho thuê phòng tiêu chuẩn/)
+  assert.match(text(list), /BeeHouse\s*· v\s*1/)
+  assert.equal(nodes(list).some(node => node.type === 'button' && text(node) === 'Sửa'), false)
+  await nodes(list).find(node => node.type === 'button' && text(node) === 'Tạo bản sao').props.onClick()
+  assert.deepEqual(navigated, ['/contract-templates/9'])
+})
+
 test('A4 document route is outside MainLayout and print styles do not scale the document', async () => {
   const routes = await readFile(new URL('../../routes/AppRoutes.jsx', import.meta.url), 'utf8')
   assert.ok(routes.indexOf('path="/contracts/:id/document"') < routes.indexOf('<Route element={<MainLayout />}'))

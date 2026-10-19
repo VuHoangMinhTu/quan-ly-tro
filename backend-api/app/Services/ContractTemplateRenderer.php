@@ -30,9 +30,17 @@ class ContractTemplateRenderer
     {
         $content = $this->prepare($content);
         $values = $this->registry->values($snapshot);
-        $blocks = ['services_table' => $this->services($snapshot['services'] ?? []), 'occupants_table' => $this->occupants($snapshot['occupants'] ?? [])];
+        $blocks = ['services_table' => $this->services($snapshot['services'] ?? []), 'occupants_table' => $this->occupants($snapshot['occupants'] ?? []),
+            'vehicles_table' => $this->vehicles($snapshot['vehicles'] ?? []), 'handover_checkin_table' => $this->handover($snapshot['handover_checkin'] ?? [])];
 
-        return preg_replace_callback('/\{\{(.*?)\}\}/s', fn ($match) => $blocks[trim($match[1])] ?? $this->escape($values[trim($match[1])]), $content);
+        $rendered = preg_replace_callback('/\{\{(.*?)\}\}/s', fn ($match) => $blocks[trim($match[1])] ?? $this->escape($values[trim($match[1])]), $content);
+
+        return str_replace('<div class="document-signatures"></div>', $this->unsignedSignatureBlock(), $rendered);
+    }
+
+    public function unsignedSignatureBlock(): string
+    {
+        return '<div class="document-signatures"><div><h3>BÊN CHO THUÊ (BÊN A)</h3><p>Chưa ký</p></div><div><h3>BÊN THUÊ (BÊN B)</h3><p>Chưa ký</p></div></div>';
     }
 
     private function escape(mixed $value): string
@@ -81,7 +89,7 @@ class ContractTemplateRenderer
             $rows[] = [$this->escape($service['service_name']), $this->escape($methods[$service['billing_method']] ?? $service['billing_method']), $price, $this->escape($this->registry->number($service['vat_rate'] ?? 0)).'%', $this->escape($this->registry->date($service['effective_from'] ?? null))];
         }
 
-        return $this->table(['Dịch vụ', 'Cách tính', 'Giá thỏa thuận', 'VAT', 'Hiệu lực từ'], $rows);
+        return $rows === [] ? '<p>Chưa có dịch vụ được ghi nhận.</p>' : $this->table(['Dịch vụ', 'Cách tính', 'Giá thỏa thuận', 'VAT', 'Hiệu lực từ'], $rows);
     }
 
     private function occupants(array $occupants): string
@@ -95,5 +103,27 @@ class ContractTemplateRenderer
         ], $occupants);
 
         return $this->table(['Họ tên', 'Ngày sinh', 'Số định danh', 'Vai trò'], $rows);
+    }
+
+    private function vehicles(array $vehicles): string
+    {
+        if ($vehicles === []) {
+            return '<p>Không có phương tiện được đăng ký.</p>';
+        }
+
+        $rows = array_map(fn ($vehicle) => [$this->escape($vehicle['type'] ?? null), $this->escape($vehicle['license_plate'] ?? null), $this->escape($vehicle['note'] ?? null)], $vehicles);
+
+        return $this->table(['Loại phương tiện', 'Biển số', 'Ghi chú'], $rows);
+    }
+
+    private function handover(array $items): string
+    {
+        if ($items === []) {
+            return '<p>Chưa có biên bản bàn giao được ghi nhận.</p>';
+        }
+
+        $rows = array_map(fn ($item) => [$this->escape($item['name'] ?? null), $this->escape($item['quantity'] ?? null), $this->escape($item['condition'] ?? null)], $items);
+
+        return $this->table(['Tài sản', 'Số lượng', 'Tình trạng'], $rows);
     }
 }

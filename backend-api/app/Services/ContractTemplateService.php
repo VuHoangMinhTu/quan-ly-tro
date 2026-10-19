@@ -24,7 +24,9 @@ class ContractTemplateService
     {
         return ContractTemplate::query()->where('is_active', true)
             ->where(fn ($query) => $query->whereNull('landlord_id')->orWhere('landlord_id', $landlordId))
-            ->orderByRaw('CASE WHEN landlord_id IS NULL THEN 1 ELSE 0 END')->orderByDesc('version')->orderBy('id');
+            ->orderByRaw('CASE WHEN landlord_id IS NULL THEN 1 ELSE 0 END')
+            ->orderByRaw("CASE WHEN template_key = 'ROOM_RENTAL_STANDARD' THEN 0 ELSE 1 END")
+            ->orderByDesc('version')->orderBy('id');
     }
 
     public function select(int $landlordId, ?int $id, bool $lock = false): ContractTemplate
@@ -57,7 +59,7 @@ class ContractTemplateService
             $version = (int) ContractTemplate::query()->where('landlord_id', $owner->id)->where('template_key', $key)->max('version') + 1;
             $template = ContractTemplate::create([
                 'landlord_id' => $owner->id, 'scope_key' => 'LANDLORD:'.$owner->id, 'template_key' => $key,
-                'name' => $data['name'] ?? $source?->name, 'version' => $version,
+                'name' => $data['name'] ?? ($source?->landlord_id === null ? $source->name.' - Bản tùy chỉnh' : $source?->name), 'version' => $version,
                 'content_html' => $this->renderer->prepare($data['content_html'] ?? $source->content_html),
                 'is_active' => false, 'created_by_user_id' => $user->id,
             ]);

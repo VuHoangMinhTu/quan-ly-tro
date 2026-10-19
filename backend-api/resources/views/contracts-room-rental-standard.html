@@ -1,0 +1,463 @@
+<div class="text-center">
+  <p><strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong></p>
+  <p><strong>Độc lập – Tự do – Hạnh phúc</strong></p>
+  <p>———•0•———</p>
+
+  <h1>HỢP ĐỒNG CHO THUÊ PHÒNG</h1>
+
+  <p>
+    Mã hợp đồng:
+    <strong>{{contract.code}}</strong>
+  </p>
+</div>
+
+<p>
+  Hôm nay, các bên xét thấy có đủ năng lực hành vi dân sự,
+  tự nguyện thỏa thuận và chịu trách nhiệm đối với các cam kết
+  trong hợp đồng này, gồm:
+</p>
+
+<h3>BÊN CHO THUÊ – BÊN A</h3>
+
+<p>
+  Đại diện:
+  <strong>{{lessor.full_name}}</strong>
+</p>
+
+<p>
+  Chức vụ:
+  <strong>{{lessor.title}}</strong>
+</p>
+
+<p>
+  Điện thoại:
+  <strong>{{lessor.phone}}</strong>
+</p>
+
+<h3>BÊN THUÊ – BÊN B</h3>
+
+<table>
+  <tbody>
+    <tr>
+      <td><strong>Họ và tên</strong></td>
+      <td>{{tenant.full_name}}</td>
+    </tr>
+
+    <tr>
+      <td><strong>Ngày sinh</strong></td>
+      <td>{{tenant.date_of_birth}}</td>
+    </tr>
+
+    <tr>
+      <td><strong>Giới tính</strong></td>
+      <td>{{tenant.gender}}</td>
+    </tr>
+
+    <tr>
+      <td><strong>Địa chỉ thường trú</strong></td>
+      <td>{{tenant.permanent_address}}</td>
+    </tr>
+
+    <tr>
+      <td><strong>Số CCCD / Số định danh</strong></td>
+      <td>{{tenant.identity_number}}</td>
+    </tr>
+
+    <tr>
+      <td><strong>Ngày cấp CCCD</strong></td>
+      <td>{{tenant.identity_issue_date}}</td>
+    </tr>
+
+    <tr>
+      <td><strong>Nơi cấp CCCD</strong></td>
+      <td>{{tenant.identity_issue_place}}</td>
+    </tr>
+
+    <tr>
+      <td><strong>Nghề nghiệp</strong></td>
+      <td>{{tenant.occupation}}</td>
+    </tr>
+
+    <tr>
+      <td><strong>Số điện thoại</strong></td>
+      <td>{{tenant.phone}}</td>
+    </tr>
+
+    <tr>
+      <td><strong>Email</strong></td>
+      <td>{{tenant.email}}</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>THÔNG TIN CHỖ Ở</h3>
+
+<table>
+  <tbody>
+    <tr>
+      <td><strong>Nhà trọ / Cơ sở</strong></td>
+      <td>{{boarding_house.name}}</td>
+    </tr>
+
+    <tr>
+      <td><strong>Địa chỉ</strong></td>
+      <td>{{boarding_house.address}}</td>
+    </tr>
+
+    <tr>
+      <td><strong>Phòng</strong></td>
+      <td>{{room.room_code}}</td>
+    </tr>
+
+    <tr>
+      <td><strong>Diện tích</strong></td>
+      <td>{{room.area}}</td>
+    </tr>
+
+    <tr>
+      <td><strong>Ngày bắt đầu</strong></td>
+      <td>{{contract.start_date}}</td>
+    </tr>
+
+    <tr>
+      <td><strong>Ngày kết thúc</strong></td>
+      <td>{{contract.end_date}}</td>
+    </tr>
+  </tbody>
+</table>
+
+
+<h2>ĐIỀU 1: ĐỐI TƯỢNG HỢP ĐỒNG VÀ KHÔNG GIAN CHO THUÊ</h2>
+
+<p>
+  1. Bên A đồng ý cho Bên B thuê chỗ ở tại
+  <strong>phòng {{room.room_code}}</strong>,
+  thuộc <strong>{{boarding_house.name}}</strong>,
+  địa chỉ <strong>{{boarding_house.address}}</strong>.
+</p>
+
+<p>
+  2. Bên B được sử dụng các khu vực, tiện ích chung của nhà trọ
+  theo quy định và nội quy hiện hành của Bên A.
+</p>
+
+<p>
+  3. Bên B có trách nhiệm sử dụng phòng và các khu vực chung
+  đúng mục đích, giữ gìn tài sản và không làm ảnh hưởng đến
+  những người đang sinh sống tại nhà trọ.
+</p>
+
+
+<h2>ĐIỀU 2: THỜI HẠN HỢP ĐỒNG</h2>
+
+<p>
+  1. Thời hạn thuê được tính từ ngày
+  <strong>{{contract.start_date}}</strong>
+  đến ngày
+  <strong>{{contract.end_date}}</strong>.
+</p>
+
+<p>
+  2. Trước khi hợp đồng hết hạn, nếu Bên B có nhu cầu tiếp tục thuê,
+  hai bên sẽ trao đổi để gia hạn hoặc ký hợp đồng mới.
+</p>
+
+<p>
+  3. Việc gia hạn, thay đổi giá thuê hoặc các điều khoản khác
+  phải được hai bên thống nhất trước khi áp dụng.
+</p>
+
+
+<h2>ĐIỀU 3: GIÁ THUÊ VÀ CHI PHÍ DỊCH VỤ</h2>
+
+<p>
+  1. Giá thuê:
+  <strong>{{contract.monthly_rent}}</strong>
+  mỗi tháng.
+</p>
+
+<p>
+  2. Các dịch vụ áp dụng:
+</p>
+
+{{services_table}}
+
+<p>
+  3. Giá thuê và mức phí dịch vụ được thực hiện theo các điều khoản
+  đã được hai bên xác nhận tại thời điểm ký hoặc theo các điều chỉnh
+  dịch vụ có hiệu lực sau đó.
+</p>
+
+<p>
+  4. Việc điều chỉnh giá dịch vụ trong thời gian hợp đồng phải được
+  ghi nhận theo thỏa thuận giữa hai bên và không làm thay đổi
+  các khoản đã phát sinh trước thời điểm điều chỉnh.
+</p>
+
+
+<h2>ĐIỀU 4: TIỀN ĐẶT CỌC VÀ HOÀN TRẢ CỌC</h2>
+
+<p>
+  1. Tiền đặt cọc theo thỏa thuận:
+  <strong>{{contract.deposit}}</strong>.
+</p>
+
+<p>
+  2. Tiền đặt cọc được sử dụng để bảo đảm việc thực hiện nghĩa vụ
+  của Bên B trong thời gian thuê.
+</p>
+
+<p>
+  3. Khi kết thúc hợp đồng, tiền cọc được xem xét hoàn trả sau khi
+  Bên B:
+</p>
+
+<ul>
+  <li>Hoàn thành các nghĩa vụ thanh toán còn lại.</li>
+  <li>Bàn giao lại phòng và tài sản được giao.</li>
+  <li>Hoàn thành các khoản bồi thường, sửa chữa nếu có.</li>
+  <li>Hoàn tất các thủ tục trả phòng theo thỏa thuận.</li>
+</ul>
+
+<p>
+  4. Nếu Bên B muốn kết thúc hợp đồng trước hạn,
+  việc xử lý tiền cọc được thực hiện theo thỏa thuận đã ký,
+  tình trạng bàn giao phòng và các nghĩa vụ tài chính còn lại.
+</p>
+
+
+<h2>ĐIỀU 5: THANH TOÁN</h2>
+
+<p>
+  1. Ngày thanh toán hàng tháng:
+  <strong>{{contract.payment_due_day}}</strong>.
+</p>
+
+<p>
+  2. Bên B có trách nhiệm kiểm tra hóa đơn và thanh toán đầy đủ
+  tiền thuê cùng các khoản dịch vụ phát sinh theo hóa đơn
+  do Bên A cung cấp.
+</p>
+
+<p>
+  3. Phương thức thanh toán có thể thực hiện bằng chuyển khoản,
+  thanh toán điện tử hoặc các hình thức khác được Bên A chấp nhận.
+</p>
+
+<p>
+  4. Trường hợp thanh toán trễ, các bên thực hiện theo điều khoản
+  đã được thống nhất trong hợp đồng và quy định hiện hành của nhà trọ.
+</p>
+
+
+<h2>ĐIỀU 6: NGƯỜI Ở VÀ KHAI BÁO CƯ TRÚ</h2>
+
+<p>
+  Những người được đăng ký ở tại phòng:
+</p>
+
+{{occupants_table}}
+
+<p>
+  1. Bên B không được tự ý cho người khác ở thường xuyên tại phòng
+  nếu chưa thông báo và được Bên A đồng ý.
+</p>
+
+<p>
+  2. Người đang cư trú phải cung cấp đầy đủ thông tin, giấy tờ cần thiết
+  để thực hiện việc khai báo cư trú theo quy định.
+</p>
+
+<p>
+  3. Khi có thay đổi người ở, Bên B phải thông báo cho Bên A
+  để cập nhật thông tin quản lý và hồ sơ cư trú.
+</p>
+
+
+<h2>ĐIỀU 7: PHƯƠNG TIỆN</h2>
+
+<p>
+  Các phương tiện được đăng ký:
+</p>
+
+{{vehicles_table}}
+
+<p>
+  Bên B có trách nhiệm tự bảo quản phương tiện và tuân thủ
+  quy định về khu vực để xe của nhà trọ.
+</p>
+
+
+<h2>ĐIỀU 8: NỘI QUY VÀ TRÁCH NHIỆM CỦA BÊN B</h2>
+
+<ol>
+  <li>
+    Tuân thủ các quy định về an ninh, trật tự và an toàn
+    tại khu vực nhà trọ.
+  </li>
+
+  <li>
+    Không thực hiện các hành vi trái pháp luật hoặc gây ảnh hưởng
+    đến những người sinh sống xung quanh.
+  </li>
+
+  <li>
+    Giữ gìn vệ sinh phòng ở và các khu vực sử dụng chung.
+  </li>
+
+  <li>
+    Tự bảo quản tiền, giấy tờ, phương tiện và tài sản cá nhân.
+  </li>
+
+  <li>
+    Bảo quản các thiết bị, tài sản do Bên A bàn giao.
+  </li>
+
+  <li>
+    Không tự ý sửa chữa, tháo dỡ hoặc thay đổi kết cấu phòng
+    khi chưa được Bên A đồng ý.
+  </li>
+
+  <li>
+    Tuân thủ các quy định về phòng cháy, chữa cháy và an toàn điện.
+  </li>
+
+  <li>
+    Thông báo cho Bên A khi phát hiện sự cố liên quan đến
+    điện, nước hoặc cơ sở vật chất.
+  </li>
+</ol>
+
+
+<h2>ĐIỀU 9: QUYỀN VÀ TRÁCH NHIỆM CỦA BÊN A</h2>
+
+<ol>
+  <li>
+    Bàn giao phòng/chỗ ở và tài sản kèm theo theo tình trạng
+    được hai bên xác nhận.
+  </li>
+
+  <li>
+    Đảm bảo việc cung cấp các dịch vụ thuộc trách nhiệm của Bên A
+    theo hợp đồng.
+  </li>
+
+  <li>
+    Thực hiện sửa chữa các hư hỏng do hao mòn tự nhiên hoặc
+    nguyên nhân khách quan thuộc trách nhiệm của Bên A.
+  </li>
+
+  <li>
+    Hỗ trợ Bên B thực hiện thủ tục khai báo cư trú khi đủ thông tin,
+    giấy tờ cần thiết.
+  </li>
+
+  <li>
+    Có quyền kiểm tra, nhắc nhở và xử lý các hành vi vi phạm
+    hợp đồng hoặc nội quy theo thỏa thuận và quy định áp dụng.
+  </li>
+</ol>
+
+
+<h2>ĐIỀU 10: CHẤM DỨT HỢP ĐỒNG</h2>
+
+<p>
+  1. Hợp đồng chấm dứt khi:
+</p>
+
+<ul>
+  <li>Hết thời hạn hợp đồng và hai bên không gia hạn.</li>
+  <li>Hai bên thống nhất chấm dứt trước thời hạn.</li>
+  <li>Một bên thực hiện quyền chấm dứt theo điều khoản hợp đồng.</li>
+  <li>Có các trường hợp khác theo thỏa thuận hoặc quy định áp dụng.</li>
+</ul>
+
+<p>
+  2. Khi kết thúc hợp đồng, Bên B có trách nhiệm bàn giao lại
+  phòng/chỗ ở, tài sản và thanh toán các khoản còn tồn đọng.
+</p>
+
+
+<h2>ĐIỀU 11: BÀN GIAO TÀI SẢN VÀ HIỆN TRẠNG</h2>
+
+<p>
+  Tình trạng tài sản khi nhận phòng:
+</p>
+
+{{handover_checkin_table}}
+
+<p>
+  Biên bản bàn giao là một phần gắn liền với quá trình thực hiện
+  hợp đồng và được sử dụng để đối chiếu khi Bên B trả phòng.
+</p>
+
+
+<h2>ĐIỀU 12: CAM KẾT CHUNG</h2>
+
+<p>
+  1. Hai bên xác nhận đã đọc, hiểu và đồng ý với nội dung
+  của hợp đồng.
+</p>
+
+<p>
+  2. Hai bên cam kết thực hiện đầy đủ các quyền và nghĩa vụ
+  đã thỏa thuận.
+</p>
+
+<p>
+  3. Các tranh chấp phát sinh được ưu tiên giải quyết thông qua
+  thương lượng. Trường hợp không thể thống nhất, các bên có quyền
+  yêu cầu cơ quan có thẩm quyền giải quyết theo quy định.
+</p>
+
+<p>
+  4. Hợp đồng có hiệu lực theo thời điểm được các bên xác nhận ký
+  và được lưu trữ trên hệ thống BeeHouse.
+</p>
+
+
+<h2>XÁC NHẬN CỦA CÁC BÊN</h2>
+
+<p>
+  Bằng việc ký hợp đồng điện tử, các bên xác nhận đã đọc
+  và đồng ý với nội dung của tài liệu này.
+</p>
+
+<div class="document-signatures"></div>
+
+
+<div class="page-break"></div>
+
+<div class="text-center">
+  <h2>PHỤ LỤC</h2>
+  <h3>BIÊN BẢN BÀN GIAO HIỆN TRẠNG</h3>
+</div>
+
+<p>
+  Nhà trọ:
+  <strong>{{boarding_house.name}}</strong>
+</p>
+
+<p>
+  Phòng:
+  <strong>{{room.room_code}}</strong>
+</p>
+
+<p>
+  Người thuê:
+  <strong>{{tenant.full_name}}</strong>
+</p>
+
+<p>
+  Ngày bắt đầu hợp đồng:
+  <strong>{{contract.start_date}}</strong>
+</p>
+
+{{handover_checkin_table}}
+
+<p>
+  <strong>Ghi chú:</strong>
+  Biên bản bàn giao là một phần của hồ sơ hợp đồng.
+  Khi kết thúc việc thuê, các bên căn cứ vào tình trạng đã bàn giao
+  để xác định trách nhiệm đối với tài sản và trang thiết bị.
+</p>

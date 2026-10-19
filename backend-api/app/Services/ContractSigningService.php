@@ -28,6 +28,7 @@ class ContractSigningService
         private SigningMailService $mail,
         private SignatureFileService $files,
         private ContractSigningAudit $audit,
+        private ContractTemplateRenderer $templateRenderer,
     ) {}
 
     private function fail(string $message, string $field = 'signing'): never
@@ -232,7 +233,7 @@ class ContractSigningService
             }
 
             return [
-                'rendered_html' => $document->rendered_html, 'content_hash' => $document->document_hash,
+                'rendered_html' => $this->withCurrentSignatures($document), 'content_hash' => $document->document_hash,
                 'signed_rendered_html' => $signed, 'signing_status' => $workflow->status,
                 'request_status' => $signing->status, 'signer_role' => $signing->signer_role,
                 'signer_name' => $signing->signer_name_snapshot, 'masked_email' => $this->mask($signing->delivery_destination_snapshot),
@@ -242,7 +243,7 @@ class ContractSigningService
                 'room_code' => data_get($document->source_snapshot, 'room.room_code'),
                 'boarding_house_name' => data_get($document->source_snapshot, 'room.boarding_house_name'),
                 'consent_version' => self::CONSENT_VERSION, 'consent_text' => self::CONSENT_TEXT,
-                'signature_ids' => $signed ? $document->signatures()->pluck('id') : [],
+                'signature_ids' => $document->signatures()->pluck('id'),
             ];
         });
     }
@@ -328,13 +329,12 @@ class ContractSigningService
                 $this->audit->record($document, 'SIGNED', $http, $signing);
                 $signatures = $document->signatures()->orderBy('signer_role')->lockForUpdate()->get();
                 if ($signatures->pluck('signer_role')->sort()->values()->all() === ['LESSOR', 'TENANT']) {
-                    $html = $document->rendered_html.'<section class="document-signatures">';
-                    foreach ($signatures as $signature) {
-                        $html .= '<div><h3>'.($signature->signer_role === 'LESSOR' ? 'BÊN CHO THUÊ (BÊN A)' : 'BÊN THUÊ (BÊN B)').'</h3>'
-                            .'<img data-signature-id="'.$signature->id.'" data-file-hash="'.$signature->signature_file_hash.'" alt="Chữ ký vẽ tay">'
-                            .'<p>'.e($signature->signer_name_snapshot).'</p><p>Ký lúc: '.$signature->signed_at->copy()->timezone(config('signing.display_timezone'))->format('d/m/Y H:i P').'</p></div>';
-                    }
-                    $html .= '</section><p>Xác nhận ký điện tử bằng OTP và chữ ký vẽ tay.</p>';
+                    $signatureBlock = $this->signatureBlock($signatures->all());
+                    $unsigned = $this->templateRenderer->unsignedSignatureBlock();
+                    $html = str_contains($document->rendered_html, $unsigned)
+                        ? str_replace($unsigned, $signatureBlock, $document->rendered_html)
+                        : $document->rendered_html.$signatureBlock;
+                    $html .= '<p>Xác nhận ký điện tử bằng OTP và chữ ký vẽ tay.</p>';
                     $workflow->update(['status' => 'COMPLETED', 'signed_rendered_html' => $html,
                         'signed_document_hash' => hash('sha256', $html), 'signatures_completed_at' => now()]);
                     $this->audit->record($document, 'SIGNING_COMPLETED', $http, $signing);
@@ -352,6 +352,36 @@ class ContractSigningService
         if ($notifyDocument) {
             $this->notifyProgress($notifyDocument, $http);
         }
+    }
+
+    /** Display current evidence without changing the frozen document or its consent hash. */
+    private function withCurrentSignatures(ContractDocument $document): string
+    {
+        $unsigned = $this->templateRenderer->unsignedSignatureBlock();
+        if (! str_contains($document->rendered_html, $unsigned)) {
+            return $document->rendered_html;
+        }
+
+        return str_replace($unsigned, $this->signatureBlock($document->signatures()->get()->all()), $document->rendered_html);
+    }
+
+    private function signatureBlock(array $signatures): string
+    {
+        $byRole = collect($signatures)->keyBy('signer_role');
+        $html = '<div class="document-signatures">';
+        foreach (['LESSOR' => 'BÊN CHO THUÊ (BÊN A)', 'TENANT' => 'BÊN THUÊ (BÊN B)'] as $role => $title) {
+            $html .= '<div><h3>'.$title.'</h3>';
+            $signature = $byRole->get($role);
+            if ($signature) {
+                $html .= '<img data-signature-id="'.$signature->id.'" data-file-hash="'.$signature->signature_file_hash.'" alt="Chữ ký vẽ tay">'
+                    .'<p>'.e($signature->signer_name_snapshot).'</p><p>Ký lúc: '.$signature->signed_at->copy()->timezone(config('signing.display_timezone'))->format('d/m/Y H:i P').'</p>';
+            } else {
+                $html .= '<p>Chưa ký</p>';
+            }
+            $html .= '</div>';
+        }
+
+        return $html.'</div>';
     }
 
     private function notifyProgress(ContractDocument $document, Request $http): void

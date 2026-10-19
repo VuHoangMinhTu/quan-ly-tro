@@ -7,6 +7,8 @@ use App\Models\ContractDocument;
 use App\Models\ContractTemplate;
 use App\Models\User;
 use App\Services\ContractTemplateRenderer;
+use App\Services\ContractTemplateVariableRegistry;
+use Database\Seeders\StandardContractTemplateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Validation\ValidationException;
@@ -44,6 +46,65 @@ class ContractDocumentsApiTest extends TestCase
         ])->assertOk();
     }
 
+    public function test_beehouse_standard_template_is_active_global_valid_and_seeded_once(): void
+    {
+        $template = ContractTemplate::query()->whereNull('landlord_id')->where('template_key', 'ROOM_RENTAL_STANDARD')->sole();
+
+        $this->assertSame(1, $template->version);
+        $this->assertTrue($template->is_active);
+        $this->assertSame('Hợp đồng cho thuê phòng tiêu chuẩn', $template->name);
+        $this->assertSame($template->content_html, app(ContractTemplateRenderer::class)->prepare($template->content_html));
+        $this->assertStringContainsString('{{vehicles_table}}', $template->content_html);
+        $this->assertStringContainsString('<div class="document-signatures"></div>', $template->content_html);
+        app(StandardContractTemplateSeeder::class)->run();
+        $this->assertSame(1, ContractTemplate::query()->whereNull('landlord_id')->where('template_key', 'ROOM_RENTAL_STANDARD')->count());
+    }
+
+    public function test_reseeding_changed_global_template_creates_new_version_without_mutating_old_content(): void
+    {
+        $original = ContractTemplate::query()->whereNull('landlord_id')->where('template_key', 'ROOM_RENTAL_STANDARD')->sole();
+        $original->update(['content_html' => '<p>Đã tùy chỉnh trước khi seed mới.</p>']);
+
+        app(StandardContractTemplateSeeder::class)->run();
+        app(StandardContractTemplateSeeder::class)->run();
+
+        $this->assertSame('<p>Đã tùy chỉnh trước khi seed mới.</p>', $original->fresh()->content_html);
+        $this->assertFalse($original->fresh()->is_active);
+        $this->assertDatabaseHas('contract_templates', ['scope_key' => 'GLOBAL', 'template_key' => 'ROOM_RENTAL_STANDARD', 'version' => 2, 'is_active' => true]);
+        $this->assertSame(2, ContractTemplate::query()->whereNull('landlord_id')->where('template_key', 'ROOM_RENTAL_STANDARD')->count());
+    }
+
+    public function test_standard_preview_formats_optional_values_and_empty_collection_blocks(): void
+    {
+        [$contract] = $this->fixture();
+
+        $html = $this->getJson("/api/contracts/{$contract->id}/document/preview")->assertOk()->json('data.rendered_html');
+
+        $this->assertStringContainsString('3.800.000 đồng', $html);
+        $this->assertStringContainsString('01/11/2026', $html);
+        $this->assertStringContainsString('Chưa cập nhật', $html);
+        $this->assertStringContainsString('Không có phương tiện được đăng ký.', $html);
+        $this->assertStringContainsString('Chưa có biên bản bàn giao được ghi nhận.', $html);
+        $this->assertSame(1, substr_count($html, 'class="document-signatures"'));
+        $this->assertStringNotContainsString('undefined', $html);
+        $this->assertStringNotContainsString('[object Object]', $html);
+    }
+
+    public function test_vehicle_and_handover_blocks_render_supplied_snapshot_rows_without_html_injection(): void
+    {
+        $snapshot = app(ContractTemplateVariableRegistry::class)->sample();
+        $snapshot['vehicles'] = [['type' => 'Xe máy', 'license_plate' => '59-X1 12345', 'note' => '<script>bad</script>']];
+        $snapshot['handover_checkin'] = [['name' => 'Máy lạnh', 'quantity' => 1, 'condition' => 'Hoạt động']];
+
+        $html = app(ContractTemplateRenderer::class)->render('{{vehicles_table}}{{handover_checkin_table}}', $snapshot);
+
+        $this->assertStringContainsString('59-X1 12345', $html);
+        $this->assertStringContainsString('Máy lạnh', $html);
+        $this->assertStringContainsString('Hoạt động', $html);
+        $this->assertStringContainsString('&lt;script&gt;', $html);
+        $this->assertStringNotContainsString('<script>', $html);
+    }
+
     public function test_document_and_template_endpoints_require_sanctum(): void
     {
         $this->getJson('/api/contract-templates')->assertUnauthorized();
@@ -60,12 +121,23 @@ class ContractDocumentsApiTest extends TestCase
         $id = $this->template();
 
         $this->assertDatabaseHas('contract_templates', ['id' => $id, 'landlord_id' => $contract->room->boardingHouse->landlord_id, 'created_by_user_id' => $owner->id, 'version' => 1]);
-        $global = ContractTemplate::whereNull('landlord_id')->firstOrFail();
+        $global = ContractTemplate::whereNull('landlord_id')->where('template_key', 'ROOM_RENTAL_STANDARD')->firstOrFail();
         $this->putJson("/api/contract-templates/{$global->id}", ['content_html' => '<p>Không được sửa</p>'])->assertNotFound();
         $this->putJson("/api/contract-templates/{$global->id}/status", ['is_active' => false])->assertNotFound();
         $this->getJson('/api/contract-templates')->assertOk()->assertJsonPath('data.can_manage', true);
-        $this->postJson("/api/contract-templates/{$global->id}/versions", [])->assertCreated();
-        $this->assertDatabaseHas('contract_templates', ['template_key' => $global->template_key, 'landlord_id' => $contract->room->boardingHouse->landlord_id, 'version' => 1]);
+        $cloneId = $this->postJson("/api/contract-templates/{$global->id}/versions", [])->assertCreated()->json('data.id');
+        $this->assertDatabaseHas('contract_templates', ['id' => $cloneId, 'template_key' => $global->template_key, 'landlord_id' => $contract->room->boardingHouse->landlord_id, 'name' => 'Hợp đồng cho thuê phòng tiêu chuẩn - Bản tùy chỉnh', 'version' => 2]);
+        $this->assertSame($global->content_html, ContractTemplate::findOrFail($cloneId)->content_html);
+    }
+
+    public function test_first_clone_of_standard_template_starts_at_version_one(): void
+    {
+        [$contract] = $this->fixture();
+        $global = ContractTemplate::query()->whereNull('landlord_id')->where('template_key', 'ROOM_RENTAL_STANDARD')->sole();
+
+        $id = $this->postJson("/api/contract-templates/{$global->id}/versions", [])->assertCreated()->json('data.id');
+
+        $this->assertDatabaseHas('contract_templates', ['id' => $id, 'landlord_id' => $contract->room->boardingHouse->landlord_id, 'template_key' => 'ROOM_RENTAL_STANDARD', 'version' => 1]);
     }
 
     public function test_manager_cannot_manage_legal_templates_but_can_preview_and_finalize_assigned_contract(): void
@@ -110,7 +182,7 @@ class ContractDocumentsApiTest extends TestCase
         $this->postJson('/api/contract-templates/preview', ['content_html' => '<p>{{tenant.fulln_ame}}</p>'])
             ->assertUnprocessable()->assertJsonPath('errors.content_html.0', 'Biến {{tenant.fulln_ame}} không được hỗ trợ.');
         $this->postJson('/api/contract-templates/preview', ['content_html' => '<p>{{tenant.full_name</p>'])->assertUnprocessable();
-        $this->postJson('/api/contract-templates/preview', ['content_html' => '<p>{{vehicles_table}}</p>'])->assertUnprocessable();
+        $this->postJson('/api/contract-templates/preview', ['content_html' => '<p>{{unknown_table}}</p>'])->assertUnprocessable();
     }
 
     #[TestWith(['<script>alert(1)</script>'])]
@@ -227,7 +299,7 @@ class ContractDocumentsApiTest extends TestCase
     public function test_default_template_is_available_without_custom_content_and_legacy_active_is_not_fabricated(): void
     {
         [$contract, $owner] = $this->fixture();
-        $this->getJson("/api/rooms/{$contract->room_id}/contract-context")->assertOk()->assertJsonPath('data.templates.0.template_key', 'BEEHOUSE_DEMO');
+        $this->getJson("/api/rooms/{$contract->room_id}/contract-context")->assertOk()->assertJsonPath('data.templates.0.template_key', 'ROOM_RENTAL_STANDARD');
         $contract->update(['status' => 'ACTIVE']);
         $this->getJson("/api/contracts/{$contract->id}")->assertOk()->assertJsonPath('data.document', null);
         $this->getJson("/api/contracts/{$contract->id}/document")->assertNotFound();
@@ -243,7 +315,7 @@ class ContractDocumentsApiTest extends TestCase
         $this->putJson("/api/contracts/{$contract->id}/status", ['status' => 'ACTIVE'])->assertOk();
 
         $this->assertDatabaseCount('contract_documents', 1);
-        $this->assertStringContainsString('Mẫu minh họa tối giản', $contract->document()->sole()->rendered_html);
+        $this->assertStringContainsString('HỢP ĐỒNG CHO THUÊ PHÒNG', $contract->document()->sole()->rendered_html);
         $this->putJson("/api/contracts/{$contract->id}", ['contract_template_id' => 9999])->assertUnprocessable();
     }
 

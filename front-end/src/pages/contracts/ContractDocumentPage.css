@@ -44,5 +44,5 @@
   .contract-document-html h1, .contract-document-html h2, .contract-document-html h3, .contract-document-html h4 { break-after: avoid; }
   .contract-document-html thead { display: table-header-group; }
   .contract-document-html tr, .contract-document-html .document-signatures { break-inside: avoid; }
-  .contract-document-html .page-break { break-before: page; }
+  .contract-document-html .page-break { display: block; height: 0; break-before: page; page-break-before: always; }
 }

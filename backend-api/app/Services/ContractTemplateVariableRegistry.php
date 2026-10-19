@@ -11,11 +11,11 @@ class ContractTemplateVariableRegistry
     {
         $groups = [
             'Hợp đồng' => ['contract.code' => 'Mã hợp đồng', 'contract.contract_code' => 'Mã hợp đồng (tên field)', 'contract.start_date' => 'Ngày bắt đầu', 'contract.end_date' => 'Ngày kết thúc', 'contract.signed_date' => 'Ngày ký đã khai báo', 'contract.monthly_rent' => 'Giá thuê hàng tháng', 'contract.deposit' => 'Tiền cọc thỏa thuận', 'contract.deposit_amount' => 'Tiền cọc (tên field)', 'contract.payment_due_day' => 'Ngày thanh toán hàng tháng'],
-            'Người thuê' => ['tenant.full_name' => 'Họ tên', 'tenant.date_of_birth' => 'Ngày sinh', 'tenant.gender' => 'Giới tính', 'tenant.identity_number' => 'Số định danh', 'tenant.identity_issue_date' => 'Ngày cấp', 'tenant.identity_issued_date' => 'Ngày cấp (bí danh)', 'tenant.identity_issue_place' => 'Nơi cấp', 'tenant.identity_issued_place' => 'Nơi cấp (bí danh)', 'tenant.phone' => 'Số điện thoại', 'tenant.email' => 'Email', 'tenant.permanent_address' => 'Địa chỉ thường trú'],
+            'Người thuê' => ['tenant.full_name' => 'Họ tên', 'tenant.date_of_birth' => 'Ngày sinh', 'tenant.gender' => 'Giới tính', 'tenant.identity_number' => 'Số định danh', 'tenant.identity_issue_date' => 'Ngày cấp', 'tenant.identity_issued_date' => 'Ngày cấp (bí danh)', 'tenant.identity_issue_place' => 'Nơi cấp', 'tenant.identity_issued_place' => 'Nơi cấp (bí danh)', 'tenant.occupation' => 'Nghề nghiệp', 'tenant.phone' => 'Số điện thoại', 'tenant.email' => 'Email', 'tenant.permanent_address' => 'Địa chỉ thường trú'],
             'Phòng' => ['room.room_code' => 'Mã phòng', 'room.room_name' => 'Tên phòng', 'room.area' => 'Diện tích', 'room.max_tenants' => 'Số người tối đa'],
             'Nhà trọ' => ['boarding_house.name' => 'Tên nhà trọ', 'boarding_house.address' => 'Địa chỉ nhà trọ'],
             'Bên cho thuê' => ['lessor.full_name' => 'Người đại diện', 'lessor.title' => 'Chức vụ', 'lessor.phone' => 'Điện thoại bên A'],
-            'Danh sách' => ['services_table' => 'Bảng dịch vụ thỏa thuận', 'occupants_table' => 'Danh sách người ở'],
+            'Danh sách' => ['services_table' => 'Bảng dịch vụ thỏa thuận', 'occupants_table' => 'Danh sách người ở', 'vehicles_table' => 'Danh sách phương tiện', 'handover_checkin_table' => 'Biên bản bàn giao'],
         ];
         $result = [];
         foreach ($groups as $group => $items) {
@@ -60,7 +60,7 @@ class ContractTemplateVariableRegistry
             'contract.code' => $contract['contract_code'] ?? null,
             'contract.monthly_rent' => $this->number($contract['monthly_rent'] ?? null, true),
             'contract.deposit' => $this->number($contract['deposit_amount'] ?? null, true),
-            'contract.payment_due_day' => isset($contract['payment_due_day']) ? str_pad((string) $contract['payment_due_day'], 2, '0', STR_PAD_LEFT) : null,
+            'contract.payment_due_day' => isset($contract['payment_due_day']) ? 'ngày '.str_pad((string) $contract['payment_due_day'], 2, '0', STR_PAD_LEFT).' hàng tháng' : null,
             'room.room_code' => $room['room_code'] ?? null, 'room.room_name' => $room['room_name'] ?? null,
             'room.area' => isset($room['area']) ? $this->number($room['area']).' m²' : null,
             'room.max_tenants' => $room['max_tenants'] ?? null,
@@ -69,7 +69,7 @@ class ContractTemplateVariableRegistry
         foreach (['start_date', 'end_date', 'signed_date'] as $key) {
             $values['contract.'.$key] = $this->date($contract[$key] ?? null);
         }
-        foreach (['full_name', 'identity_number', 'identity_issue_place', 'phone', 'email', 'permanent_address'] as $key) {
+        foreach (['full_name', 'identity_number', 'identity_issue_place', 'occupation', 'phone', 'email', 'permanent_address'] as $key) {
             $values['tenant.'.$key] = $tenant[$key] ?? null;
         }
         $values['tenant.gender'] = ['MALE' => 'Nam', 'FEMALE' => 'Nữ', 'OTHER' => 'Khác'][$tenant['gender'] ?? ''] ?? null;
