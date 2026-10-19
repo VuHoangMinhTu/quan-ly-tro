@@ -96,6 +96,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::put('/residence-declarations/{id}', [ResidenceDeclarationController::class, 'update']);
     Route::put('/residence-declarations/{id}/status', [ResidenceDeclarationController::class, 'status']);
     Route::get('/residence-declarations/{id}/export', [ResidenceDeclarationController::class, 'export']);
+    Route::get('/residence-declarations/{id}/documents/residence-stay-consent', [ResidenceDeclarationController::class, 'stayConsent']);
     Route::delete('/residence-declarations/{id}', [ResidenceDeclarationController::class, 'destroy']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);

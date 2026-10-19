@@ -39,7 +39,11 @@ class ResidenceDeclarationController extends Controller
         if ($request->filled('contract_id')) {
             $contract = $context['room']->contracts()->findOrFail($request->integer('contract_id'));
             $active = $contract->occupants()->where('status', 'ACTIVE')->pluck('tenant_id')->map(fn ($value) => (int) $value);
+            if ($active->isEmpty()) {
+                $active = $context['occupants']->pluck('tenant_id')->map(fn ($value) => (int) $value);
+            }
             $context['suggested_declaration'] = [
+                ...$context['suggested_declaration'],
                 'contract_id' => $contract->id,
                 'declarant_tenant_id' => $active->contains((int) $contract->tenant_id) ? $contract->tenant_id : null,
                 'request_content' => 'Đăng ký tạm trú',
@@ -103,6 +107,11 @@ class ResidenceDeclarationController extends Controller
     public function export(Request $request, int $id): JsonResponse
     {
         return ApiResponse::success($this->declarations->export($this->declarations->find($request->user(), $id)), 'Dữ liệu CT01 đã sẵn sàng để in.');
+    }
+
+    public function stayConsent(Request $request, int $id): JsonResponse
+    {
+        return ApiResponse::success($this->declarations->exportStayConsent($this->declarations->find($request->user(), $id)), 'Văn bản đồng ý cho ở nhờ nhà đã sẵn sàng để in.');
     }
 
     public function destroy(Request $request, int $id): JsonResponse

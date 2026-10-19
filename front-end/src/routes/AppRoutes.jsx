@@ -43,6 +43,7 @@ import ResidenceDeclarationListPage from '../pages/residence/ResidenceDeclaratio
 import ResidenceDeclarationEditPage from '../pages/residence/ResidenceDeclarationEditPage'
 import ResidenceDeclarationDetailPage from '../pages/residence/ResidenceDeclarationDetailPage'
 import ResidenceCt01PrintPage from '../pages/residence/ResidenceCt01PrintPage'
+import ResidenceStayConsentPrintPage from '../pages/residence/ResidenceStayConsentPrintPage'
 import MainLayout from '../layouts/MainLayout'
 import ProtectedRoute from './ProtectedRoute'
 
@@ -65,6 +66,7 @@ export default function AppRoutes() {
           <Route path="/contracts/:id/document" element={<ContractDocumentPage />} />
           <Route path="/invoices/:id/print" element={<InvoicePrintPage />} />
           <Route path="/residence-declarations/:id/print" element={<ResidenceCt01PrintPage />} />
+          <Route path="/residence-declarations/:id/stay-consent/print" element={<ResidenceStayConsentPrintPage />} />
           <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/residence-declarations" element={<ResidenceDeclarationListPage />} />

@@ -8,7 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { transformWithOxc } from 'vite'
 import { residenceFormValues, residencePayload } from '../../utils/residence.js'
-import { formatBillingPeriodForDisplay, formatDateForDisplay } from '../../utils/date.js'
+import { formatBillingPeriodForDisplay, formatDateForDisplay, isValidDisplayDate } from '../../utils/date.js'
 import { invoiceStatusLabels } from '../../utils/invoiceStatus.js'
 import { BILLING_METHOD_LABELS, BILLING_METHODS, getBasePriceLabel, getSuggestedServiceUnit, SERVICE_TYPE_LABELS, SERVICE_TYPES } from '../../utils/service.js'
 
@@ -42,7 +42,7 @@ async function formHarness(initial) {
         Object.defineProperty(form, 'formState', { get: () => form.control._formState })
       }
       return form
-    }, zodResolver, z, Link, formatDateForDisplay, genderLabels, residenceFormValues, residencePayload,
+    }, zodResolver, z, Link, formatDateForDisplay, isValidDisplayDate, genderLabels, residenceFormValues, residencePayload,
     applyApiFieldErrors: () => {}, getApiErrorMessage: () => 'Lỗi API',
   })
   const props = { context, initial, onSubmit: async payload => { submitted.push(payload) } }
@@ -106,6 +106,30 @@ test('CT01 uses date strings, escapes names/content, and does not invent consent
   assert.doesNotMatch(markup, /<script>|<img src=x>|Tôi đồng ý/)
   assert.match(markup, /ct01-missing/)
   assert.match(markup, /ct01-print-blank/)
+})
+
+test('manual stay dates use dd/mm/yyyy in form and submit exact date strings', async () => {
+  const harness = await formHarness({ stay_start_date: '2026-11-15', stay_end_date: '2027-11-14' })
+  assert.equal(harness.form.getValues('stay_start_date'), '15/11/2026')
+  await harness.submit()
+  assert.equal(harness.submitted[0].stay_start_date, '2026-11-15')
+  assert.equal(harness.submitted[0].stay_end_date, '2027-11-14')
+  const buttons = harness.render().filter(node => node.type === 'button').map(node => node.props.children)
+  assert.ok(buttons.includes('Lưu bản nháp') && buttons.includes('Xem trước CT01') && buttons.includes('Hoàn tất'))
+})
+
+test('stay consent preview uses frozen data and escapes untrusted person fields', async () => {
+  const Document = await load('./StayConsentDocument.jsx', 'StayConsentDocument', { formatDateForDisplay })
+  const markup = renderToStaticMarkup(React.createElement(Document, { data: {
+    location: 'Đà Nẵng', captured_at: '2026-11-01', host: { full_name: 'Bên A', birth_year: 1970, permanent_address: 'Địa chỉ A', identity_number: '111', phone: '0900' },
+    guest: { full_name: '<script>alert(1)</script>', birth_year: 2000, permanent_address: 'Địa chỉ B', identity_number: '222', phone: '0901' },
+    stay_address: 'Nhà trọ', room_code: '101', purpose: 'để ở', occupant_count: 2, companions: [{ full_name: 'Người đi cùng' }], start_date: '2026-11-15', end_date: '2027-11-14',
+  } }))
+  assert.match(markup, /VĂN BẢN ĐỒNG Ý CHO Ở NHỜ NHÀ/)
+  assert.match(markup, /15\/11\/2026/)
+  assert.match(markup, /Người đi cùng/)
+  assert.match(markup, /&lt;script&gt;/)
+  assert.doesNotMatch(markup, /<script>/)
 })
 
 test('invoice print renders the stored AUTO tax item and total without reading a live service rate', async () => {

@@ -18,6 +18,7 @@
 .ct01-signatures > div { min-height: 35mm; }
 .ct01-signatures strong { display: block; }
 .ct01-signatures span { display: block; margin-top: 40px; }
+.ct01-opinion { white-space: pre-wrap; text-align: left; }
 @media screen and (max-width: 639px) {
   .ct01-document { padding: 16px; font-size: 11pt; }
   .ct01-document h1 { font-size: 14pt; }

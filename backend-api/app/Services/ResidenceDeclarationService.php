@@ -30,6 +30,8 @@ class ResidenceDeclarationService
             'occupants' => $room->roomTenants()->where('status', 'ACTIVE')
                 ->whereHas('tenant', fn ($query) => $query->where('landlord_id', $room->boardingHouse->landlord_id))->with('tenant')->get(),
             'contracts' => $room->contracts()->with('tenant')->get(),
+            'suggested_declaration' => ['authority_name' => $room->boardingHouse->residenceProfile?->residence_authority_name,
+                'request_content' => 'Đăng ký tạm trú', 'members' => []],
         ];
     }
 
@@ -46,13 +48,17 @@ class ResidenceDeclarationService
                 throw ValidationException::withMessages(['room_id' => 'Không thể chuyển hồ sơ sang phòng khác.']);
             }
             if ($record->exists) {
-                $data = [...$record->only(['contract_id', 'declarant_tenant_id', 'authority_name', 'relationship_to_household_head', 'request_content']), ...$data];
+                $data = [...$record->only(['contract_id', 'declarant_tenant_id', 'authority_name', 'relationship_to_household_head', 'request_content', 'stay_start_date', 'stay_end_date', 'household_head_opinion', 'legal_owner_opinion', 'guardian_opinion']), ...$data];
+            } else {
+                $house->load('residenceProfile');
+                $data['authority_name'] = $data['authority_name'] ?? $house->residenceProfile?->residence_authority_name;
+                $data['request_content'] = $data['request_content'] ?? 'Đăng ký tạm trú';
             }
             $this->validatePeople($room, $data);
             if (! empty($data['contract_id']) && ! $room->contracts()->whereKey($data['contract_id'])->exists()) {
                 throw ValidationException::withMessages(['contract_id' => 'Hợp đồng phải thuộc phòng này.']);
             }
-            $record->fill(Arr::only($data, ['contract_id', 'declarant_tenant_id', 'authority_name', 'relationship_to_household_head', 'request_content']));
+            $record->fill(Arr::only($data, ['contract_id', 'declarant_tenant_id', 'authority_name', 'relationship_to_household_head', 'request_content', 'stay_start_date', 'stay_end_date', 'household_head_opinion', 'legal_owner_opinion', 'guardian_opinion']));
             $record->landlord_id = $house->landlord_id;
             $record->boarding_house_id = $house->id;
             $record->room_id = $room->id;
@@ -89,6 +95,7 @@ class ResidenceDeclarationService
             'tenant_id' => $tenant?->id, 'full_name' => $tenant?->full_name,
             'date_of_birth' => $tenant?->date_of_birth?->format('Y-m-d'), 'gender' => $tenant?->gender,
             'identity_number' => $tenant?->identity_number, 'phone' => $tenant?->phone, 'email' => $tenant?->email,
+            'permanent_address' => $tenant?->permanent_address,
         ];
     }
 
@@ -97,20 +104,80 @@ class ResidenceDeclarationService
         if ($record->snapshot !== null) {
             $ct01 = $record->snapshot;
         } else {
-            $record->load(['declarant', 'members.tenant', 'room', 'boardingHouse.residenceProfile']);
+            $record->load(['declarant', 'members.tenant', 'room', 'boardingHouse.residenceProfile', 'contract']);
             $profile = $record->boardingHouse->residenceProfile;
             $ct01 = [
                 'schema_version' => 1, 'captured_at' => now()->toIso8601String(),
                 'authority_name' => $record->authority_name, 'request_content' => $record->request_content,
                 'relationship_to_household_head' => $record->relationship_to_household_head,
+                'opinions' => ['household_head' => $record->household_head_opinion, 'legal_owner' => $record->legal_owner_opinion, 'guardian' => $record->guardian_opinion],
                 'declarant' => $this->person($record->declarant),
                 'household_head' => ['name' => $profile?->household_head_name, 'identity_number' => $profile?->household_head_identity_number],
                 'residence' => ['boarding_house_name' => $record->boardingHouse->name, 'address' => $record->boardingHouse->address, 'room_code' => $record->room->room_code],
                 'members' => $record->members->map(fn ($member) => [...$this->person($member->tenant), 'relationship_to_household_head' => $member->relationship_to_household_head])->all(),
             ];
+            $ct01['stay_consent'] = $this->stayConsent($record, $ct01);
         }
 
-        return ['ct01' => $ct01, 'missing_fields' => $this->missingFields($ct01), 'is_frozen' => $record->snapshot !== null];
+        $consent = $ct01['stay_consent'] ?? null;
+
+        return ['ct01' => $ct01, 'stay_consent' => $consent,
+            'stay_consent_missing_fields' => $consent === null ? ['document' => 'Hồ sơ đã chốt trước khi có văn bản ở nhờ.'] : $this->missingStayConsent($consent),
+            'missing_fields' => $this->missingFields($ct01), 'is_frozen' => $record->snapshot !== null];
+    }
+
+    private function stayConsent(ResidenceDeclaration $record, array $ct01): array
+    {
+        $profile = $record->boardingHouse->residenceProfile;
+        $declarant = $ct01['declarant'];
+        $hasLegalOwner = filled($profile?->legal_owner_name);
+
+        return [
+            'type' => 'RESIDENCE_STAY_CONSENT', 'captured_at' => now()->toDateString(),
+            'location' => $record->boardingHouse->address,
+            'host' => [
+                'full_name' => $hasLegalOwner ? $profile->legal_owner_name : $profile?->household_head_name,
+                'birth_year' => $profile?->legal_owner_birth_year,
+                'permanent_address' => $profile?->legal_owner_permanent_address,
+                'identity_number' => $hasLegalOwner ? $profile->legal_owner_identity_number : $profile?->household_head_identity_number,
+                'phone' => $profile?->legal_owner_phone,
+            ],
+            'guest' => ['full_name' => $declarant['full_name'], 'birth_year' => $declarant['date_of_birth'] ? substr($declarant['date_of_birth'], 0, 4) : null,
+                'permanent_address' => $declarant['permanent_address'], 'identity_number' => $declarant['identity_number'], 'phone' => $declarant['phone']],
+            'stay_address' => $record->boardingHouse->address, 'room_code' => $record->room->room_code,
+            'purpose' => 'để ở', 'companions' => $ct01['members'], 'occupant_count' => 1 + count($ct01['members']),
+            'start_date' => $record->contract?->start_date?->format('Y-m-d') ?? $record->stay_start_date?->format('Y-m-d'),
+            'end_date' => $record->contract?->end_date?->format('Y-m-d') ?? $record->stay_end_date?->format('Y-m-d'),
+        ];
+    }
+
+    public function exportStayConsent(ResidenceDeclaration $record): array
+    {
+        $preview = $this->preview($record);
+        $consent = $preview['stay_consent'];
+        if ($consent === null) {
+            throw ValidationException::withMessages(['document' => 'Hồ sơ đã chốt trước khi có văn bản ở nhờ; không thể tự tạo văn bản từ dữ liệu hiện tại.']);
+        }
+        $missing = $preview['stay_consent_missing_fields'];
+        if ($missing !== []) {
+            throw ValidationException::withMessages($missing);
+        }
+
+        return ['document' => $consent, 'is_frozen' => $preview['is_frozen']];
+    }
+
+    private function missingStayConsent(array $consent): array
+    {
+        $missing = [];
+        foreach (['host.full_name', 'host.birth_year', 'host.permanent_address', 'host.identity_number', 'host.phone',
+            'guest.full_name', 'guest.birth_year', 'guest.permanent_address', 'guest.identity_number', 'guest.phone',
+            'stay_address', 'start_date', 'end_date'] as $field) {
+            if (blank(Arr::get($consent, $field))) {
+                $missing[$field] = 'Vui lòng bổ sung '.str_replace(['host.', 'guest.', '_'], ['Bên A: ', 'Bên B: ', ' '], $field).' trước khi in văn bản.';
+            }
+        }
+
+        return $missing;
     }
 
     private function missingFields(array $ct01): array

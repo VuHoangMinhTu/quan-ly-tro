@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link } from 'react-router-dom'
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
-import { formatDateForDisplay } from '../../utils/date'
+import { formatDateForDisplay, isValidDisplayDate } from '../../utils/date'
 import { genderLabels } from '../../utils/formatters'
 import { residenceFormValues, residencePayload } from '../../utils/residence'
 
@@ -12,13 +12,27 @@ const schema = z.object({
   declarant_tenant_id: z.string(), contract_id: z.string(), authority_name: z.string().max(255, 'Tên cơ quan không quá 255 ký tự.'),
   relationship_to_household_head: z.string().max(255, 'Quan hệ không quá 255 ký tự.'), request_content: z.string().max(5000, 'Nội dung không quá 5.000 ký tự.'),
   members: z.array(z.object({ tenant_id: z.number().int(), relationship_to_household_head: z.string().max(255, 'Quan hệ không quá 255 ký tự.') })),
+  stay_start_date: z.string().refine(value => !value || isValidDisplayDate(value), 'Ngày bắt đầu ở nhờ phải đúng dd/mm/yyyy.'),
+  stay_end_date: z.string().refine(value => !value || isValidDisplayDate(value), 'Ngày kết thúc ở nhờ phải đúng dd/mm/yyyy.'),
+  household_head_opinion: z.string().max(2000, 'Ý kiến chủ hộ không quá 2.000 ký tự.'),
+  legal_owner_opinion: z.string().max(2000, 'Ý kiến chủ sở hữu không quá 2.000 ký tự.'),
+  guardian_opinion: z.string().max(2000, 'Ý kiến người giám hộ không quá 2.000 ký tự.'),
 })
 const inputClass = 'mt-1 min-h-11 w-full min-w-0 rounded-lg border border-slate-300 p-2'
+const sectionClass = 'space-y-3 rounded-xl border border-slate-200 p-4'
+
+function Datum({ label, value }) {
+  return <div className="min-w-0"><dt className="text-slate-500">{label}</dt><dd className={`break-words ${value ? 'font-medium' : 'text-amber-700'}`}>{value || 'Chưa cập nhật'}</dd></div>
+}
 
 export function TenantAutofill({ tenant, role }) {
   if (!tenant) return <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Chọn người kê khai để tự điền thông tin từ hồ sơ người thuê.</p>
-  const values = [['Họ tên', tenant.full_name], ['Ngày sinh', formatDateForDisplay(tenant.date_of_birth)], ['Giới tính', genderLabels[tenant.gender]], ['Số định danh cá nhân', tenant.identity_number], ['Số điện thoại', tenant.phone], ['Email', tenant.email]]
-  return <div className="space-y-2 rounded-lg bg-slate-50 p-3"><dl className="grid gap-3 text-sm sm:grid-cols-2">{values.map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-slate-500">{label}</dt><dd className={`break-words ${value ? 'font-medium' : 'text-amber-700'}`}>{value || 'Chưa cập nhật'}</dd></div>)}</dl>
+  const values = [
+    ['1. Họ, chữ đệm và tên khai sinh', tenant.full_name], ['2. Ngày, tháng, năm sinh', formatDateForDisplay(tenant.date_of_birth)],
+    ['3. Giới tính', genderLabels[tenant.gender]], ['4. Số định danh cá nhân', tenant.identity_number],
+    ['5. Số điện thoại liên hệ', tenant.phone], ['6. Email', tenant.email],
+  ]
+  return <div className="space-y-3 rounded-lg bg-slate-50 p-3"><dl className="grid gap-3 text-sm sm:grid-cols-2">{values.map(([label, value]) => <Datum key={label} label={label} value={value} />)}</dl>
     {role === 'OWNER' ? <Link to={`/tenants/${tenant.id ?? tenant.tenant_id}/edit`} className="inline-flex min-h-11 items-center text-sm underline">Bổ sung thông tin trong hồ sơ người thuê</Link> : <p className="text-xs text-slate-500">Nếu thiếu dữ liệu, vui lòng yêu cầu chủ workspace cập nhật hồ sơ người thuê.</p>}
   </div>
 }
@@ -26,14 +40,19 @@ export function TenantAutofill({ tenant, role }) {
 export default function ResidenceDeclarationForm({ context, initial, initialPeople = [], onSubmit }) {
   const form = useForm({ resolver: zodResolver(schema), defaultValues: residenceFormValues(initial) })
   const declarantId = useWatch({ control: form.control, name: 'declarant_tenant_id' })
-  const members = useWatch({ control: form.control, name: 'members' })
+  const contractId = useWatch({ control: form.control, name: 'contract_id' })
+  const members = useWatch({ control: form.control, name: 'members' }) ?? []
   const tenants = context.occupants.map(occupant => occupant.tenant)
   const declarant = tenants.find(tenant => String(tenant.id) === declarantId)
+  const selectedContract = context.contracts.find(contract => String(contract.id) === contractId)
+  const profile = context.room.boarding_house?.residence_profile
   const [error, setError] = useState('')
   const { errors, isSubmitting } = form.formState
-  const submit = async values => {
+  const submit = async (values, event) => {
     setError('')
-    try { await onSubmit(residencePayload(context.room.id, values)) } catch (requestError) {
+    const intent = event?.nativeEvent?.submitter?.value ?? 'draft'
+    if (intent === 'finish' && !window.confirm('Hoàn tất sẽ chốt dữ liệu CT01 và văn bản ở nhờ theo thông tin hiện tại. Hãy kiểm tra thông tin trước khi tiếp tục.')) return
+    try { await onSubmit(residencePayload(context.room.id, values), intent) } catch (requestError) {
       applyApiFieldErrors(requestError, form.setError)
       setError(getApiErrorMessage(requestError))
     }
@@ -44,20 +63,35 @@ export default function ResidenceDeclarationForm({ context, initial, initialPeop
     form.setValue('members', selected ? members.filter(member => member.tenant_id !== Number(tenant.id)) : [...members, { tenant_id: Number(tenant.id), relationship_to_household_head: '' }], { shouldDirty: true })
   }
   return <form onSubmit={form.handleSubmit(submit)} className="min-w-0 space-y-5 rounded-xl bg-white p-4 shadow-sm sm:p-6">
-    <p className="text-sm text-slate-500">Có thể lưu nháp khi thiếu thông tin. Form này không ghi đè dữ liệu người thuê. Hãy lưu nháp trước khi sang trang chỉnh hồ sơ người thuê để không mất nội dung đang nhập.</p>
-    <div><label htmlFor="ct01-declarant" className="text-sm font-medium">Người kê khai</label><select id="ct01-declarant" className={inputClass} {...selectDeclarant} onChange={event => { selectDeclarant.onChange(event); form.setValue('members', members.filter(member => String(member.tenant_id) !== event.target.value), { shouldDirty: true }) }}><option value="">Chưa chọn người kê khai</option>{tenants.map(tenant => <option key={tenant.id} value={String(tenant.id)}>{tenant.full_name}</option>)}</select>{errors.declarant_tenant_id && <p className="text-sm text-red-700">{errors.declarant_tenant_id.message}</p>}</div>
-    <TenantAutofill tenant={declarant} role={context.operational_role} />
-    <div><label htmlFor="ct01-contract" className="text-sm font-medium">Hợp đồng liên quan</label><select id="ct01-contract" className={inputClass} {...form.register('contract_id')}><option value="">Không liên kết hợp đồng</option>{context.contracts.map(contract => <option key={contract.id} value={String(contract.id)}>{contract.contract_code}</option>)}</select>{errors.contract_id && <p className="text-sm text-red-700">{errors.contract_id.message}</p>}</div>
-    <div className="grid gap-4 sm:grid-cols-2"><div><label htmlFor="ct01-authority" className="text-sm font-medium">Cơ quan đăng ký cư trú</label><input id="ct01-authority" className={inputClass} {...form.register('authority_name')} />{errors.authority_name && <p className="text-sm text-red-700">{errors.authority_name.message}</p>}</div><div><label htmlFor="ct01-relationship" className="text-sm font-medium">Quan hệ người kê khai với chủ hộ</label><input id="ct01-relationship" list="ct01-relationships" className={inputClass} {...form.register('relationship_to_household_head')} />{errors.relationship_to_household_head && <p className="text-sm text-red-700">{errors.relationship_to_household_head.message}</p>}</div></div>
-    <datalist id="ct01-relationships"><option value="Người thuê" /><option value="Ở nhờ" /><option value="Khác" /></datalist>
-    <div><label htmlFor="ct01-request" className="text-sm font-medium">Nội dung đề nghị</label><textarea id="ct01-request" rows={3} className={inputClass} {...form.register('request_content')} /><p className="mt-1 text-xs text-slate-500">Kiểm tra và bổ sung địa chỉ, nội dung đề nghị phù hợp trước khi xuất.</p>{errors.request_content && <p className="text-sm text-red-700">{errors.request_content.message}</p>}</div>
-    <fieldset className="min-w-0 space-y-3"><legend className="font-semibold">Người ở cùng khai báo</legend><p className="text-sm text-slate-500">Chỉ hiển thị người đang ở trong phòng; chọn những người cùng khai báo.</p><div className="grid gap-2 sm:grid-cols-2">{tenants.filter(tenant => String(tenant.id) !== declarantId).map(tenant => <label key={tenant.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm"><input type="checkbox" className="size-5 shrink-0" checked={members.some(member => member.tenant_id === Number(tenant.id))} onChange={() => toggleMember(tenant)} /><span className="min-w-0 break-words">{tenant.full_name}</span></label>)}</div>
-      {members.map((member, index) => {
-        const tenant = tenants.find(tenant => Number(tenant.id) === member.tenant_id) || initialPeople.find(tenant => Number(tenant.tenant_id) === member.tenant_id)
-        return <div key={member.tenant_id} className="space-y-3 rounded-lg border p-3"><div className="flex flex-wrap items-center justify-between gap-2"><strong className="break-words text-sm">{tenant?.full_name || `Thành viên #${member.tenant_id}`}</strong><button type="button" className="min-h-11 px-2 text-sm text-red-700" onClick={() => form.setValue('members', members.filter((_, current) => current !== index), { shouldDirty: true })}>Bỏ khỏi hồ sơ</button></div><TenantAutofill tenant={tenant} role={context.operational_role} /><label className="block text-sm" htmlFor={`member-relationship-${member.tenant_id}`}>Quan hệ với chủ hộ</label><input id={`member-relationship-${member.tenant_id}`} list="ct01-relationships" className={inputClass} {...form.register(`members.${index}.relationship_to_household_head`)} />{errors.members?.[index] && <p className="text-sm text-red-700">{errors.members[index].relationship_to_household_head?.message || errors.members[index].tenant_id?.message}</p>}</div>
-      })}
+    <p className="text-sm text-slate-500">Có thể lưu nháp khi thiếu thông tin. Dữ liệu người thuê và chủ hộ được tự điền từ hồ sơ hiện tại; khi nộp, BeeHouse chốt một bản snapshot.</p>
+    <section className={sectionClass}><h3 className="font-semibold">1. Cơ quan tiếp nhận</h3>
+      <label htmlFor="ct01-authority" className="block text-sm">Kính gửi / cơ quan tiếp nhận<input id="ct01-authority" className={inputClass} {...form.register('authority_name')} /></label>{errors.authority_name && <p className="text-sm text-red-700">{errors.authority_name.message}</p>}
+      <label htmlFor="ct01-contract" className="block text-sm">Hợp đồng liên quan<select id="ct01-contract" className={inputClass} {...form.register('contract_id')}><option value="">Không liên kết hợp đồng</option>{context.contracts.map(contract => <option key={contract.id} value={String(contract.id)}>{contract.contract_code}</option>)}</select></label>{errors.contract_id && <p className="text-sm text-red-700">{errors.contract_id.message}</p>}
+    </section>
+    <section className={sectionClass}><h3 className="font-semibold">2. Người kê khai</h3>
+      <label htmlFor="ct01-declarant" className="block text-sm">Chọn người kê khai<select id="ct01-declarant" className={inputClass} {...selectDeclarant} onChange={event => { selectDeclarant.onChange(event); form.setValue('members', members.filter(member => String(member.tenant_id) !== event.target.value), { shouldDirty: true }) }}><option value="">Chưa chọn người kê khai</option>{tenants.map(tenant => <option key={tenant.id} value={String(tenant.id)}>{tenant.full_name}</option>)}</select></label>{errors.declarant_tenant_id && <p className="text-sm text-red-700">{errors.declarant_tenant_id.message}</p>}
+      <TenantAutofill tenant={declarant} role={context.operational_role} />
+    </section>
+    <section className={sectionClass}><h3 className="font-semibold">3. Chủ hộ</h3><dl className="text-sm"><Datum label="7. Họ, chữ đệm và tên chủ hộ" value={profile?.household_head_name} /></dl>
+      <label htmlFor="ct01-relationship" className="block text-sm">8. Mối quan hệ với chủ hộ<input id="ct01-relationship" list="ct01-relationships" className={inputClass} {...form.register('relationship_to_household_head')} /></label>{errors.relationship_to_household_head && <p className="text-sm text-red-700">{errors.relationship_to_household_head.message}</p>}
+      <dl className="text-sm"><Datum label="9. Số định danh cá nhân của chủ hộ" value={profile?.household_head_identity_number} /></dl>
+      <datalist id="ct01-relationships"><option value="Người thuê" /><option value="Ở nhờ" /><option value="Khác" /></datalist>
+      <p className="text-xs text-slate-500">Chủ hộ lấy từ cấu hình nhà trọ, không suy ra từ tài khoản OWNER/MANAGER. Quan hệ cần tự xác nhận.</p>
+    </section>
+    <section className={sectionClass}><h3 className="font-semibold">4. Nội dung đề nghị</h3><label htmlFor="ct01-request" className="block text-sm">10. Nội dung đề nghị<textarea id="ct01-request" rows={3} className={inputClass} {...form.register('request_content')} /></label>{errors.request_content && <p className="text-sm text-red-700">{errors.request_content.message}</p>}</section>
+    <fieldset className={sectionClass}><legend className="px-1 font-semibold">5. Thành viên cùng thay đổi</legend><p className="text-sm text-slate-500">11. Chỉ chọn những người đang ở cùng phòng; người đã chuyển đi không xuất hiện.</p>
+      <div className="grid gap-2 sm:grid-cols-2">{tenants.filter(tenant => String(tenant.id) !== declarantId).map(tenant => <label key={tenant.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm"><input type="checkbox" className="size-5 shrink-0" checked={members.some(member => member.tenant_id === Number(tenant.id))} onChange={() => toggleMember(tenant)} /><span className="min-w-0 break-words">{tenant.full_name}</span></label>)}</div>
+      {members.length > 0 && <div className="min-w-0 overflow-x-auto"><table className="w-full min-w-[760px] border-collapse text-left text-sm"><thead><tr>{['STT', 'Họ, chữ đệm và tên', 'Ngày sinh', 'Giới tính', 'Số định danh cá nhân', 'Mối quan hệ với chủ hộ', ''].map(label => <th key={label} className="border-b p-2">{label}</th>)}</tr></thead><tbody>{members.map((member, index) => {
+        const tenant = tenants.find(person => Number(person.id) === member.tenant_id) || initialPeople.find(person => Number(person.tenant_id) === member.tenant_id)
+        return <tr key={member.tenant_id}><td className="border-b p-2">{index + 1}</td><td className="border-b p-2">{tenant?.full_name || 'Chưa cập nhật'}</td><td className="border-b p-2">{formatDateForDisplay(tenant?.date_of_birth) || 'Chưa cập nhật'}</td><td className="border-b p-2">{genderLabels[tenant?.gender] || 'Chưa cập nhật'}</td><td className="border-b p-2">{tenant?.identity_number || 'Chưa cập nhật'}</td><td className="border-b p-2"><input aria-label={`Quan hệ với chủ hộ của ${tenant?.full_name || 'thành viên'}`} list="ct01-relationships" className={inputClass} {...form.register(`members.${index}.relationship_to_household_head`)} />{errors.members?.[index] && <p className="text-red-700">{errors.members[index].relationship_to_household_head?.message || errors.members[index].tenant_id?.message}</p>}</td><td className="border-b p-2"><button type="button" className="min-h-11 text-red-700" onClick={() => form.setValue('members', members.filter((_, current) => current !== index), { shouldDirty: true })}>Bỏ</button></td></tr>
+      })}</tbody></table></div>}
     </fieldset>
+    <section className={sectionClass}><h3 className="font-semibold">6. Xác nhận</h3><p className="text-sm text-slate-500">Các ý kiến dưới đây là tùy chọn; chỉ nhập nội dung đã được bên liên quan cung cấp. BeeHouse không tự tạo chữ ký hay xác nhận thay các bên.</p>
+      {[['household_head_opinion', 'Ý kiến của chủ hộ'], ['legal_owner_opinion', 'Ý kiến của chủ sở hữu chỗ ở hợp pháp'], ['guardian_opinion', 'Ý kiến của cha/mẹ/người giám hộ nếu cần']].map(([field, label]) => <label key={field} className="block text-sm">{label}<textarea rows={2} className={inputClass} {...form.register(field)} />{errors[field] && <span className="text-red-700">{errors[field].message}</span>}</label>)}
+      <p className="text-sm">Người kê khai: <strong>{declarant?.full_name || 'Chưa cập nhật'}</strong></p>
+    </section>
+    <section className={sectionClass}><h3 className="font-semibold">Thời hạn cho văn bản ở nhờ</h3><p className="text-sm text-slate-500">{selectedContract ? `Ưu tiên thời hạn hợp đồng: ${formatDateForDisplay(selectedContract.start_date) || 'Chưa cập nhật'} – ${formatDateForDisplay(selectedContract.end_date) || 'Chưa cập nhật'}.` : 'Nếu không có hợp đồng, nhập thời hạn ở nhờ để có thể in văn bản.'}</p><div className="grid gap-3 sm:grid-cols-2"><label className="block text-sm">Từ ngày<input type="text" inputMode="numeric" placeholder="dd/mm/yyyy" className={inputClass} {...form.register('stay_start_date')} />{errors.stay_start_date && <span className="text-red-700">{errors.stay_start_date.message}</span>}</label><label className="block text-sm">Đến ngày<input type="text" inputMode="numeric" placeholder="dd/mm/yyyy" className={inputClass} {...form.register('stay_end_date')} />{errors.stay_end_date && <span className="text-red-700">{errors.stay_end_date.message}</span>}</label></div></section>
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-    <button disabled={isSubmitting} className="min-h-11 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50 sm:w-auto">{isSubmitting ? 'Đang lưu...' : 'Lưu hồ sơ và xem trước CT01'}</button>
+    <div className="flex flex-wrap gap-2"><button disabled={isSubmitting} type="submit" name="intent" value="draft" className="min-h-11 rounded-lg border px-4 py-2 text-sm disabled:opacity-50">Lưu bản nháp</button><button disabled={isSubmitting} type="submit" name="intent" value="preview" className="min-h-11 rounded-lg border px-4 py-2 text-sm disabled:opacity-50">Xem trước CT01</button><button disabled={isSubmitting} type="submit" name="intent" value="finish" className="min-h-11 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">{isSubmitting ? 'Đang lưu...' : 'Hoàn tất'}</button></div>
   </form>
 }

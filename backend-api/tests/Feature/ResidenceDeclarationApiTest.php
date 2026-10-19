@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\BoardingHouse;
 use App\Models\BoardingHouseResidenceProfile;
+use App\Models\Contract;
 use App\Models\Landlord;
 use App\Models\ResidenceDeclaration;
 use App\Models\Room;
@@ -22,6 +23,7 @@ class ResidenceDeclarationApiTest extends TestCase
         $this->getJson('/api/residence-declarations')->assertUnauthorized();
         $this->getJson('/api/residence/boarding-houses')->assertUnauthorized();
         $this->postJson('/api/residence-declarations', [])->assertUnauthorized();
+        $this->getJson('/api/residence-declarations/1/documents/residence-stay-consent')->assertUnauthorized();
     }
 
     public function test_context_only_lists_active_roommates_and_legal_head_not_operational_owner(): void
@@ -84,18 +86,20 @@ class ResidenceDeclarationApiTest extends TestCase
     public function test_submitted_and_registered_records_keep_snapshot_when_master_data_changes(): void
     {
         [$user, $room, $tenant, $member] = $this->fixture();
-        $id = $this->actingAs($user, 'sanctum')->postJson('/api/residence-declarations', $this->payload($room, $tenant, $member))->json('data.id');
+        $id = $this->actingAs($user, 'sanctum')->postJson('/api/residence-declarations', [...$this->payload($room, $tenant, $member), 'household_head_opinion' => 'Ý kiến đã ghi nhận'])->json('data.id');
         $this->putJson("/api/residence-declarations/{$id}/status", ['status' => 'SUBMITTED'])->assertOk();
         $snapshot = ResidenceDeclaration::findOrFail($id)->snapshot;
         $tenant->update(['full_name' => 'Tên mới', 'identity_number' => '999999999999', 'email' => 'new@example.com']);
         $member->update(['date_of_birth' => '2001-01-01']);
         $room->boardingHouse->residenceProfile->update(['household_head_name' => 'Chủ hộ mới']);
+        ResidenceDeclaration::findOrFail($id)->update(['household_head_opinion' => 'Ý kiến sửa sau khi chốt']);
         RoomTenant::where('tenant_id', $tenant->id)->update(['status' => 'MOVED_OUT']);
 
         $this->getJson("/api/residence-declarations/{$id}/export")->assertOk()
             ->assertJsonPath('data.ct01.declarant.full_name', 'Nguyễn Văn A')
             ->assertJsonPath('data.ct01.declarant.identity_number', '079000000001')
-            ->assertJsonPath('data.ct01.household_head.name', 'Chủ hộ pháp lý');
+            ->assertJsonPath('data.ct01.household_head.name', 'Chủ hộ pháp lý')
+            ->assertJsonPath('data.ct01.opinions.household_head', 'Ý kiến đã ghi nhận');
         $this->putJson("/api/residence-declarations/{$id}/status", ['status' => 'REGISTERED', 'expires_at' => '2027-12-31'])->assertOk();
         $this->assertSame($snapshot, ResidenceDeclaration::findOrFail($id)->snapshot);
         $this->getJson('/api/residence-declarations')->assertOk()->assertJsonPath('data.0.declarant_name', 'Nguyễn Văn A');
@@ -153,6 +157,125 @@ class ResidenceDeclarationApiTest extends TestCase
         $this->actingAs($user, 'sanctum')->postJson('/api/residence-declarations', ['room_id' => $room->id, 'contract_id' => 0, 'declarant_tenant_id' => 0])
             ->assertUnprocessable()->assertJsonValidationErrors(['contract_id', 'declarant_tenant_id']);
         $this->assertDatabaseCount('residence_declarations', 0);
+    }
+
+    public function test_ct01_context_prefills_authority_and_only_active_selected_members(): void
+    {
+        [$owner, $room, $tenant, $member] = $this->fixture();
+        $room->boardingHouse->residenceProfile->update(['residence_authority_name' => 'Công an phường đã cấu hình']);
+        $moved = $this->person($room, 'Người đã chuyển đi', 'MOVED_OUT');
+        $contract = Contract::factory()->create(['room_id' => $room->id, 'tenant_id' => $tenant->id]);
+
+        $this->actingAs($owner, 'sanctum')->getJson("/api/residence/rooms/{$room->id}/context?contract_id={$contract->id}")
+            ->assertOk()->assertJsonPath('data.suggested_declaration.authority_name', 'Công an phường đã cấu hình')
+            ->assertJsonPath('data.suggested_declaration.declarant_tenant_id', $tenant->id)
+            ->assertJsonCount(2, 'data.occupants')->assertJsonMissing(['full_name' => $moved->full_name]);
+        $id = $this->postJson('/api/residence-declarations', ['room_id' => $room->id, 'declarant_tenant_id' => $tenant->id])->assertCreated()->json('data.id');
+        $this->getJson("/api/residence-declarations/{$id}")->assertJsonPath('data.ct01.authority_name', 'Công an phường đã cấu hình');
+        $this->assertModelExists($member);
+    }
+
+    public function test_residence_profile_saves_legal_owner_fields_without_using_operational_account(): void
+    {
+        [$owner, $room] = $this->fixture();
+
+        $this->actingAs($owner, 'sanctum')->putJson("/api/boarding-houses/{$room->boarding_house_id}/residence-profile", [
+            'household_head_name' => 'Chủ hộ', 'household_head_identity_number' => '079000000099',
+            'residence_authority_name' => 'Công an phường đã cấu hình', 'legal_owner_name' => 'Chủ sở hữu',
+            'legal_owner_birth_year' => 1970, 'legal_owner_permanent_address' => 'Địa chỉ chủ sở hữu',
+            'legal_owner_identity_number' => '079111111111', 'legal_owner_phone' => '0902222222',
+        ])->assertOk()->assertJsonPath('data', null);
+
+        $this->getJson("/api/boarding-houses/{$room->boarding_house_id}/residence-profile")->assertOk()
+            ->assertJsonPath('data.legal_owner_name', 'Chủ sở hữu')
+            ->assertJsonPath('data.residence_authority_name', 'Công an phường đã cấu hình');
+        $this->assertDatabaseHas('boarding_house_residence_profiles', ['boarding_house_id' => $room->boarding_house_id, 'legal_owner_identity_number' => '079111111111']);
+        $this->assertNotSame($owner->name, $room->boardingHouse->residenceProfile->fresh()->legal_owner_name);
+    }
+
+    public function test_stay_consent_prefills_profile_tenant_contract_and_selected_active_members_then_freezes(): void
+    {
+        [$owner, $room, $tenant, $member] = $this->fixture();
+        $owner->update(['name' => 'Tên tài khoản vận hành']);
+        $tenant->update(['phone' => '0901111111', 'permanent_address' => 'Địa chỉ Bên B', 'email' => 'old@example.com']);
+        $room->boardingHouse->residenceProfile->update([
+            'legal_owner_name' => 'Chủ sở hữu pháp lý', 'legal_owner_birth_year' => 1970,
+            'legal_owner_permanent_address' => 'Địa chỉ Bên A', 'legal_owner_identity_number' => '079111111111', 'legal_owner_phone' => '0902222222',
+        ]);
+        $contract = Contract::factory()->create(['room_id' => $room->id, 'tenant_id' => $tenant->id, 'start_date' => '2026-11-01', 'end_date' => '2027-10-31']);
+        $payload = [...$this->payload($room, $tenant, $member), 'contract_id' => $contract->id];
+        $id = $this->actingAs($owner, 'sanctum')->postJson('/api/residence-declarations', $payload)->assertCreated()->json('data.id');
+
+        $this->getJson("/api/residence-declarations/{$id}")->assertOk()
+            ->assertJsonPath('data.stay_consent.type', 'RESIDENCE_STAY_CONSENT')
+            ->assertJsonPath('data.stay_consent.host.full_name', 'Chủ sở hữu pháp lý')
+            ->assertJsonPath('data.stay_consent.guest.full_name', 'Nguyễn Văn A')
+            ->assertJsonPath('data.stay_consent.start_date', '2026-11-01')
+            ->assertJsonPath('data.stay_consent.companions.0.full_name', 'Trần Thị B');
+        $this->getJson("/api/residence-declarations/{$id}/documents/residence-stay-consent")->assertOk()
+            ->assertJsonPath('data.document.occupant_count', 2);
+        $this->putJson("/api/residence-declarations/{$id}/status", ['status' => 'SUBMITTED'])->assertOk();
+        $snapshot = ResidenceDeclaration::findOrFail($id)->snapshot;
+        $tenant->update(['full_name' => 'Tên mới', 'phone' => '0909999999', 'email' => 'new@example.com']);
+        $room->boardingHouse->residenceProfile->update(['legal_owner_name' => 'Chủ mới']);
+        $contract->update(['start_date' => '2028-01-01']);
+
+        $this->getJson("/api/residence-declarations/{$id}/documents/residence-stay-consent")->assertOk()
+            ->assertJsonPath('data.document.host.full_name', 'Chủ sở hữu pháp lý')
+            ->assertJsonPath('data.document.guest.full_name', 'Nguyễn Văn A')
+            ->assertJsonPath('data.document.guest.phone', '0901111111')
+            ->assertJsonPath('data.document.start_date', '2026-11-01')
+            ->assertJsonPath('data.is_frozen', true);
+        $this->assertSame($snapshot, ResidenceDeclaration::findOrFail($id)->snapshot);
+        $this->assertNotSame('Tên tài khoản vận hành', $snapshot['stay_consent']['host']['full_name']);
+    }
+
+    public function test_stay_consent_print_requires_complete_data_and_foreign_house_is_hidden(): void
+    {
+        [$owner, $room, $tenant, $member] = $this->fixture();
+        $id = $this->actingAs($owner, 'sanctum')->postJson('/api/residence-declarations', $this->payload($room, $tenant, $member))->assertCreated()->json('data.id');
+
+        $this->getJson("/api/residence-declarations/{$id}")->assertOk()->assertJsonPath('data.stay_consent.host.full_name', 'Chủ hộ pháp lý');
+        $this->getJson("/api/residence-declarations/{$id}/documents/residence-stay-consent")
+            ->assertUnprocessable()->assertJsonValidationErrors(['host.birth_year', 'guest.phone', 'start_date']);
+        [$foreign] = $this->fixture();
+        $this->actingAs($foreign, 'sanctum')->getJson("/api/residence-declarations/{$id}/documents/residence-stay-consent")->assertNotFound();
+    }
+
+    public function test_assigned_manager_can_preview_stay_consent_but_revoked_manager_cannot(): void
+    {
+        [$owner, $room, $tenant, $member] = $this->fixture();
+        $manager = User::factory()->create();
+        $room->boardingHouse->managers()->attach($manager);
+        $id = $this->actingAs($owner, 'sanctum')->postJson('/api/residence-declarations', $this->payload($room, $tenant, $member))->assertCreated()->json('data.id');
+
+        $this->actingAs($manager, 'sanctum')->getJson("/api/residence-declarations/{$id}")->assertOk()->assertJsonPath('data.stay_consent.type', 'RESIDENCE_STAY_CONSENT');
+        $room->boardingHouse->managers()->detach($manager);
+        $this->getJson("/api/residence-declarations/{$id}")->assertNotFound();
+    }
+
+    public function test_stay_consent_can_use_manual_dates_without_contract_and_old_snapshots_are_not_rebuilt(): void
+    {
+        [$owner, $room, $tenant, $member] = $this->fixture();
+        $tenant->update(['phone' => '0901111111', 'permanent_address' => 'Địa chỉ Bên B']);
+        $room->boardingHouse->residenceProfile->update([
+            'legal_owner_name' => 'Bên A', 'legal_owner_birth_year' => 1970, 'legal_owner_permanent_address' => 'Địa chỉ Bên A',
+            'legal_owner_identity_number' => '079111111111', 'legal_owner_phone' => '0902222222',
+        ]);
+        $payload = [...$this->payload($room, $tenant, $member), 'stay_start_date' => '2026-11-15', 'stay_end_date' => '2027-11-14'];
+        $id = $this->actingAs($owner, 'sanctum')->postJson('/api/residence-declarations', $payload)->assertCreated()->json('data.id');
+
+        $this->getJson("/api/residence-declarations/{$id}/documents/residence-stay-consent")
+            ->assertOk()->assertJsonPath('data.document.start_date', '2026-11-15')->assertJsonPath('data.document.end_date', '2027-11-14');
+        $this->putJson("/api/residence-declarations/{$id}", [...$payload, 'stay_end_date' => '2026-10-01'])->assertUnprocessable()->assertJsonValidationErrors('stay_end_date');
+        $this->putJson("/api/residence-declarations/{$id}/status", ['status' => 'SUBMITTED'])->assertOk();
+        $record = ResidenceDeclaration::findOrFail($id);
+        $oldSnapshot = $record->snapshot;
+        unset($oldSnapshot['stay_consent']);
+        $record->update(['snapshot' => $oldSnapshot]);
+
+        $this->getJson("/api/residence-declarations/{$id}")->assertOk()->assertJsonPath('data.stay_consent', null);
+        $this->getJson("/api/residence-declarations/{$id}/documents/residence-stay-consent")->assertUnprocessable()->assertJsonValidationErrors('document');
     }
 
     private function fixture(): array

@@ -19,6 +19,7 @@ export const updateResidenceDeclaration = (id, data) => client.put(`/residence-d
 export const updateResidenceStatus = (id, data) => client.put(`/residence-declarations/${id}/status`, data)
 export const deleteResidenceDeclaration = id => client.delete(`/residence-declarations/${id}`)
 export const exportResidenceDeclaration = id => client.get(`/residence-declarations/${id}/export`)
+export const getResidenceStayConsent = id => client.get(`/residence-declarations/${id}/documents/residence-stay-consent`)
 export const getResidenceProfile = id => client.get(`/boarding-houses/${id}/residence-profile`)
 export const updateResidenceProfile = (id, data) => client.put(`/boarding-houses/${id}/residence-profile`, data)
 export const getBoardingHouseManagers = id => client.get(`/boarding-houses/${id}/managers`)

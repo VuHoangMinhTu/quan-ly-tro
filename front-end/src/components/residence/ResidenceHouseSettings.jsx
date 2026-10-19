@@ -9,16 +9,21 @@ const buttonClass = 'min-h-11 rounded-lg bg-slate-900 px-4 py-2 text-sm text-whi
 
 function ProfileForm({ houseId, initial }) {
   const client = useQueryClient()
-  const form = useForm({ defaultValues: { household_head_name: initial?.household_head_name ?? '', household_head_identity_number: initial?.household_head_identity_number ?? '' } })
+  const form = useForm({ defaultValues: Object.fromEntries(['household_head_name', 'household_head_identity_number', 'residence_authority_name', 'legal_owner_name', 'legal_owner_birth_year', 'legal_owner_permanent_address', 'legal_owner_identity_number', 'legal_owner_phone'].map(field => [field, initial?.[field] ?? ''])) })
   const [message, setMessage] = useState('')
   const save = useMutation({ mutationFn: data => updateResidenceProfile(houseId, data), onSuccess: async () => {
     setMessage('Đã lưu thông tin chủ hộ.')
     await Promise.all([client.invalidateQueries({ queryKey: residenceKeys.profile(houseId) }), client.invalidateQueries({ queryKey: ['residence-context'] }), client.invalidateQueries({ queryKey: ['residence-declaration'] })])
   } })
-  return <form onSubmit={form.handleSubmit(data => { setMessage(''); save.mutate({ household_head_name: data.household_head_name.trim() || null, household_head_identity_number: data.household_head_identity_number.trim() || null }) })} className="space-y-3">
-    <h3 className="font-semibold">Thông tin chủ hộ pháp lý</h3><p className="text-sm text-slate-500">Không mặc định lấy tên OWNER/MANAGER. Chỉ nhập thông tin chủ hộ đã được xác nhận.</p>
+  return <form onSubmit={form.handleSubmit(data => { setMessage(''); save.mutate(Object.fromEntries(Object.entries(data).map(([field, value]) => [field, field === 'legal_owner_birth_year' ? (value === '' ? null : Number(value)) : String(value).trim() || null]))) })} className="space-y-3">
+    <h3 className="font-semibold">Thông tin cư trú & chủ sở hữu</h3><p className="text-sm text-slate-500">Chỉ nhập thông tin đã được xác nhận. BeeHouse không mặc định OWNER/MANAGER là chủ hộ hoặc chủ sở hữu.</p>
+    <div><label htmlFor="residence-authority" className="text-sm">Cơ quan tiếp nhận CT01 mặc định</label><input id="residence-authority" maxLength={255} className={inputClass} {...form.register('residence_authority_name')} /></div>
     <div><label htmlFor="residence-head" className="text-sm">Họ tên chủ hộ</label><input id="residence-head" maxLength={255} className={inputClass} {...form.register('household_head_name')} /></div>
     <div><label htmlFor="residence-head-id" className="text-sm">Số định danh cá nhân của chủ hộ</label><input id="residence-head-id" maxLength={30} className={inputClass} {...form.register('household_head_identity_number')} /></div>
+    <p className="pt-2 text-sm font-semibold">Bên cho ở nhờ (chủ sở hữu hợp pháp nếu đã xác nhận)</p>
+    <div className="grid gap-3 sm:grid-cols-2"><div><label htmlFor="legal-owner-name" className="text-sm">Họ tên</label><input id="legal-owner-name" maxLength={255} className={inputClass} {...form.register('legal_owner_name')} /></div><div><label htmlFor="legal-owner-year" className="text-sm">Năm sinh</label><input id="legal-owner-year" type="number" min="1900" max="2100" className={inputClass} {...form.register('legal_owner_birth_year')} /></div></div>
+    <div><label htmlFor="legal-owner-address" className="text-sm">Địa chỉ thường trú</label><input id="legal-owner-address" maxLength={500} className={inputClass} {...form.register('legal_owner_permanent_address')} /></div>
+    <div className="grid gap-3 sm:grid-cols-2"><div><label htmlFor="legal-owner-id" className="text-sm">Số định danh cá nhân</label><input id="legal-owner-id" maxLength={30} className={inputClass} {...form.register('legal_owner_identity_number')} /></div><div><label htmlFor="legal-owner-phone" className="text-sm">Số điện thoại</label><input id="legal-owner-phone" maxLength={20} className={inputClass} {...form.register('legal_owner_phone')} /></div></div>
     {save.isError && <p role="alert" className="text-sm text-red-700">{getApiErrorMessage(save.error)}</p>}{message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
     <button disabled={save.isPending} className={buttonClass}>{save.isPending ? 'Đang lưu...' : 'Lưu thông tin chủ hộ'}</button>
   </form>
