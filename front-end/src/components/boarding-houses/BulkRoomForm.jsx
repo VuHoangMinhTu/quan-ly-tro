@@ -8,7 +8,7 @@ import MoneyInput from '../ui/MoneyInput'
 const inputClass = 'min-h-11 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 sm:min-h-0 sm:text-sm'
 const buttonClass = 'min-h-11 w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 sm:w-auto'
 
-export default function BulkRoomForm({ initialRooms, onBack, onSubmit }) {
+export default function BulkRoomForm({ initialRooms, onBack, onSubmit, submitLabel }) {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [generatorError, setGeneratorError] = useState('')
@@ -80,8 +80,8 @@ export default function BulkRoomForm({ initialRooms, onBack, onSubmit }) {
       {(errors.rooms?.message || errors.rooms?.root?.message) && <p role="alert" className="text-sm text-red-600">{errors.rooms.message || errors.rooms.root.message}</p>}
       {submitError && <p role="alert" className="text-sm text-red-600">{submitError}</p>}
       <div className="flex flex-col-reverse justify-between gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:flex-wrap">
-        <button type="button" onClick={() => onBack(form.getValues('rooms'))} className={buttonClass}>← Thông tin nhà trọ</button>
-        <button type="submit" className="min-h-11 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 sm:min-h-0 sm:w-auto">{isSubmitting ? 'Đang tạo...' : 'Tạo nhà trọ và ' + fields.length + ' phòng'}</button>
+        {onBack && <button type="button" onClick={() => onBack(form.getValues('rooms'))} className={buttonClass}>← Thông tin nhà trọ</button>}
+        <button type="submit" className="min-h-11 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 sm:min-h-0 sm:w-auto">{isSubmitting ? 'Đang tạo...' : submitLabel?.(fields.length) ?? 'Tạo nhà trọ và ' + fields.length + ' phòng'}</button>
       </div>
     </fieldset>
   </form>

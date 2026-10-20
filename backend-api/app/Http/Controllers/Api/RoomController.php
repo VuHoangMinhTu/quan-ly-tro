@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Custom\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Room\StoreBulkRoomsRequest;
 use App\Http\Requests\Room\StoreRoomRequest;
 use App\Http\Requests\Room\UpdateRoomRequest;
 use App\Models\BoardingHouse;
@@ -11,6 +12,8 @@ use App\Models\Room;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class RoomController extends Controller
 {
@@ -37,6 +40,39 @@ class RoomController extends Controller
         });
 
         return ApiResponse::success($room, 'Tạo phòng thành công.', 201);
+    }
+
+    public function storeBulk(StoreBulkRoomsRequest $request, int $boardingHouseId): JsonResponse
+    {
+        $boardingHouse = $this->findOwnedBoardingHouse($request, $boardingHouseId);
+        $rooms = $request->validated()['rooms'];
+
+        DB::transaction(function () use ($boardingHouse, $rooms): void {
+            // Serialize batch additions to this house; no room is written if any code already exists.
+            $boardingHouse->newQuery()->whereKey($boardingHouse->id)->lockForUpdate()->firstOrFail();
+            $existingCodes = $boardingHouse->rooms()->pluck('room_code')
+                ->mapWithKeys(fn (string $code) => [Str::lower($code) => true]);
+
+            foreach ($rooms as $index => $room) {
+                if ($existingCodes->has(Str::lower($room['room_code']))) {
+                    throw ValidationException::withMessages([
+                        "rooms.{$index}.room_code" => 'Mã phòng đã tồn tại trong nhà trọ này.',
+                    ]);
+                }
+            }
+
+            foreach ($rooms as $room) {
+                $boardingHouse->rooms()->create([
+                    'room_code' => $room['room_code'],
+                    'area' => $room['area'] ?? null,
+                    'monthly_rent' => $room['monthly_rent'] ?? null,
+                    'max_tenants' => $room['max_tenants'] ?? null,
+                    'status' => 'AVAILABLE',
+                ]);
+            }
+        });
+
+        return ApiResponse::success(null, 'Đã thêm '.count($rooms).' phòng thành công.', 201);
     }
 
     public function show(Request $request, int $id): JsonResponse
