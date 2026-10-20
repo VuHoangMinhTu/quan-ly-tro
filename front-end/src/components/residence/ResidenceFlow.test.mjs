@@ -98,14 +98,19 @@ test('async context refetch does not reset the note or selected members and a ne
   assert.deepEqual(other.form.getValues('members'), [])
 })
 
-test('CT01 uses date strings, escapes names/content, and does not invent consent or household head', async () => {
+test('CT01 matches the Word section order and leaves missing fields blank', async () => {
   const Document = await load('./Ct01Document.jsx', 'Ct01Document', { formatDateForDisplay, genderLabels })
   const markup = renderToStaticMarkup(React.createElement(Document, { data: { declarant: { ...tenant, full_name: '<script>alert(1)</script>' }, authority_name: null, request_content: '<img src=x>', relationship_to_household_head: null, household_head: { name: null, identity_number: null }, members: [] } }))
   assert.match(markup, /28\/09\/2000/)
   assert.match(markup, /&lt;script&gt;/)
   assert.doesNotMatch(markup, /<script>|<img src=x>|Tôi đồng ý/)
-  assert.match(markup, /ct01-missing/)
-  assert.match(markup, /ct01-print-blank/)
+  assert.match(markup, /Mẫu CT01 ban hành kèm theo Thông tư số 116\/2026\/TT-BCA/)
+  assert.match(markup, /Kính gửi/)
+  assert.match(markup, /11\. Những thành viên trong hộ gia đình cùng thay đổi/)
+  assert.equal((markup.match(/class="ct01-identity-boxes"/g) ?? []).length, 2)
+  assert.equal((markup.match(/<tr>/g) ?? []).length, 9)
+  assert.equal((markup.match(/class="ct01-signature"/g) ?? []).length, 4)
+  assert.doesNotMatch(markup, /Chưa cập nhật|null|undefined/)
 })
 
 test('manual stay dates use dd/mm/yyyy in form and submit exact date strings', async () => {
@@ -130,6 +135,9 @@ test('stay consent preview uses frozen data and escapes untrusted person fields'
   assert.match(markup, /Người đi cùng/)
   assert.match(markup, /&lt;script&gt;/)
   assert.doesNotMatch(markup, /<script>/)
+  assert.match(markup, /2\. Hợp đồng được lập thành 02 bản và có giá trị như nhau/)
+  assert.equal((markup.match(/class="stay-consent-companion"/g) ?? []).length, 5)
+  assert.doesNotMatch(markup, /Chưa cập nhật|null|undefined/)
 })
 
 test('invoice print renders the stored AUTO tax item and total without reading a live service rate', async () => {

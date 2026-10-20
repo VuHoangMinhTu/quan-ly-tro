@@ -1,45 +1,45 @@
-.ct01-document { box-sizing: border-box; width: 100%; max-width: 210mm; margin: 0 auto; padding: 20px; color: #111; background: white; font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.45; overflow-wrap: anywhere; }
-.ct01-document header { text-align: center; margin-bottom: 20px; }
-.ct01-document h1 { margin: 14px 0 20px; font-size: 16pt; font-weight: bold; }
-.ct01-document p { margin: 8px 0; }
-.ct01-template { text-align: right; font-size: 10pt; }
-.ct01-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
-.ct01-value { min-width: 0; font-weight: 600; white-space: pre-wrap; }
-.ct01-row > .ct01-value { flex: 1; min-width: 100px; }
-.ct01-missing { color: #92400e; background: #fffbeb; font-weight: normal; }
-.ct01-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.ct01-request { min-height: 36px; padding-bottom: 8px; white-space: pre-wrap; }
-.ct01-member-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 12px; font-size: 10pt; }
-.ct01-member-table :is(th, td) { border: 1px solid #333; padding: 6px; vertical-align: top; overflow-wrap: anywhere; }
-.ct01-member-table th:first-child { width: 7%; }
-.ct01-mobile-label { display: none; }
-.ct01-print-blank { display: none; }
-.ct01-signatures { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 20px; font-size: 9pt; text-align: center; }
-.ct01-signatures > div { min-height: 35mm; }
-.ct01-signatures strong { display: block; }
-.ct01-signatures span { display: block; margin-top: 40px; }
-.ct01-opinion { white-space: pre-wrap; text-align: left; }
-@media screen and (max-width: 639px) {
-  .ct01-document { padding: 16px; font-size: 11pt; }
-  .ct01-document h1 { font-size: 14pt; }
-  .ct01-pair, .ct01-signatures { grid-template-columns: 1fr; }
-  .ct01-signatures > div { min-height: auto; }
-  .ct01-member-table, .ct01-member-table tbody, .ct01-member-table tr { display: block; }
-  .ct01-member-table thead { display: none; }
-  .ct01-member-table tr { border: 1px solid #bbb; border-radius: 8px; margin-bottom: 10px; padding: 8px; }
-  .ct01-member-table td { display: flex; gap: 8px; border: 0; padding: 4px; }
-  .ct01-mobile-label { display: block; flex: 0 0 38%; font-weight: normal; }
-}
+.ct01-document { box-sizing: border-box; width: 216mm; min-height: 279mm; margin: 0 auto; padding: 5mm 25mm 8mm; background: #fff; color: #000; font: 12pt/1.2 'Times New Roman', Times, serif; overflow-wrap: normal; }
+.ct01-document * { box-sizing: border-box; }
+.ct01-document p { margin: 0; }
+.ct01-template { text-align: center; font-size: 11pt; line-height: 1.12; }
+.ct01-heading { margin-top: 6mm; text-align: center; }
+.ct01-heading > strong { display: block; font-size: 12pt; }
+.ct01-motto { width: max-content; max-width: 100%; margin: 0 auto; border-bottom: 1px solid #000; }
+.ct01-heading h1 { margin: 4mm 0 2mm; font-size: 13pt; line-height: 1.15; }
+.ct01-recipient { margin: 0 0 3mm 29mm !important; }
+.ct01-fields { display: grid; gap: 1.7mm; }
+.ct01-fields > p, .ct01-inline-pair > p { min-height: 5.8mm; }
+.ct01-fields > p:not(.ct01-identity-row), .ct01-inline-pair > p { display: flex; align-items: baseline; gap: 2mm; }
+.ct01-value { min-width: 0; white-space: pre-wrap; }
+.ct01-dotted { flex: 1; min-height: 5mm; border-bottom: 1px dotted #333; }
+.ct01-inline-pair { display: grid; grid-template-columns: 68% 32%; }
+.ct01-inline-pair > p { min-width: 0; }
+.ct01-inline-pair > p:last-child { padding-left: 2mm; }
+.ct01-identity-row { display: flex; align-items: center; justify-content: space-between; gap: 3mm; }
+.ct01-identity-boxes { display: inline-grid; grid-template-columns: repeat(12, 1fr); width: 95mm; height: 8mm; border: 1px solid #000; white-space: nowrap; }
+.ct01-identity-boxes > span { display: flex; align-items: center; justify-content: center; border-right: 1px solid #000; font-size: 10pt; }
+.ct01-identity-boxes > span:last-child { border-right: 0; }
+.ct01-request-extra { width: 100%; }
+.ct01-member-table { width: 100%; margin-top: 5mm; border-collapse: collapse; table-layout: fixed; font-size: 11pt; }
+.ct01-member-table th, .ct01-member-table td { padding: 1mm; border: 1px solid #000; overflow-wrap: anywhere; }
+.ct01-member-table th { height: 13.5mm; text-align: center; line-height: 1.05; }
+.ct01-member-table td { height: 8mm; border-top: 0; border-bottom: 1px dotted #555; vertical-align: middle; }
+.ct01-member-table tbody tr:last-child td { border-bottom: 1px solid #000; }
+.ct01-member-table td:first-child { text-align: center; }
+.ct01-signatures { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1mm; margin: 5mm -20mm 0; text-align: center; font-size: 9pt; }
+.ct01-signature { position: relative; min-height: 43mm; }
+.ct01-signature-date { font-style: italic; }
+.ct01-signature strong { display: block; font-size: 9pt; line-height: 1.15; }
+.ct01-opinion { padding: 2mm; text-align: left; white-space: pre-wrap; }
+.ct01-signature-extra { position: absolute; bottom: 0; left: 0; width: 100%; text-align: left; font-size: 8pt; }
+.ct01-signer-name { margin-top: 17mm !important; }
+@media screen { .ct01-document { box-shadow: 0 2px 10px #0002; } #ct01-preview { overflow-x: auto; } }
 @media print {
-  body:has(.ct01-print-page) { margin: 0; padding: 0; background: white; }
-  .ct01-print-page { height: auto; min-height: 0; width: 100%; margin: 0; padding: 0 !important; }
-  .ct01-print-page { page: residence-ct01; }
+  body:has(.ct01-print-page) { margin: 0; padding: 0; background: #fff; }
+  .ct01-print-page { width: 100%; min-height: 0; margin: 0; padding: 0 !important; page: residence-ct01; }
   .ct01-print-actions { display: none !important; }
-  .ct01-print-page .ct01-document { max-width: none; padding: 0; }
-  .ct01-document .ct01-missing { background: none; color: #111; }
-  .ct01-signatures, .ct01-member-table tr { break-inside: avoid; }
+  .ct01-document { width: 100%; min-height: 0; padding: 0 20mm; box-shadow: none; }
   .ct01-member-table thead { display: table-header-group; }
-  .ct01-screen-missing { display: none; }
-  .ct01-print-blank { display: inline; }
+  .ct01-member-table tr, .ct01-signatures { break-inside: avoid; }
 }
-@page residence-ct01 { size: A4 portrait; margin: 12mm; }
+@page residence-ct01 { size: letter portrait; margin: 5mm 5mm 8mm; }
