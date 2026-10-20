@@ -39,9 +39,9 @@ class ContractController extends Controller
 
     public function store(StoreContractRequest $request, int $roomId): JsonResponse
     {
-        $this->contracts->save($request->user(), $roomId, $request->validated());
+        $contract = $this->contracts->save($request->user(), $roomId, $request->validated());
 
-        return ApiResponse::success(null, 'Tạo hợp đồng thành công.', 201);
+        return ApiResponse::success(['id' => $contract->id], 'Tạo hợp đồng thành công.', 201);
     }
 
     public function show(Request $request, int $id): JsonResponse

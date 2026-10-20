@@ -35,6 +35,7 @@ class ContractLifecycleApiTest extends TestCase
         $manager = User::factory()->create(['name' => 'Ngô Đức Bình']);
         $house->managers()->attach($manager);
         $roommate = Tenant::create(['landlord_id' => $house->landlord_id, 'full_name' => 'Trần Thị B']);
+        $contract->handoverReports()->create(['type' => 'CHECK_IN', 'status' => 'CONFIRMED', 'items' => [['name' => 'Giường', 'quantity' => 1, 'condition' => 'GOOD', 'note' => null]], 'confirmed_at' => now()]);
 
         return [$contract, $owner, $manager, $roommate];
     }
@@ -59,7 +60,7 @@ class ContractLifecycleApiTest extends TestCase
         $this->login($owner)->postJson("/api/rooms/{$existing->room_id}/contracts", [
             'tenant_id' => $existing->tenant_id, 'contract_code' => 'DRAFT-NULL', 'status' => 'DRAFT',
             'monthly_rent' => null, 'start_date' => null, 'signing_snapshot' => ['fake' => true],
-        ])->assertCreated()->assertJsonPath('data', null);
+        ])->assertCreated()->assertJsonStructure(['data' => ['id']]);
 
         $this->assertDatabaseHas('contracts', ['contract_code' => 'DRAFT-NULL', 'monthly_rent' => null, 'start_date' => null, 'signing_snapshot' => null]);
         $this->assertDatabaseCount('room_tenants', 0);
@@ -208,8 +209,11 @@ class ContractLifecycleApiTest extends TestCase
         [$contract, $owner] = $this->fixture();
         $house = $contract->room->boardingHouse;
         $this->login($owner)->putJson("/api/boarding-houses/{$house->id}/contract-schedule", ['default_invoice_issue_day_from' => 25, 'default_invoice_issue_day_to' => 28, 'default_payment_due_day' => 31])->assertOk();
-        $this->postJson("/api/rooms/{$contract->room_id}/contracts", ['tenant_id' => $contract->tenant_id, 'contract_code' => 'POLICY', ...$this->activate($contract, $owner)])->assertCreated();
+        $this->postJson("/api/rooms/{$contract->room_id}/contracts", ['tenant_id' => $contract->tenant_id, 'contract_code' => 'POLICY', ...$this->activate($contract, $owner), 'status' => 'DRAFT'])->assertCreated();
         $created = Contract::where('contract_code', 'POLICY')->sole();
+        $created->handoverReports()->create(['type' => 'CHECK_IN', 'status' => 'CONFIRMED', 'items' => [['name' => 'Giường', 'quantity' => 1, 'condition' => 'GOOD', 'note' => null]], 'confirmed_at' => now()]);
+        $this->putJson("/api/contracts/{$created->id}/status", $this->activate($created, $owner))->assertOk();
+        $created->refresh();
         $house->update(['default_payment_due_day' => 5]);
         $this->assertSame(31, $created->fresh()->signing_snapshot['contract']['payment_due_day']);
         $this->assertDatabaseHas('contracts', ['id' => $created->id, 'invoice_issue_day_from' => null, 'invoice_issue_day_to' => null]);

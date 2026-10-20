@@ -42,6 +42,7 @@ class ContractSigningApiTest extends TestCase
         }
         $this->actingAs($owner, 'sanctum');
         $this->putJson("/api/contracts/{$contract->id}", ['lessor_representative_user_id' => ($representative ?? $owner)->id])->assertOk();
+        $contract->handoverReports()->create(['type' => 'CHECK_IN', 'status' => 'CONFIRMED', 'items' => [['name' => 'Giường', 'quantity' => 1, 'condition' => 'GOOD', 'note' => null]], 'confirmed_at' => now()]);
         $this->postJson("/api/contracts/{$contract->id}/finalize")->assertOk();
 
         return [$contract->fresh(), $owner, $contract->document()->firstOrFail()];

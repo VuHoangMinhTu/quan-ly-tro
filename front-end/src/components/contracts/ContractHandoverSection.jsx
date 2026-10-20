@@ -31,7 +31,7 @@ export default function ContractHandoverSection({ contract }) {
   }, onError: failure => setError(getApiErrorMessage(failure)) })
   const change = (index, key, value) => setItems(current => current.map((item, position) => position === index ? { ...item, [key]: value } : item))
 
-  return <section className="space-y-4 rounded-xl bg-white p-4 shadow-sm sm:p-6">
+  return <section id="contract-handover" className="scroll-mt-4 space-y-4 rounded-xl bg-white p-4 shadow-sm sm:p-6">
     <div><h3 className="text-lg font-semibold">Biên bản bàn giao CHECK_IN</h3><p className="text-sm text-slate-500">Biên bản là hồ sơ riêng. Hợp đồng đã chốt hoặc đã ký không tự thay đổi.</p></div>
     {query.isPending && <p>Đang tải biên bản...</p>}
     {query.isError && <p role="alert" className="text-sm text-red-700">{getApiErrorMessage(query.error)}</p>}

@@ -51,7 +51,11 @@ test('document section supports draft finalization, invalidates dependent data a
     finalizeContractDocument: async id => calls.push(id), window: { confirm: () => true },
   })
   const contract = { id: 1, status: 'DRAFT', contract_template: { name: 'Mẫu riêng', version: 2 } }
-  const tree = Section({ contract })
+  const blocked = Section({ contract })
+  assert.equal(nodes(blocked).find(node => node.type === 'button' && text(node) === 'Chốt hợp đồng').props.disabled, true)
+  assert.match(text(blocked), /biên bản bàn giao tình trạng đồ vật/)
+  const tree = Section({ contract, handoverConfirmed: true })
+  assert.equal(nodes(tree).find(node => node.type === 'button' && text(node) === 'Chốt hợp đồng').props.disabled, false)
   assert.ok(nodes(tree).some(node => node.type === Link && node.props.to === '/contracts/1/document?preview=1'))
   await nodes(tree).find(node => node.type === 'button' && text(node) === 'Chốt hợp đồng').props.onClick()
   await settled

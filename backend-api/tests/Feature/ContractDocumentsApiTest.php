@@ -44,6 +44,7 @@ class ContractDocumentsApiTest extends TestCase
         $this->putJson("/api/contracts/{$contract->id}", [
             'lessor_representative_user_id' => $owner->id, 'contract_template_id' => $templateId,
         ])->assertOk();
+        $contract->handoverReports()->create(['type' => 'CHECK_IN', 'status' => 'CONFIRMED', 'items' => [['name' => 'Giường', 'quantity' => 1, 'condition' => 'GOOD', 'note' => null]], 'confirmed_at' => now()]);
     }
 
     public function test_beehouse_standard_template_is_active_global_valid_and_seeded_once(): void

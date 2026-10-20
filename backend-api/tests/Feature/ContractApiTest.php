@@ -38,7 +38,7 @@ class ContractApiTest extends TestCase
         ]))->assertCreated()
             ->assertJsonPath('success', true)
             ->assertJsonPath('message', 'Tạo hợp đồng thành công.')
-            ->assertJsonPath('data', null);
+            ->assertJsonStructure(['data' => ['id']]);
 
         $this->assertDatabaseHas('contracts', [
             'room_id' => $room->id,
@@ -176,12 +176,15 @@ class ContractApiTest extends TestCase
         ]))->assertStatus(422)->assertJsonValidationErrors('start_date');
 
         $this->withBearerToken($landlord)->postJson("/api/rooms/{$room->id}/contracts", $this->contractPayload([
-            'tenant_id' => $tenant->id, 'lessor_representative_user_id' => $landlord->user_id, 'contract_code' => 'HD-NEXT', 'status' => 'ACTIVE', 'start_date' => '2026-10-01', 'end_date' => '2026-10-31',
-        ]))->assertCreated()->assertJsonPath('data', null);
+            'tenant_id' => $tenant->id, 'lessor_representative_user_id' => $landlord->user_id, 'contract_code' => 'HD-NEXT', 'status' => 'DRAFT', 'start_date' => '2026-10-01', 'end_date' => '2026-10-31',
+        ]))->assertCreated();
+        $next = Contract::where('contract_code', 'HD-NEXT')->sole();
+        $next->handoverReports()->create(['type' => 'CHECK_IN', 'status' => 'CONFIRMED', 'items' => [['name' => 'Giường', 'quantity' => 1, 'condition' => 'GOOD', 'note' => null]], 'confirmed_at' => now()]);
+        $this->withBearerToken($landlord)->putJson("/api/contracts/{$next->id}/status", ['status' => 'ACTIVE'])->assertOk();
 
         $this->withBearerToken($landlord)->postJson("/api/rooms/{$room->id}/contracts", $this->contractPayload([
             'tenant_id' => $tenant->id, 'contract_code' => 'HD-DRAFT', 'status' => 'DRAFT', 'start_date' => '2026-09-15', 'end_date' => '2026-10-15',
-        ]))->assertCreated()->assertJsonPath('data', null);
+        ]))->assertCreated()->assertJsonStructure(['data' => ['id']]);
     }
 
     public function test_active_contract_update_ignores_itself_for_overlap_validation(): void

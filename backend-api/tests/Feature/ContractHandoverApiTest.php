@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Amenity;
 use App\Models\Contract;
+use App\Models\ContractDocument;
 use App\Models\ContractHandoverReport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -93,12 +94,52 @@ class ContractHandoverApiTest extends TestCase
         $this->assertSame('Tivi mới', $document->source_snapshot['handover_checkin'][0]['name']);
     }
 
-    public function test_handover_after_finalization_remains_separate_and_does_not_mutate_signed_source(): void
+    public function test_draft_cannot_be_finalized_until_check_in_is_confirmed(): void
     {
         $contract = $this->contract();
         $owner = $contract->room->boardingHouse->landlord->user;
         $this->putJson("/api/contracts/{$contract->id}", ['lessor_representative_user_id' => $owner->id])->assertOk();
+
+        $this->postJson("/api/contracts/{$contract->id}/finalize")
+            ->assertUnprocessable()->assertJsonPath('errors.handover_checkin.0', 'Vui lòng tạo và xác nhận biên bản bàn giao trước khi chốt hợp đồng.');
+        $this->postJson("/api/contracts/{$contract->id}/handover-check-in")->assertCreated();
+        $this->putJson("/api/contracts/{$contract->id}/status", ['status' => 'ACTIVE'])
+            ->assertUnprocessable()->assertJsonValidationErrors('handover_checkin');
+        $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'status' => 'DRAFT', 'finalized_at' => null]);
+        $this->assertDatabaseCount('contract_documents', 0);
+
+        $this->postJson("/api/contracts/{$contract->id}/handover-check-in/confirm")->assertOk();
         $this->postJson("/api/contracts/{$contract->id}/finalize")->assertOk();
+
+        $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'status' => 'ACTIVE']);
+        $this->assertStringContainsString('Giường', $contract->document()->sole()->rendered_html);
+    }
+
+    public function test_direct_active_create_cannot_skip_the_handover_step(): void
+    {
+        $existing = $this->contract();
+        $owner = $existing->room->boardingHouse->landlord->user;
+
+        $this->postJson("/api/rooms/{$existing->room_id}/contracts", [
+            'tenant_id' => $existing->tenant_id, 'contract_code' => 'DIRECT-ACTIVE',
+            'status' => 'ACTIVE', 'start_date' => '2028-01-01', 'monthly_rent' => 3000000,
+            'lessor_representative_user_id' => $owner->id,
+        ])->assertUnprocessable()->assertJsonValidationErrors('handover_checkin');
+
+        $this->assertDatabaseMissing('contracts', ['contract_code' => 'DIRECT-ACTIVE']);
+        $this->assertDatabaseCount('contract_documents', 0);
+    }
+
+    public function test_handover_after_finalization_remains_separate_and_does_not_mutate_signed_source(): void
+    {
+        $contract = $this->contract();
+        $oldHtml = '<p>Hợp đồng đã chốt trước khi có quy tắc bắt buộc bàn giao.</p>';
+        $contract->update(['status' => 'ACTIVE', 'finalized_at' => now()]);
+        ContractDocument::create([
+            'contract_id' => $contract->id, 'template_name' => 'Mẫu cũ',
+            'rendered_html' => $oldHtml, 'source_snapshot' => ['handover_checkin' => []],
+            'document_hash' => hash('sha256', $oldHtml), 'finalized_at' => now(),
+        ]);
         $before = $contract->document()->sole()->only(['rendered_html', 'document_hash', 'source_snapshot']);
 
         $this->postJson("/api/contracts/{$contract->id}/handover-check-in")->assertCreated();

@@ -210,6 +210,9 @@ class ContractService
         if ($overlaps) {
             throw ValidationException::withMessages(['start_date' => 'Thời hạn hợp đồng trùng với hợp đồng đang hiệu lực của phòng. Vui lòng kiểm tra ngày bắt đầu và kết thúc.']);
         }
+        if (! $contract->handoverReports()->where('type', 'CHECK_IN')->where('status', 'CONFIRMED')->exists()) {
+            throw ValidationException::withMessages(['handover_checkin' => 'Vui lòng tạo và xác nhận biên bản bàn giao trước khi chốt hợp đồng.']);
+        }
         $this->terms->finalize($contract, $room);
         $this->saveOpenings($contract, $room, $contract->utilityOpenings()->get()->map(fn ($opening) => [
             'utility_meter_id' => $opening->utility_meter_id, 'opening_reading' => $opening->opening_reading,

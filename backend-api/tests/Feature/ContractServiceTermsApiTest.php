@@ -17,6 +17,7 @@ class ContractServiceTermsApiTest extends TestCase
     private function fixture(string $method = 'PER_UNIT', string $start = '2027-01-01'): array
     {
         $contract = Contract::factory()->create(['start_date' => $start, 'end_date' => '2027-12-31', 'monthly_rent' => 3800000]);
+        $contract->handoverReports()->create(['type' => 'CHECK_IN', 'status' => 'CONFIRMED', 'items' => [['name' => 'Giường', 'quantity' => 1, 'condition' => 'GOOD', 'note' => null]], 'confirmed_at' => now()]);
         $owner = $contract->room->boardingHouse->landlord->user;
         $service = $contract->room->boardingHouse->services()->create([
             'name' => 'Điện thỏa thuận', 'type' => 'ELECTRICITY', 'billing_method' => $method,
