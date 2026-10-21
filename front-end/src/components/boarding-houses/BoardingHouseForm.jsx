@@ -7,10 +7,11 @@ import { getApiErrorMessage, applyApiFieldErrors } from '../../api/getApiErrorMe
 const schema = z.object({
   name: z.string().trim().min(1, 'Vui lòng nhập tên nhà trọ').max(255),
   address: z.string().trim().min(1, 'Vui lòng nhập địa chỉ').max(500),
+  ward: z.string().trim().max(255),
   description: z.string().optional(),
 })
 
-const emptyValues = { name: '', address: '', description: '' }
+const emptyValues = { name: '', address: '', ward: '', description: '' }
 
 export default function BoardingHouseForm({ initialValues = emptyValues, onSubmit, submitLabel }) {
   const [submitError, setSubmitError] = useState('')
@@ -23,6 +24,7 @@ export default function BoardingHouseForm({ initialValues = emptyValues, onSubmi
     form.reset({
       name: initialValues.name || '',
       address: initialValues.address || '',
+      ward: initialValues.ward || '',
       description: initialValues.description || '',
     })
   }, [form, initialValues])
@@ -34,6 +36,7 @@ export default function BoardingHouseForm({ initialValues = emptyValues, onSubmi
       await onSubmit({
         ...values,
         description: values.description?.trim() || null,
+        ward: values.ward?.trim() || null,
       })
     } catch (error) {
       applyApiFieldErrors(error, form.setError)
@@ -56,6 +59,13 @@ export default function BoardingHouseForm({ initialValues = emptyValues, onSubmi
           {...form.register('name')}
         />
         {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700" htmlFor="boarding-house-ward">Phường/xã <span className="font-normal text-slate-500">(không bắt buộc)</span></label>
+        <input id="boarding-house-ward" placeholder="VD: Phường Vườn Lài" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200" {...form.register('ward')} />
+        <p className="mt-1 text-xs text-slate-500">Dùng tên phường/xã này làm địa danh đầu văn bản ở nhờ.</p>
+        {errors.ward && <p className="mt-1 text-sm text-red-600">{errors.ward.message}</p>}
       </div>
 
       <div>

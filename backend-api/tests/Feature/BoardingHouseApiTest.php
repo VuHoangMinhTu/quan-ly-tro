@@ -27,7 +27,7 @@ class BoardingHouseApiTest extends TestCase
     public function test_landlord_can_create_a_boarding_house(): void
     {
         $landlord = $this->createLandlord();
-        $payload = $this->validPayload();
+        $payload = $this->validPayload(['ward' => 'Phường Vườn Lài']);
 
         $this->withBearerToken($landlord)->postJson('/api/boarding-houses', [
             ...$payload,
@@ -40,6 +40,7 @@ class BoardingHouseApiTest extends TestCase
         $this->assertDatabaseHas('boarding_houses', [
             'landlord_id' => $landlord->id,
             'name' => $payload['name'],
+            'ward' => 'Phường Vườn Lài',
         ]);
         $this->assertDatabaseMissing('boarding_houses', ['landlord_id' => 99999]);
     }
@@ -90,7 +91,7 @@ class BoardingHouseApiTest extends TestCase
     {
         $landlord = $this->createLandlord();
         $boardingHouse = $this->createBoardingHouse($landlord);
-        $payload = $this->validPayload(['name' => 'Updated House']);
+        $payload = $this->validPayload(['name' => 'Updated House', 'ward' => 'Phường Dĩ An']);
 
         $this->withBearerToken($landlord)->putJson("/api/boarding-houses/{$boardingHouse->id}", $payload)
             ->assertOk()
@@ -101,6 +102,7 @@ class BoardingHouseApiTest extends TestCase
             'id' => $boardingHouse->id,
             'landlord_id' => $landlord->id,
             'name' => 'Updated House',
+            'ward' => 'Phường Dĩ An',
         ]);
     }
 

@@ -9,7 +9,7 @@ import BulkRoomForm from '../../components/boarding-houses/BulkRoomForm'
 
 export default function BoardingHouseCreatePage() {
   const [phase, setPhase] = useState(1)
-  const [house, setHouse] = useState({ name: '', address: '', description: '' })
+  const [house, setHouse] = useState({ name: '', address: '', ward: '', description: '' })
   const [rooms, setRooms] = useState([])
   const navigate = useNavigate()
   const queryClient = useQueryClient()

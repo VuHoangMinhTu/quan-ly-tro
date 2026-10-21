@@ -27,9 +27,10 @@ class StoreBoardingHouseWithRoomsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'boarding_house' => ['required', 'array:name,address,description'],
+            'boarding_house' => ['required', 'array:name,address,ward,description'],
             'boarding_house.name' => ['required', 'string', 'max:255'],
             'boarding_house.address' => ['required', 'string', 'max:500'],
+            'boarding_house.ward' => ['nullable', 'string', 'max:255'],
             'boarding_house.description' => ['nullable', 'string'],
             'rooms' => ['required', 'array', 'list', 'min:1', 'max:200'],
             'rooms.*' => ['required', 'array:room_code,area,monthly_rent,max_tenants'],

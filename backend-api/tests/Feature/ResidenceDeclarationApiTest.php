@@ -280,6 +280,27 @@ class ResidenceDeclarationApiTest extends TestCase
         $this->assertNotSame('Tên tài khoản vận hành', $snapshot['stay_consent']['host']['full_name']);
     }
 
+    public function test_stay_consent_uses_structured_ward_before_legacy_document_place(): void
+    {
+        [$owner, $room, $tenant, $member] = $this->fixture();
+        $room->boardingHouse->residenceProfile->update(['document_place' => 'Địa danh cũ']);
+        $id = $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/residence-declarations', $this->payload($room, $tenant, $member))
+            ->assertCreated()->json('data.id');
+
+        $room->boardingHouse->update(['ward' => 'Phường Vườn Lài']);
+        $this->getJson("/api/residence-declarations/{$id}")->assertOk()
+            ->assertJsonPath('data.stay_consent.document_place', 'Vườn Lài');
+
+        $room->boardingHouse->update(['ward' => 'Phường Dĩ An']);
+        $this->getJson("/api/residence-declarations/{$id}")->assertOk()
+            ->assertJsonPath('data.stay_consent.document_place', 'Dĩ An');
+
+        $room->boardingHouse->update(['ward' => null]);
+        $this->getJson("/api/residence-declarations/{$id}")->assertOk()
+            ->assertJsonPath('data.stay_consent.document_place', 'Địa danh cũ');
+    }
+
     public function test_contract_dates_prefill_stay_period_but_manual_override_controls_consent_preview(): void
     {
         [$owner, $room, $tenant, $member] = $this->fixture();

@@ -158,10 +158,14 @@ class ResidenceDeclarationService
     {
         $profile = $record->boardingHouse->residenceProfile;
         $declarant = $ct01['declarant'];
+        $ward = trim((string) $record->boardingHouse->ward);
+        $documentPlace = $ward !== ''
+            ? trim(preg_replace('/^(?:phường|xã|thị trấn)\s+/iu', '', $ward) ?? $ward)
+            : $profile?->document_place;
 
         return [
             'type' => 'RESIDENCE_STAY_CONSENT', 'captured_at' => now()->toDateString(),
-            'document_place' => $profile?->document_place,
+            'document_place' => $documentPlace,
             'location' => $record->boardingHouse->address,
             'host' => [
                 'full_name' => $profile?->legal_owner_name,

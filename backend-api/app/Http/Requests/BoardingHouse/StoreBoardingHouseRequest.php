@@ -19,6 +19,7 @@ class StoreBoardingHouseRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'address' => ['required', 'string', 'max:500'],
+            'ward' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
         ];
     }

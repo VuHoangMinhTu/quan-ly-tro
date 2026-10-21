@@ -15,6 +15,7 @@ class BoardingHouse extends Model
         'landlord_id',
         'name',
         'address',
+        'ward',
         'description',
         'default_invoice_issue_day_from',
         'default_invoice_issue_day_to',
