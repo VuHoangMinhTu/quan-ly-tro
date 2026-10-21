@@ -40,6 +40,8 @@ class StoreContractRequest extends FormRequest
             'lessor_representative_user_id' => ['nullable', 'integer', 'min:1'],
             'payment_due_day' => ['nullable', 'integer', 'between:1,31'],
             'contract_template_id' => ['nullable', 'integer', 'min:1'],
+            'contract_type' => ['sometimes', Rule::in(['ROOM_RENTAL', 'DORM_BED'])],
+            'bed_id' => ['nullable', 'integer', 'min:1', 'exists:beds,id'],
             'occupant_tenant_ids' => ['sometimes', 'array', 'max:100'],
             'occupant_tenant_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
             'service_ids' => ['sometimes', 'array', 'max:100'],

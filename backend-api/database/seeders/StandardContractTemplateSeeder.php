@@ -12,7 +12,9 @@ class StandardContractTemplateSeeder extends Seeder
 {
     public function run(): void
     {
-        $source = file_get_contents(resource_path('views/contracts-room-rental-standard.html'));
+        // Transcribed in source order from "Bình_Hợp đồng cho thuê phòng trọ ( bản chính).docx".
+        // A changed source creates a new version; finalized documents keep their original copy.
+        $source = file_get_contents(resource_path('views/contracts-room-rental-word.html'));
         if ($source === false) {
             throw new RuntimeException('Không tìm thấy nội dung mẫu hợp đồng BeeHouse.');
         }

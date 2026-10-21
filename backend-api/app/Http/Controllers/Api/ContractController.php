@@ -28,9 +28,10 @@ class ContractController extends Controller
     public function index(Request $request, int $roomId): JsonResponse
     {
         $records = $this->access->room($request->user(), $roomId)->contracts()
-            ->with('tenant:id,full_name')->latest('id')->get()->map(function ($contract): array {
+            ->with(['tenant:id,full_name', 'bed:id,bed_code,floor_label'])->latest('id')->get()->map(function ($contract): array {
                 // List payloads never expose identity, address or the full signing snapshot.
-                return [...Arr::only($contract->toArray(), ['id', 'room_id', 'tenant_id', 'contract_code', 'start_date', 'end_date', 'signed_date', 'monthly_rent', 'deposit_amount', 'status']),
+                return [...Arr::only($contract->toArray(), ['id', 'room_id', 'tenant_id', 'contract_type', 'bed_id', 'contract_code', 'start_date', 'end_date', 'signed_date', 'monthly_rent', 'deposit_amount', 'status']),
+                    'bed' => $contract->bed?->only(['id', 'bed_code', 'floor_label']),
                     'tenant' => ['id' => $contract->tenant_id, 'full_name' => $contract->signing_snapshot['tenant']['full_name'] ?? $contract->tenant?->full_name]];
             });
 

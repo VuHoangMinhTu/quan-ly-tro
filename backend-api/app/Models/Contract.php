@@ -16,6 +16,8 @@ class Contract extends Model
 
     protected $fillable = [
         'room_id',
+        'contract_type',
+        'bed_id',
         'tenant_id',
         'contract_code',
         'start_date',
@@ -46,6 +48,11 @@ class Contract extends Model
     public function room()
     {
         return $this->belongsTo(Room::class);
+    }
+
+    public function bed(): BelongsTo
+    {
+        return $this->belongsTo(Bed::class);
     }
 
     public function tenant()

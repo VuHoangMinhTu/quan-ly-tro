@@ -12,6 +12,15 @@ class ContractHandoverService
 {
     private const DEFAULT_ITEMS = ['Giường', 'Nệm', 'Tủ', 'Khóa/chìa khóa', 'Đèn/ổ cắm', 'Máy lạnh'];
 
+    private const DORM_BED_ITEMS = [
+        'Khung giường, vạt giường, rèm che riêng tư',
+        'Nệm nằm, drap/ga bọc nệm (nếu có)',
+        'Tủ quần áo/tủ đồ cá nhân + chìa khóa',
+        'Đèn đọc sách tại giường, ổ cắm điện',
+        'Khóa vân tay / Thẻ từ / Chìa khóa cửa chính KTX',
+        'Máy lạnh phòng + Remote điều hòa',
+    ];
+
     public function __construct(private ContractService $contracts) {}
 
     public function find(User $user, int $contractId): ?ContractHandoverReport
@@ -27,7 +36,8 @@ class ContractHandoverService
             if ($contract->handoverReports()->where('type', 'CHECK_IN')->exists()) {
                 throw ValidationException::withMessages(['report' => 'Biên bản CHECK_IN đã tồn tại.']);
             }
-            $names = collect(self::DEFAULT_ITEMS)->concat($contract->room->amenities()->pluck('name'))
+            $defaults = $contract->contract_type === 'DORM_BED' ? self::DORM_BED_ITEMS : self::DEFAULT_ITEMS;
+            $names = collect($defaults)->concat($contract->room->amenities()->pluck('name'))
                 ->map(fn (string $name) => trim($name))->filter()->unique(fn (string $name) => Str::lower($name))->values();
             $contract->handoverReports()->create([
                 'type' => 'CHECK_IN', 'status' => 'DRAFT',

@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\Bed;
 use App\Models\BoardingHouse;
 use App\Models\Contract;
 use App\Models\Room;
 use App\Models\RoomTenant;
+use App\Models\Service;
 use App\Models\Tenant;
 use App\Models\User;
 use Brick\Math\BigDecimal;
@@ -17,7 +19,7 @@ use Illuminate\Validation\ValidationException;
 
 class ContractService
 {
-    private const CORE = ['tenant_id', 'contract_code', 'start_date', 'end_date', 'signed_date', 'monthly_rent', 'deposit_amount', 'lessor_representative_user_id', 'payment_due_day', 'occupant_tenant_ids', 'contract_template_id'];
+    private const CORE = ['tenant_id', 'contract_code', 'start_date', 'end_date', 'signed_date', 'monthly_rent', 'deposit_amount', 'lessor_representative_user_id', 'payment_due_day', 'occupant_tenant_ids', 'contract_template_id', 'contract_type', 'bed_id'];
 
     public function __construct(private BoardingHouseAccessService $access, private ContractServiceTerms $terms, private ContractTemplateService $templates, private ContractDocumentService $documents) {}
 
@@ -34,7 +36,7 @@ class ContractService
             ->whereHas('service', fn ($query) => $query->whereIn('type', ['ELECTRICITY', 'WATER']))->with(['service', 'latestReading'])->get();
 
         return [
-            'room' => $room, 'operational_role' => $this->access->role($user, $room->boardingHouse),
+            'room' => $room, 'beds' => $room->beds()->orderBy('bed_code')->get(), 'operational_role' => $this->access->role($user, $room->boardingHouse),
             'tenants' => Tenant::query()->where('landlord_id', $room->boardingHouse->landlord_id)->orderBy('full_name')->get(['id', 'full_name', 'phone']),
             'representatives' => $this->representatives($room->boardingHouse),
             'services' => $services,
@@ -107,13 +109,29 @@ class ContractService
                 && (int) $data['contract_template_id'] !== (int) $contract->contract_template_id) {
                 $this->templates->select($house->landlord_id, (int) $data['contract_template_id']);
             }
-            if ($isNew && ($data['contract_template_id'] ?? null) === null) {
-                $data['contract_template_id'] = $this->templates->select($house->landlord_id, null)->id;
+            if (($data['contract_template_id'] ?? $contract->contract_template_id) === null) {
+                $type = $data['contract_type'] ?? 'ROOM_RENTAL';
+                $key = $type === 'DORM_BED' ? 'DORM_BED_STANDARD' : 'ROOM_RENTAL_STANDARD';
+                $data['contract_template_id'] = $this->templates->available($house->landlord_id)->where('template_key', $key)->firstOrFail()->id;
+            } elseif (array_key_exists('contract_template_id', $data) && $data['contract_template_id'] === null) {
+                unset($data['contract_template_id']);
             }
             if ($isNew && ! array_key_exists('payment_due_day', $data)) {
                 $data['payment_due_day'] = $house->default_payment_due_day;
             }
             $contract->fill(Arr::only($data, [...self::CORE, 'note']));
+            if ($contract->contract_type === 'DORM_BED') {
+                if ($contract->bed_id !== null && ! $room->beds()->whereKey($contract->bed_id)->exists()) {
+                    throw ValidationException::withMessages(['bed_id' => 'Giường phải thuộc phòng của hợp đồng.']);
+                }
+            } elseif ($contract->bed_id !== null) {
+                throw ValidationException::withMessages(['bed_id' => 'Hợp đồng thuê phòng không chọn giường riêng.']);
+            }
+            $template = $this->templates->select($house->landlord_id, (int) $contract->contract_template_id);
+            $expectedKey = $contract->contract_type === 'DORM_BED' ? 'DORM_BED_STANDARD' : 'ROOM_RENTAL_STANDARD';
+            if ($template->landlord_id === null && $template->template_key !== $expectedKey) {
+                throw ValidationException::withMessages(['contract_template_id' => 'Mẫu hợp đồng không khớp loại thuê đã chọn.']);
+            }
             $selectedPeople = $contract->occupant_tenant_ids ?? [];
             if (count($selectedPeople) !== count(array_unique($selectedPeople))) {
                 throw ValidationException::withMessages(['occupant_tenant_ids' => 'Danh sách người ở không được trùng lặp.']);
@@ -201,10 +219,14 @@ class ContractService
         if ($errors) {
             throw ValidationException::withMessages($errors);
         }
+        if ($contract->contract_type === 'DORM_BED' && $contract->bed_id === null) {
+            throw ValidationException::withMessages(['bed_id' => 'Vui lòng chọn giường trước khi kích hoạt hợp đồng ký túc xá.']);
+        }
         if (! $representative) {
             throw ValidationException::withMessages(['lessor_representative_user_id' => 'Vui lòng chọn người đại diện hợp lệ.']);
         }
         $overlaps = $room->contracts()->whereKeyNot($contract->id)->where('status', 'ACTIVE')
+            ->when($contract->contract_type === 'DORM_BED', fn ($query) => $query->where(fn ($scope) => $scope->where('contract_type', 'ROOM_RENTAL')->orWhere('bed_id', $contract->bed_id)))
             ->whereDate('start_date', '<=', $contract->end_date?->format('Y-m-d') ?? '9999-12-31')
             ->where(fn ($query) => $query->whereNull('end_date')->orWhereDate('end_date', '>=', $contract->start_date->format('Y-m-d')))->exists();
         if ($overlaps) {
@@ -236,7 +258,7 @@ class ContractService
             if (! $membership) {
                 $membership = new RoomTenant(['room_id' => $room->id, 'tenant_id' => $tenantId, 'move_in_date' => $contract->start_date->format('Y-m-d')]);
             }
-            if ($tenantId === (int) $contract->tenant_id && $room->roomTenants()->where('status', 'ACTIVE')->where('is_primary', true)->where('tenant_id', '!=', $tenantId)->exists()) {
+            if ($contract->contract_type !== 'DORM_BED' && $tenantId === (int) $contract->tenant_id && $room->roomTenants()->where('status', 'ACTIVE')->where('is_primary', true)->where('tenant_id', '!=', $tenantId)->exists()) {
                 throw ValidationException::withMessages(['tenant_id' => 'Phòng đã có người đứng tên đang ở. Vui lòng xác nhận lịch sử chuyển đi trước.']);
             }
             $membership->fill(['contract_id' => $contract->id, 'status' => 'ACTIVE', 'move_out_date' => null, 'is_primary' => $tenantId === (int) $contract->tenant_id])->save();
@@ -251,7 +273,7 @@ class ContractService
     private function sourceSnapshot(Contract $contract, Room $room, BoardingHouse $house, ?array $representative, array $ids): array
     {
         $tenant = Tenant::query()->where('landlord_id', $house->landlord_id)->findOrFail($contract->tenant_id);
-        $core = $contract->only(['contract_code', 'monthly_rent', 'deposit_amount', 'payment_due_day']);
+        $core = $contract->only(['contract_code', 'contract_type', 'monthly_rent', 'deposit_amount', 'payment_due_day', 'note']);
         foreach (['start_date', 'end_date', 'signed_date'] as $key) {
             $core[$key] = $contract->{$key}?->format('Y-m-d');
         }
@@ -259,10 +281,12 @@ class ContractService
         return [
             'schema_version' => 2, 'finalized_at' => $contract->finalized_at?->toIso8601String(),
             'lessor' => $representative, 'tenant' => $this->person($tenant), 'contract' => $core,
-            'room' => ['room_id' => $room->id, 'room_code' => $room->room_code, 'room_name' => $room->room_name, 'area' => $room->area, 'boarding_house_name' => $house->name, 'address' => $house->address, 'max_tenants' => $room->max_tenants],
+            'room' => ['room_id' => $room->id, 'room_code' => $room->room_code, 'room_name' => $room->room_name, 'area' => $room->area, 'boarding_house_name' => $house->name, 'address' => $house->address, 'ward' => $house->ward, 'max_tenants' => $room->max_tenants],
+            'bed' => $contract->bed_id ? Bed::query()->where('room_id', $room->id)->findOrFail($contract->bed_id)->only(['bed_code', 'floor_label']) : null,
             'services' => $contract->agreedServices()->get()->toArray(),
             'occupants' => Tenant::query()->where('landlord_id', $house->landlord_id)->whereIn('id', $ids)->get()->map(fn (Tenant $person) => ['tenant_id' => $person->id, 'is_primary' => (int) $person->id === (int) $contract->tenant_id, ...$this->person($person)])->all(),
             'utility_openings' => $contract->utilityOpenings()->get()->toArray(),
+            'electricity_opening' => $contract->utilityOpenings()->whereIn('service_id', Service::query()->where('type', 'ELECTRICITY')->select('id'))->value('opening_reading'),
             'handover_checkin' => $contract->handoverReports()->where('type', 'CHECK_IN')->where('status', 'CONFIRMED')->first()?->items ?? [],
         ];
     }
@@ -310,7 +334,7 @@ class ContractService
 
     public function detail(User $user, int $id): array
     {
-        $contract = $this->find($user, $id)->load(['room.boardingHouse', 'tenant', 'occupants.tenant', 'agreedServices', 'utilityOpenings', 'residenceDeclarations:id,contract_id,status', 'contractTemplate:id,name,version,template_key,is_active', 'document:id,contract_id,template_name,template_version,finalized_at']);
+        $contract = $this->find($user, $id)->load(['room.boardingHouse', 'bed', 'tenant', 'occupants.tenant', 'agreedServices', 'utilityOpenings', 'residenceDeclarations:id,contract_id,status', 'contractTemplate:id,name,version,template_key,is_active', 'document:id,contract_id,template_name,template_version,finalized_at']);
 
         return [...$contract->toArray(), 'is_legacy' => $contract->status !== 'DRAFT' && $contract->signing_snapshot === null,
             'operational_role' => $this->access->role($user, $contract->room->boardingHouse),
@@ -370,6 +394,7 @@ class ContractService
                 return;
             }
             $contract->room_id = $roomId;
+            $contract->bed_id = null;
             if (! collect($this->representatives($houses[$target->boarding_house_id]))->contains('user_id', $contract->lessor_representative_user_id)) {
                 $contract->lessor_representative_user_id = null;
             }

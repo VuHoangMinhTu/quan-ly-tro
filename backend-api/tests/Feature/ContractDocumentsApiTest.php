@@ -55,7 +55,8 @@ class ContractDocumentsApiTest extends TestCase
         $this->assertTrue($template->is_active);
         $this->assertSame('Hợp đồng cho thuê phòng tiêu chuẩn', $template->name);
         $this->assertSame($template->content_html, app(ContractTemplateRenderer::class)->prepare($template->content_html));
-        $this->assertStringContainsString('{{vehicles_table}}', $template->content_html);
+        $this->assertStringContainsString('ĐIỀU 12: CAM KẾT', $template->content_html);
+        $this->assertStringContainsString('BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG', $template->content_html);
         $this->assertStringContainsString('<div class="document-signatures"></div>', $template->content_html);
         app(StandardContractTemplateSeeder::class)->run();
         $this->assertSame(1, ContractTemplate::query()->whereNull('landlord_id')->where('template_key', 'ROOM_RENTAL_STANDARD')->count());
@@ -84,8 +85,7 @@ class ContractDocumentsApiTest extends TestCase
         $this->assertStringContainsString('3.800.000 đồng', $html);
         $this->assertStringContainsString('01/11/2026', $html);
         $this->assertStringContainsString('Chưa cập nhật', $html);
-        $this->assertStringContainsString('Không có phương tiện được đăng ký.', $html);
-        $this->assertStringContainsString('Chưa có biên bản bàn giao được ghi nhận.', $html);
+        $this->assertStringContainsString('BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG', $html);
         $this->assertSame(1, substr_count($html, 'class="document-signatures"'));
         $this->assertStringNotContainsString('undefined', $html);
         $this->assertStringNotContainsString('[object Object]', $html);

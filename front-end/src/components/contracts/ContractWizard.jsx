@@ -5,7 +5,7 @@ import { formatDateForApi, formatDateForDisplay, isValidDisplayDate } from '../.
 import { formatCurrency, formatUtilityValue } from '../../utils/formatters'
 import ContractDraftServicesEditor from './ContractDraftServicesEditor'
 import { editableContractService, contractServicesPayload, contractServicePricingError } from '../../utils/contractServices'
-import { getContractContext } from '../../api/contractApi'
+import { createBed, getContractContext } from '../../api/contractApi'
 import { getApiErrorMessage, getApiFieldErrors } from '../../api/getApiErrorMessage'
 
 const inputClass = 'mt-1 min-h-11 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2'
@@ -21,6 +21,11 @@ export default function ContractWizard({ context, initial, onSubmit, allowActiva
   const [representative, setRepresentative] = useState(() => String(initial?.lessor_representative_user_id ?? ''))
   const [paymentDueDay, setPaymentDueDay] = useState(() => initial ? initial.payment_due_day ?? '' : context.room.boarding_house.default_payment_due_day ?? '')
   const [templateId, setTemplateId] = useState(() => String(initial ? initial.contract_template_id ?? '' : context.templates?.[0]?.id ?? ''))
+  const [contractType, setContractType] = useState(() => initial?.contract_type ?? 'ROOM_RENTAL')
+  const [bedId, setBedId] = useState(() => String(initial?.bed_id ?? ''))
+  const [beds, setBeds] = useState(() => context.beds ?? [])
+  const [newBedCode, setNewBedCode] = useState('')
+  const [newBedFloor, setNewBedFloor] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
@@ -32,6 +37,9 @@ export default function ContractWizard({ context, initial, onSubmit, allowActiva
     setError(''); setFieldErrors({})
     if (status === 'ACTIVE' && (!core.start_date || core.monthly_rent == null || !representative)) {
       setError('Để kích hoạt, vui lòng bổ sung ngày bắt đầu, giá thuê thỏa thuận và người đại diện Bên A.'); return
+    }
+    if (status === 'ACTIVE' && contractType === 'DORM_BED' && !bedId) {
+      setFieldErrors({ bed_id: 'Vui lòng chọn giường cho hợp đồng ký túc xá.' }); return
     }
     if (paymentDueDay !== '' && (!Number.isInteger(Number(paymentDueDay)) || Number(paymentDueDay) < 1 || Number(paymentDueDay) > 31)) {
       setFieldErrors({ payment_due_day: 'Ngày thanh toán hàng tháng phải là số nguyên từ 1 đến 31.' })
@@ -48,7 +56,7 @@ export default function ContractWizard({ context, initial, onSubmit, allowActiva
       // Older API records can still contain the retired invoice issue range.
       delete contractValues.invoice_issue_day_from
       delete contractValues.invoice_issue_day_to
-      await onSubmit({ ...contractValues, status, lessor_representative_user_id: representative ? Number(representative) : null,
+      await onSubmit({ ...contractValues, status, contract_type: contractType, bed_id: contractType === 'DORM_BED' ? Number(bedId) : null, lessor_representative_user_id: representative ? Number(representative) : null,
         payment_due_day: paymentDueDay === '' ? null : Number(paymentDueDay),
         contract_template_id: templateId ? Number(templateId) : null,
         occupant_tenant_ids: people.filter(id => Number(id) !== Number(core.tenant_id)).map(Number), services: contractServicesPayload(services),
@@ -60,7 +68,19 @@ export default function ContractWizard({ context, initial, onSubmit, allowActiva
   return <div className="min-w-0 space-y-4">
     <ol aria-label="Các bước tạo hợp đồng" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{titles.map((title, index) => <li key={title} aria-current={step === index ? 'step' : undefined} className={`rounded-lg p-3 text-sm ${step === index ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>{index + 1}. {title}</li>)}</ol>
     <p className="text-sm text-slate-500">Phòng {context.room.room_code} · {context.room.boarding_house.name}. Bản nháp có thể chưa có giá thuê/ngày bắt đầu. Kích hoạt sẽ chốt điều khoản và ghi nhận người ở.</p>
-    {step === 0 && <><div className="space-y-2 rounded-xl bg-white p-4 shadow-sm sm:p-6"><label htmlFor="contract-template" className="text-sm font-medium">Mẫu hợp đồng</label><select id="contract-template" value={templateId} onChange={event => setTemplateId(event.target.value)} className={inputClass}><option value="">Chưa chọn — dùng mẫu đang hoạt động khi chốt</option>{templateOptions.map(template => <option key={template.id} value={String(template.id)} disabled={!template.is_active}>{template.name} — v{template.version}{template.is_active ? '' : ' (đã ngừng sử dụng)'}</option>)}</select>{errorFor('contract_template_id')}<p className="text-sm text-slate-500">Mẫu đang hoạt động sẽ được chọn sẵn. Mẫu xác định nội dung văn bản khi chốt hợp đồng và không thay đổi cách tính tiền.</p></div><ContractForm key="core" initialValues={core} tenantOptions={context.tenants} wizard onSubmit={async values => { setCore(values); setStep(1) }} submitLabel="Tiếp tục" /></>}
+    {step === 0 && contractType === 'DORM_BED' && <div className="grid gap-2 rounded-xl bg-white p-4 shadow-sm sm:grid-cols-[1fr_1fr_auto]">
+      <input aria-label="Mã giường mới" value={newBedCode} onChange={event => setNewBedCode(event.target.value)} placeholder="Mã giường mới" className={inputClass} />
+      <input aria-label="Tầng" value={newBedFloor} onChange={event => setNewBedFloor(event.target.value)} placeholder="Tầng (không bắt buộc)" className={inputClass} />
+      <button type="button" disabled={!newBedCode.trim() || saving} onClick={async () => {
+        setSaving(true); setError('')
+        try {
+          const response = await createBed(context.room.id, { bed_code: newBedCode.trim(), floor_label: newBedFloor.trim() || null })
+          const bed = { id: response.data.data.id, bed_code: newBedCode.trim(), floor_label: newBedFloor.trim() || null }
+          setBeds(previous => [...previous, bed]); setBedId(String(bed.id)); setNewBedCode(''); setNewBedFloor('')
+        } catch (requestError) { setError(getApiErrorMessage(requestError)) } finally { setSaving(false) }
+      }} className="mt-1 min-h-11 rounded-lg border px-3 disabled:opacity-50">Thêm giường</button>
+    </div>}
+    {step === 0 && <><div className="space-y-3 rounded-xl bg-white p-4 shadow-sm sm:p-6"><label htmlFor="contract-type" className="block text-sm font-medium">Loại hợp đồng</label><select id="contract-type" value={contractType} onChange={event => { const type = event.target.value; setContractType(type); setBedId(''); setTemplateId(String(context.templates.find(template => template.template_key === (type === 'DORM_BED' ? 'DORM_BED_STANDARD' : 'ROOM_RENTAL_STANDARD'))?.id ?? '')) }} className={inputClass}><option value="ROOM_RENTAL">Thuê phòng</option><option value="DORM_BED">Thuê giường ký túc xá</option></select>{contractType === 'DORM_BED' && <><label htmlFor="contract-bed" className="block text-sm font-medium">Giường</label><select id="contract-bed" value={bedId} onChange={event => setBedId(event.target.value)} className={inputClass}><option value="">Chọn giường</option>{(beds).map(bed => <option key={bed.id} value={String(bed.id)}>{bed.floor_label ? `${bed.floor_label} · ` : ''}{bed.bed_code}</option>)}</select>{errorFor('bed_id')}{(beds).length === 0 && <p className="text-sm text-amber-700">Phòng chưa có giường. Hãy thêm giường tại đây trước khi lập hợp đồng.</p>}</>}<label htmlFor="contract-template" className="block text-sm font-medium">Mẫu hợp đồng</label><select id="contract-template" value={templateId} onChange={event => setTemplateId(event.target.value)} className={inputClass}><option value="">Chưa chọn — dùng mẫu đang hoạt động khi chốt</option>{templateOptions.filter(template => template.template_key === (contractType === 'DORM_BED' ? 'DORM_BED_STANDARD' : 'ROOM_RENTAL_STANDARD') || String(template.id) === templateId).map(template => <option key={template.id} value={String(template.id)} disabled={!template.is_active}>{template.name} — v{template.version}{template.is_active ? '' : ' (đã ngừng sử dụng)'}</option>)}</select>{errorFor('contract_template_id')}<p className="text-sm text-slate-500">Mẫu được chốt khi kích hoạt hợp đồng.</p></div><ContractForm key="core" initialValues={core} tenantOptions={context.tenants} wizard onSubmit={async values => { setCore(values); setStep(1) }} submitLabel="Tiếp tục" /></>}
     {step === 1 && <div className="space-y-5 rounded-xl bg-white p-4 shadow-sm sm:p-6">
       <fieldset><legend className="font-semibold">Người ở cùng</legend><p className="my-2 text-sm text-slate-500">Người đứng tên được tự động thêm khi kích hoạt. Tối đa của phòng: {context.room.max_tenants ?? 'Chưa thiết lập'}.</p><div className="grid gap-2 sm:grid-cols-2">{context.tenants.filter(tenant => Number(tenant.id) !== Number(core.tenant_id)).map(tenant => <label key={tenant.id} className="flex min-h-11 items-center gap-3 rounded-lg border p-3 text-sm"><input type="checkbox" checked={people.includes(String(tenant.id))} onChange={() => toggle(setPeople, people, tenant.id)} />{tenant.full_name}</label>)}</div>{errorFor('occupant_tenant_ids')}</fieldset>
       <fieldset><legend className="mb-3 font-semibold">Dịch vụ áp dụng</legend><ContractDraftServicesEditor availableServices={serviceOptions} value={services} onChange={setServices} onSync={async () => { const response = await getContractContext(context.room.id); const available = response.data.data.services; setServiceOptions(available); setServices(available.map(editableContractService)) }} />{errorFor('services')}{errorFor('service_ids')}</fieldset>

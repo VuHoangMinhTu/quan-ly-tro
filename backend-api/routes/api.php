@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AmenityController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BedController;
 use App\Http\Controllers\Api\BoardingHouseController;
 use App\Http\Controllers\Api\BoardingHouseManagerController;
 use App\Http\Controllers\Api\ContractController;
@@ -114,6 +115,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/boarding-houses/{boardingHouseId}/rooms/bulk', [RoomController::class, 'storeBulk']);
 
     Route::get('/rooms/{id}', [RoomController::class, 'show']);
+    Route::get('/rooms/{roomId}/beds', [BedController::class, 'index']);
+    Route::post('/rooms/{roomId}/beds', [BedController::class, 'store']);
 
     Route::put('/rooms/{id}', [RoomController::class, 'update']);
     Route::delete('/rooms/{id}', [RoomController::class, 'destroy']);

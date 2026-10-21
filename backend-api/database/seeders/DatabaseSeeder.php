@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call(StandardContractTemplateSeeder::class);
+        $this->call(DormBedContractTemplateSeeder::class);
         // User::factory(10)->create();
 
         User::factory()->create([
