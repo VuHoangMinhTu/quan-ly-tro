@@ -7,7 +7,7 @@ import { createFormControl } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { transformWithOxc } from 'vite'
-import { residenceFormValues, residencePayload } from '../../utils/residence.js'
+import { residenceFormValues, residencePayload, wholeMonthsBetweenDates } from '../../utils/residence.js'
 import { formatBillingPeriodForDisplay, formatDateForDisplay, isValidDisplayDate } from '../../utils/date.js'
 import { invoiceStatusLabels } from '../../utils/invoiceStatus.js'
 import { BILLING_METHOD_LABELS, BILLING_METHODS, getBasePriceLabel, getSuggestedServiceUnit, SERVICE_TYPE_LABELS, SERVICE_TYPES } from '../../utils/service.js'
@@ -157,20 +157,35 @@ test('no other active occupants has no member checkbox and independent confirmat
 })
 
 test('stay consent preview uses frozen data and escapes untrusted person fields', async () => {
-  const Document = await load('./StayConsentDocument.jsx', 'StayConsentDocument', { formatDateForDisplay })
+  const Document = await load('./StayConsentDocument.jsx', 'StayConsentDocument', { formatDateForDisplay, wholeMonthsBetweenDates })
   const markup = renderToStaticMarkup(React.createElement(Document, { data: {
-    location: 'Đà Nẵng', captured_at: '2026-11-01', host: { full_name: 'Bên A', birth_year: 1970, permanent_address: 'Địa chỉ A', identity_number: '111', phone: '0900' },
+    document_place: 'Vườn Lài', location: '15/3 đường Lê Quý Đôn, Phường Vườn Lài, TP.HCM', captured_at: '2026-11-01', host: { full_name: 'Bên A', birth_year: 1970, permanent_address: 'Địa chỉ A', identity_number: '111', phone: '0900' },
     guest: { full_name: '<script>alert(1)</script>', birth_year: 2000, permanent_address: 'Địa chỉ B', identity_number: '222', phone: '0901' },
-    stay_address: 'Nhà trọ', room_code: '101', purpose: 'để ở', occupant_count: 2, companions: [{ full_name: 'Người đi cùng' }], start_date: '2026-11-15', end_date: '2027-11-14',
+    stay_address: '15/3 đường Lê Quý Đôn, Phường Vườn Lài, TP.HCM', room_code: '107', purpose: 'để ở', occupant_count: 2, companions: [{ full_name: 'Người đi cùng' }], start_date: '2026-11-15', end_date: '2027-11-14',
   } }))
   assert.match(markup, /VĂN BẢN ĐỒNG Ý CHO Ở NHỜ NHÀ/)
   assert.match(markup, /15\/11\/2026/)
   assert.match(markup, /Người đi cùng/)
+  assert.match(markup, /Vườn Lài.*ngày/)
+  assert.match(markup, /15\/3 đường Lê Quý Đôn, Phường Vườn Lài, TP.HCM.*Phòng 107/)
+  assert.match(markup, /Địa chỉ B/)
   assert.match(markup, /&lt;script&gt;/)
   assert.doesNotMatch(markup, /<script>/)
   assert.match(markup, /2\. Hợp đồng được lập thành 02 bản và có giá trị như nhau/)
   assert.equal((markup.match(/class="stay-consent-companion"/g) ?? []).length, 5)
   assert.doesNotMatch(markup, /Chưa cập nhật|null|undefined/)
+  assert.doesNotMatch(markup, /<span class="stay-consent-blank stay-consent-month-count">01<\/span>/)
+})
+
+test('stay consent fills exact whole months without timezone conversion or rounding', async () => {
+  const Document = await load('./StayConsentDocument.jsx', 'StayConsentDocument', { formatDateForDisplay, wholeMonthsBetweenDates })
+  const data = { document_place: 'Vườn Lài', captured_at: '2026-10-21', host: {}, guest: {}, start_date: '2026-10-21', end_date: '2026-11-21' }
+  const whole = renderToStaticMarkup(React.createElement(Document, { data }))
+  const partial = renderToStaticMarkup(React.createElement(Document, { data: { ...data, end_date: '2026-11-20', guest: { permanent_address: null } } }))
+  assert.match(whole, /01.*tháng.*21\/10\/2026.*21\/11\/2026/)
+  assert.doesNotMatch(partial, /01.*tháng/)
+  assert.match(partial, /21\/10\/2026.*20\/11\/2026/)
+  assert.doesNotMatch(partial, /null|undefined/)
 })
 
 test('invoice print renders the stored AUTO tax item and total without reading a live service rate', async () => {

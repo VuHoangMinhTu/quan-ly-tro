@@ -2,6 +2,15 @@ import { formatDateForApi, formatDateForDisplay } from './date.js'
 
 export const residenceStatusLabels = { DRAFT: 'Nháp', PENDING: 'Chờ nộp', SUBMITTED: 'Đã nộp', REGISTERED: 'Đã đăng ký', REJECTED: 'Bị từ chối', EXPIRED: 'Hết hạn' }
 export const residenceTransitions = { DRAFT: ['PENDING', 'SUBMITTED'], PENDING: ['DRAFT', 'SUBMITTED', 'REJECTED'], SUBMITTED: ['REGISTERED', 'REJECTED'], REGISTERED: ['EXPIRED'], REJECTED: [], EXPIRED: [] }
+export function wholeMonthsBetweenDates(start, end) {
+  const from = String(start ?? '').slice(0, 10)
+  const to = String(end ?? '').slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return null
+  const [fromYear, fromMonth, fromDay] = from.split('-').map(Number)
+  const [toYear, toMonth, toDay] = to.split('-').map(Number)
+  const months = (toYear - fromYear) * 12 + toMonth - fromMonth
+  return months > 0 && fromDay === toDay ? months : null
+}
 export function residenceFormValues(record) {
   return {
     declarant_tenant_id: record?.declarant_tenant_id == null ? '' : String(record.declarant_tenant_id),

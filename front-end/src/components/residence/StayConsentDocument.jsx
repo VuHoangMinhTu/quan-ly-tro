@@ -1,4 +1,5 @@
 import { formatDateForDisplay } from '../../utils/date'
+import { wholeMonthsBetweenDates } from '../../utils/residence'
 import './StayConsentDocument.css'
 
 function Blank({ value, className = '' }) {
@@ -10,10 +11,11 @@ export default function StayConsentDocument({ data }) {
   const guest = data.guest ?? {}
   const companions = data.companions ?? []
   const [year, month, day] = String(data.captured_at ?? '').slice(0, 10).split('-')
-  const stayAddress = [data.stay_address, data.room_code ? `phòng ${data.room_code}` : ''].filter(Boolean).join(', ')
+  const stayAddress = [data.stay_address, data.room_code ? `Phòng ${data.room_code}` : ''].filter(Boolean).join(' - ')
+  const monthCount = wholeMonthsBetweenDates(data.start_date, data.end_date)
 
   return <article className="stay-consent-document">
-    <header className="stay-consent-heading"><strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><strong className="stay-consent-motto">Độc lập - Tự do - Hạnh phúc</strong><p className="stay-consent-location"><Blank value={data.location} />, ngày <Blank value={day} /> tháng <Blank value={month} /> năm <Blank value={year} /></p><h1>VĂN BẢN ĐỒNG Ý CHO Ở NHỜ NHÀ</h1></header>
+    <header className="stay-consent-heading"><strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><strong className="stay-consent-motto">Độc lập - Tự do - Hạnh phúc</strong><p className="stay-consent-location"><Blank value={data.document_place} />, ngày <Blank value={day} /> tháng <Blank value={month} /> năm <Blank value={year} /></p><h1>VĂN BẢN ĐỒNG Ý CHO Ở NHỜ NHÀ</h1></header>
     <div className="stay-consent-body">
       <p className="stay-consent-indented">Hôm nay, ngày <Blank value={day} /> tháng <Blank value={month} /> năm <Blank value={year} />, tại số <Blank value={data.location} className="stay-consent-grow" /></p>
       <p className="stay-consent-dotted">&nbsp;</p>
@@ -35,7 +37,7 @@ export default function StayConsentDocument({ data }) {
       <p><strong>1. Mục đích ở nhờ:</strong> <Blank value={data.purpose} /></p>
       <p className="stay-consent-indented"><strong>Số người ở nhờ kèm theo:</strong></p>
       {Array.from({ length: Math.max(5, companions.length) }, (_, index) => <p key={companions[index]?.tenant_id ?? index} className="stay-consent-companion">+ <Blank value={companions[index]?.full_name} className="stay-consent-grow" /></p>)}
-      <p><strong>2. Thời hạn ở nhờ:</strong> <Blank value={null} className="stay-consent-month-count" /> tháng (Từ ngày <Blank value={formatDateForDisplay(data.start_date)} /> đến ngày <Blank value={formatDateForDisplay(data.end_date)} /> )</p>
+      <p><strong>2. Thời hạn ở nhờ:</strong> {monthCount === null ? null : <><Blank value={String(monthCount).padStart(2, '0')} className="stay-consent-month-count" /> tháng </>}(Từ ngày <Blank value={formatDateForDisplay(data.start_date)} /> đến ngày <Blank value={formatDateForDisplay(data.end_date)} /> )</p>
       <p className="stay-consent-section"><strong>II. Quyền và nghĩa vụ của hai bên:</strong></p>
       <p className="stay-consent-indented">- Bên B có trách nhiệm thanh toán tất cả các khoảng phí phát sinh trong quá trình ở nhờ.</p>
       <p className="stay-consent-indented">- Khi cần sửa chữa phải thông báo cho bên A và được sự đồng ý của Bên A.</p>

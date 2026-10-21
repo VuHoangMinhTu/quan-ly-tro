@@ -161,6 +161,7 @@ class ResidenceDeclarationService
 
         return [
             'type' => 'RESIDENCE_STAY_CONSENT', 'captured_at' => now()->toDateString(),
+            'document_place' => $profile?->document_place,
             'location' => $record->boardingHouse->address,
             'host' => [
                 'full_name' => $profile?->legal_owner_name,
@@ -196,11 +197,16 @@ class ResidenceDeclarationService
     private function missingStayConsent(array $consent): array
     {
         $missing = [];
+        if (blank($consent['document_place'] ?? null)) {
+            $missing['document_place'] = 'Chưa cấu hình địa danh lập văn bản ở nhờ trong nhà trọ.';
+        }
         foreach (['host.full_name', 'host.birth_year', 'host.permanent_address', 'host.identity_number', 'host.phone',
             'guest.full_name', 'guest.birth_year', 'guest.permanent_address', 'guest.identity_number', 'guest.phone',
             'stay_address', 'start_date', 'end_date'] as $field) {
             if (blank(Arr::get($consent, $field))) {
-                $missing[$field] = 'Vui lòng bổ sung '.str_replace(['host.', 'guest.', '_'], ['Bên A: ', 'Bên B: ', ' '], $field).' trước khi in văn bản.';
+                $missing[$field] = $field === 'guest.permanent_address'
+                    ? 'Bên B chưa có địa chỉ thường trú. Vui lòng cập nhật hồ sơ người thuê trước khi in văn bản.'
+                    : 'Vui lòng bổ sung '.str_replace(['host.', 'guest.', '_'], ['Bên A: ', 'Bên B: ', ' '], $field).' trước khi in văn bản.';
             }
         }
 

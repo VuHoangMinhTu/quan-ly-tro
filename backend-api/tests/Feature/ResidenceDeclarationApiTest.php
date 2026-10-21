@@ -223,13 +223,14 @@ class ResidenceDeclarationApiTest extends TestCase
 
         $this->actingAs($owner, 'sanctum')->putJson("/api/boarding-houses/{$room->boarding_house_id}/residence-profile", [
             'household_head_name' => 'Chủ hộ', 'household_head_identity_number' => '079000000099',
-            'residence_authority_name' => 'Công an phường đã cấu hình', 'legal_owner_name' => 'Chủ sở hữu',
+            'residence_authority_name' => 'Công an phường đã cấu hình', 'document_place' => 'Vườn Lài', 'legal_owner_name' => 'Chủ sở hữu',
             'legal_owner_birth_year' => 1970, 'legal_owner_permanent_address' => 'Địa chỉ chủ sở hữu',
             'legal_owner_identity_number' => '079111111111', 'legal_owner_phone' => '0902222222',
         ])->assertOk()->assertJsonPath('data', null);
 
         $this->getJson("/api/boarding-houses/{$room->boarding_house_id}/residence-profile")->assertOk()
             ->assertJsonPath('data.legal_owner_name', 'Chủ sở hữu')
+            ->assertJsonPath('data.document_place', 'Vườn Lài')
             ->assertJsonPath('data.residence_authority_name', 'Công an phường đã cấu hình');
         $this->assertDatabaseHas('boarding_house_residence_profiles', ['boarding_house_id' => $room->boarding_house_id, 'legal_owner_identity_number' => '079111111111']);
         $this->assertNotSame($owner->name, $room->boardingHouse->residenceProfile->fresh()->legal_owner_name);
@@ -239,8 +240,10 @@ class ResidenceDeclarationApiTest extends TestCase
     {
         [$owner, $room, $tenant, $member] = $this->fixture();
         $owner->update(['name' => 'Tên tài khoản vận hành']);
+        $room->boardingHouse->update(['address' => '15/3 đường Lê Quý Đôn, Phường Vườn Lài, TP.HCM']);
         $tenant->update(['phone' => '0901111111', 'permanent_address' => 'Địa chỉ Bên B', 'email' => 'old@example.com']);
         $room->boardingHouse->residenceProfile->update([
+            'document_place' => 'Vườn Lài',
             'legal_owner_name' => 'Chủ sở hữu pháp lý', 'legal_owner_birth_year' => 1970,
             'legal_owner_permanent_address' => 'Địa chỉ Bên A', 'legal_owner_identity_number' => '079111111111', 'legal_owner_phone' => '0902222222',
         ]);
@@ -252,6 +255,10 @@ class ResidenceDeclarationApiTest extends TestCase
             ->assertJsonPath('data.stay_consent.type', 'RESIDENCE_STAY_CONSENT')
             ->assertJsonPath('data.stay_consent.host.full_name', 'Chủ sở hữu pháp lý')
             ->assertJsonPath('data.stay_consent.guest.full_name', 'Nguyễn Văn A')
+            ->assertJsonPath('data.stay_consent.guest.permanent_address', 'Địa chỉ Bên B')
+            ->assertJsonPath('data.stay_consent.document_place', 'Vườn Lài')
+            ->assertJsonPath('data.stay_consent.stay_address', '15/3 đường Lê Quý Đôn, Phường Vườn Lài, TP.HCM')
+            ->assertJsonPath('data.stay_consent.room_code', '101')
             ->assertJsonPath('data.stay_consent.start_date', '2026-11-01')
             ->assertJsonPath('data.stay_consent.companions.0.full_name', 'Trần Thị B');
         $this->getJson("/api/residence-declarations/{$id}/documents/residence-stay-consent")->assertOk()
@@ -259,13 +266,14 @@ class ResidenceDeclarationApiTest extends TestCase
         $this->putJson("/api/residence-declarations/{$id}/status", ['status' => 'SUBMITTED'])->assertOk();
         $snapshot = ResidenceDeclaration::findOrFail($id)->snapshot;
         $tenant->update(['full_name' => 'Tên mới', 'phone' => '0909999999', 'email' => 'new@example.com']);
-        $room->boardingHouse->residenceProfile->update(['legal_owner_name' => 'Chủ mới']);
+        $room->boardingHouse->residenceProfile->update(['legal_owner_name' => 'Chủ mới', 'document_place' => 'Địa danh mới']);
         $contract->update(['start_date' => '2028-01-01']);
 
         $this->getJson("/api/residence-declarations/{$id}/documents/residence-stay-consent")->assertOk()
             ->assertJsonPath('data.document.host.full_name', 'Chủ sở hữu pháp lý')
             ->assertJsonPath('data.document.guest.full_name', 'Nguyễn Văn A')
             ->assertJsonPath('data.document.guest.phone', '0901111111')
+            ->assertJsonPath('data.document.document_place', 'Vườn Lài')
             ->assertJsonPath('data.document.start_date', '2026-11-01')
             ->assertJsonPath('data.is_frozen', true);
         $this->assertSame($snapshot, ResidenceDeclaration::findOrFail($id)->snapshot);
@@ -309,7 +317,10 @@ class ResidenceDeclarationApiTest extends TestCase
 
         $this->getJson("/api/residence-declarations/{$id}")->assertOk()->assertJsonPath('data.stay_consent.host.full_name', null);
         $this->getJson("/api/residence-declarations/{$id}/documents/residence-stay-consent")
-            ->assertUnprocessable()->assertJsonValidationErrors(['host.full_name', 'host.birth_year', 'guest.phone', 'start_date']);
+            ->assertUnprocessable()->assertJsonValidationErrors(['document_place', 'host.full_name', 'host.birth_year', 'guest.permanent_address', 'guest.phone', 'start_date']);
+        $preview = $this->getJson("/api/residence-declarations/{$id}")->assertOk()
+            ->assertJsonPath('data.stay_consent.guest.permanent_address', null);
+        $this->assertSame('Bên B chưa có địa chỉ thường trú. Vui lòng cập nhật hồ sơ người thuê trước khi in văn bản.', $preview->json('data.stay_consent_missing_fields')['guest.permanent_address']);
         [$foreign] = $this->fixture();
         $this->actingAs($foreign, 'sanctum')->getJson("/api/residence-declarations/{$id}/documents/residence-stay-consent")->assertNotFound();
     }
@@ -331,6 +342,7 @@ class ResidenceDeclarationApiTest extends TestCase
         [$owner, $room, $tenant, $member] = $this->fixture();
         $tenant->update(['phone' => '0901111111', 'permanent_address' => 'Địa chỉ Bên B']);
         $room->boardingHouse->residenceProfile->update([
+            'document_place' => 'Vườn Lài',
             'legal_owner_name' => 'Bên A', 'legal_owner_birth_year' => 1970, 'legal_owner_permanent_address' => 'Địa chỉ Bên A',
             'legal_owner_identity_number' => '079111111111', 'legal_owner_phone' => '0902222222',
         ]);

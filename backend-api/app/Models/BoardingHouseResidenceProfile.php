@@ -12,7 +12,7 @@ class BoardingHouseResidenceProfile extends Model
     /** @use HasFactory<BoardingHouseResidenceProfileFactory> */
     use HasFactory;
 
-    protected $fillable = ['household_head_name', 'household_head_identity_number', 'residence_authority_name', 'legal_owner_name', 'legal_owner_birth_year', 'legal_owner_permanent_address', 'legal_owner_identity_number', 'legal_owner_phone'];
+    protected $fillable = ['household_head_name', 'household_head_identity_number', 'residence_authority_name', 'document_place', 'legal_owner_name', 'legal_owner_birth_year', 'legal_owner_permanent_address', 'legal_owner_identity_number', 'legal_owner_phone'];
 
     public function boardingHouse(): BelongsTo
     {

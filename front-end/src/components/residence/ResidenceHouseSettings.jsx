@@ -9,7 +9,7 @@ const buttonClass = 'min-h-11 rounded-lg bg-slate-900 px-4 py-2 text-sm text-whi
 
 function ProfileForm({ houseId, initial }) {
   const client = useQueryClient()
-  const form = useForm({ defaultValues: Object.fromEntries(['household_head_name', 'household_head_identity_number', 'residence_authority_name', 'legal_owner_name', 'legal_owner_birth_year', 'legal_owner_permanent_address', 'legal_owner_identity_number', 'legal_owner_phone'].map(field => [field, initial?.[field] ?? ''])) })
+  const form = useForm({ defaultValues: Object.fromEntries(['household_head_name', 'household_head_identity_number', 'residence_authority_name', 'document_place', 'legal_owner_name', 'legal_owner_birth_year', 'legal_owner_permanent_address', 'legal_owner_identity_number', 'legal_owner_phone'].map(field => [field, initial?.[field] ?? ''])) })
   const [message, setMessage] = useState('')
   const save = useMutation({ mutationFn: data => updateResidenceProfile(houseId, data), onSuccess: async () => {
     setMessage('Đã lưu thông tin chủ hộ.')
@@ -18,6 +18,7 @@ function ProfileForm({ houseId, initial }) {
   return <form onSubmit={form.handleSubmit(data => { setMessage(''); save.mutate(Object.fromEntries(Object.entries(data).map(([field, value]) => [field, field === 'legal_owner_birth_year' ? (value === '' ? null : Number(value)) : String(value).trim() || null]))) })} className="space-y-3">
     <h3 className="font-semibold">Thông tin cư trú & chủ sở hữu</h3><p className="text-sm text-slate-500">Chỉ nhập thông tin đã được xác nhận. BeeHouse không mặc định OWNER/MANAGER là chủ hộ hoặc chủ sở hữu.</p>
     <div><label htmlFor="residence-authority" className="text-sm">Cơ quan tiếp nhận CT01 mặc định</label><input id="residence-authority" maxLength={255} className={inputClass} {...form.register('residence_authority_name')} /></div>
+    <div><label htmlFor="residence-document-place" className="text-sm">Địa danh lập văn bản ở nhờ</label><input id="residence-document-place" maxLength={255} placeholder="VD: Vườn Lài" className={inputClass} {...form.register('document_place')} /><p className="mt-1 text-xs text-slate-500">Địa danh ở đầu văn bản, không phải địa chỉ chỗ ở nhờ.</p></div>
     <div><label htmlFor="residence-head" className="text-sm">Họ tên chủ hộ</label><input id="residence-head" maxLength={255} className={inputClass} {...form.register('household_head_name')} /></div>
     <div><label htmlFor="residence-head-id" className="text-sm">Số định danh cá nhân của chủ hộ</label><input id="residence-head-id" maxLength={30} className={inputClass} {...form.register('household_head_identity_number')} /></div>
     <p className="pt-2 text-sm font-semibold">Bên cho ở nhờ (chủ sở hữu hợp pháp nếu đã xác nhận)</p>
