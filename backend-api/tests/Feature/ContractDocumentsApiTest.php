@@ -47,6 +47,34 @@ class ContractDocumentsApiTest extends TestCase
         $contract->handoverReports()->create(['type' => 'CHECK_IN', 'status' => 'CONFIRMED', 'items' => [['name' => 'Giường', 'quantity' => 1, 'condition' => 'GOOD', 'note' => null]], 'confirmed_at' => now()]);
     }
 
+    public function test_owner_can_delete_only_unused_private_template(): void
+    {
+        [$contract, $owner] = $this->fixture();
+        $id = $this->template();
+        $this->deleteJson("/api/contract-templates/{$id}")->assertOk()->assertJsonPath('data', null);
+        $this->assertDatabaseMissing('contract_templates', ['id' => $id]);
+
+        $usedId = $this->template();
+        $contract->update(['contract_template_id' => $usedId]);
+        $this->deleteJson("/api/contract-templates/{$usedId}")->assertUnprocessable();
+        $this->assertDatabaseHas('contract_templates', ['id' => $usedId]);
+
+        $globalId = ContractTemplate::query()->whereNull('landlord_id')->firstOrFail()->id;
+        $this->deleteJson("/api/contract-templates/{$globalId}")->assertNotFound();
+        $this->assertDatabaseHas('contract_templates', ['id' => $globalId]);
+    }
+
+    public function test_manager_and_foreign_owner_cannot_delete_template(): void
+    {
+        [$contract, $owner] = $this->fixture();
+        $id = $this->template();
+        $this->actingAs(User::factory()->create(), 'sanctum');
+        $this->deleteJson("/api/contract-templates/{$id}")->assertForbidden();
+        $this->actingAs(Contract::factory()->create()->room->boardingHouse->landlord->user, 'sanctum');
+        $this->deleteJson("/api/contract-templates/{$id}")->assertNotFound();
+        $this->assertDatabaseHas('contract_templates', ['id' => $id]);
+    }
+
     public function test_beehouse_standard_template_is_active_global_valid_and_seeded_once(): void
     {
         $template = ContractTemplate::query()->whereNull('landlord_id')->where('template_key', 'ROOM_RENTAL_STANDARD')->sole();

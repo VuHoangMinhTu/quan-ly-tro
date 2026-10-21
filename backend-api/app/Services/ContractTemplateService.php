@@ -99,6 +99,18 @@ class ContractTemplateService
         }, 3);
     }
 
+    public function delete(User $user, int $id): void
+    {
+        DB::transaction(function () use ($user, $id): void {
+            $owner = $this->owner($user);
+            $template = ContractTemplate::query()->where('landlord_id', $owner->id)->lockForUpdate()->findOrFail($id);
+            if ($template->documents()->exists() || $template->contracts()->exists()) {
+                throw ValidationException::withMessages(['template' => 'Mẫu đã được dùng trong hợp đồng hoặc tài liệu. Hãy ngừng sử dụng thay vì xóa.']);
+            }
+            $template->delete();
+        }, 3);
+    }
+
     private function activateVersion(ContractTemplate $template, bool $active): void
     {
         if ($active) {

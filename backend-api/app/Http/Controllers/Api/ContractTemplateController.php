@@ -59,6 +59,13 @@ class ContractTemplateController extends Controller
         return ApiResponse::success(null, 'Cập nhật trạng thái mẫu hợp đồng thành công.');
     }
 
+    public function destroy(Request $request, int $id): JsonResponse
+    {
+        $this->templates->delete($request->user(), $id);
+
+        return ApiResponse::success(null, 'Xóa mẫu hợp đồng thành công.');
+    }
+
     public function preview(PreviewContractTemplateRequest $request, ContractTemplateRenderer $renderer): JsonResponse
     {
         return ApiResponse::success(['rendered_html' => $renderer->render($request->validated('content_html'), $this->variables->sample())], 'Xem trước mẫu hợp đồng thành công.');

@@ -7,6 +7,7 @@ export const createContractTemplate = payload => client.post('/contract-template
 export const updateContractTemplate = (id, payload) => client.put(`/contract-templates/${id}`, payload)
 export const createContractTemplateVersion = id => client.post(`/contract-templates/${id}/versions`, {})
 export const setContractTemplateStatus = (id, active) => client.put(`/contract-templates/${id}/status`, { is_active: active })
+export const deleteContractTemplate = id => client.delete(`/contract-templates/${id}`)
 export const previewContractTemplate = content => client.post('/contract-templates/preview', { content_html: content })
 export const getContractDocument = id => client.get(`/contracts/${id}/document`)
 export const previewContractDocument = id => client.get(`/contracts/${id}/document/preview`)

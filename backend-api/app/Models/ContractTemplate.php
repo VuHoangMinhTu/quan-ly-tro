@@ -22,6 +22,11 @@ class ContractTemplate extends Model
         return $this->hasMany(ContractDocument::class);
     }
 
+    public function contracts(): HasMany
+    {
+        return $this->hasMany(Contract::class, 'contract_template_id');
+    }
+
     protected static function booted(): void
     {
         static::updating(function (self $template): void {
@@ -29,6 +34,10 @@ class ContractTemplate extends Model
                 throw ValidationException::withMessages(['content_html' => 'Mẫu này đã được sử dụng. Hãy tạo phiên bản mới để chỉnh sửa.']);
             }
         });
-        static::deleting(fn () => throw new \LogicException('Archive a contract template instead of deleting its version.'));
+        static::deleting(function (self $template): void {
+            if ($template->landlord_id === null || $template->documents()->exists() || $template->contracts()->exists()) {
+                throw ValidationException::withMessages(['template' => 'Mẫu BeeHouse hoặc mẫu đã được sử dụng không thể xóa.']);
+            }
+        });
     }
 }

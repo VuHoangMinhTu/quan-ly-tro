@@ -80,6 +80,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::put('/contract-templates/{id}', [ContractTemplateController::class, 'update']);
     Route::post('/contract-templates/{id}/versions', [ContractTemplateController::class, 'version']);
     Route::put('/contract-templates/{id}/status', [ContractTemplateController::class, 'status']);
+    Route::delete('/contract-templates/{id}', [ContractTemplateController::class, 'destroy']);
     Route::get('/contracts/{id}/document/preview', [ContractDocumentController::class, 'preview']);
     Route::get('/contracts/{id}/document', [ContractDocumentController::class, 'show']);
     Route::post('/contracts/{id}/finalize', [ContractDocumentController::class, 'finalize']);
