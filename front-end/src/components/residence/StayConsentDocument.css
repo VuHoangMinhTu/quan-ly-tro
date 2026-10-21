@@ -5,7 +5,7 @@
 .stay-consent-heading > strong { display: block; font-size: 14pt; line-height: 1.05; }
 .stay-consent-motto { width: max-content; max-width: 100%; margin: 0 auto; border-bottom: 1px solid #000; }
 .stay-consent-location { margin: 5mm 0 3mm !important; text-align: right; font-style: italic; }
-.stay-consent-heading h1 { margin: 8mm 0 6mm; font-size: 14pt; line-height: 1.1; }
+.stay-consent-heading h1 { margin: 8mm 0 6mm; font-size: 14pt; font-weight: 700; line-height: 1.1; }
 .stay-consent-body { text-align: justify; }
 .stay-consent-body > p { min-height: 5.2mm; }
 .stay-consent-body > p:has(.stay-consent-grow) { display: flex; align-items: baseline; gap: 1mm; }

@@ -5,7 +5,7 @@
 .ct01-heading { margin-top: 6mm; text-align: center; }
 .ct01-heading > strong { display: block; font-size: 12pt; }
 .ct01-motto { width: max-content; max-width: 100%; margin: 0 auto; border-bottom: 1px solid #000; }
-.ct01-heading h1 { margin: 4mm 0 2mm; font-size: 13pt; line-height: 1.15; }
+.ct01-heading h1 { margin: 4mm 0 2mm; font-size: 13pt; font-weight: 700; line-height: 1.15; }
 .ct01-recipient { margin: 0 0 3mm 29mm !important; }
 .ct01-fields { display: grid; gap: 1.7mm; }
 .ct01-fields > p, .ct01-inline-pair > p { min-height: 5.8mm; }
