@@ -296,9 +296,38 @@ class ResidenceDeclarationApiTest extends TestCase
         $this->getJson("/api/residence-declarations/{$id}")->assertOk()
             ->assertJsonPath('data.stay_consent.document_place', 'Dĩ An');
 
+        $room->boardingHouse->update(['ward' => 'Xã Tân Phú']);
+        $this->getJson("/api/residence-declarations/{$id}")->assertOk()
+            ->assertJsonPath('data.stay_consent.document_place', 'Tân Phú');
+
         $room->boardingHouse->update(['ward' => null]);
         $this->getJson("/api/residence-declarations/{$id}")->assertOk()
             ->assertJsonPath('data.stay_consent.document_place', 'Địa danh cũ');
+    }
+
+    public function test_updating_house_ward_clears_stay_consent_place_warning_without_changing_ct01(): void
+    {
+        [$owner, $room, $tenant, $member] = $this->fixture();
+        $id = $this->actingAs($owner, 'sanctum')
+            ->postJson('/api/residence-declarations', $this->payload($room, $tenant, $member))
+            ->assertCreated()->json('data.id');
+
+        $before = $this->getJson("/api/residence-declarations/{$id}")->assertOk();
+        $this->assertSame('Chưa cập nhật Phường/Xã của nhà trọ.', $before->json('data.stay_consent_missing_fields.document_place'));
+
+        $house = $room->boardingHouse;
+        $this->putJson("/api/boarding-houses/{$house->id}", [
+            'name' => $house->name,
+            'address' => $house->address,
+            'ward' => 'Phường Vườn Lài',
+            'description' => $house->description,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('boarding_houses', ['id' => $house->id, 'ward' => 'Phường Vườn Lài']);
+        $after = $this->getJson("/api/residence-declarations/{$id}")->assertOk()
+            ->assertJsonPath('data.stay_consent.document_place', 'Vườn Lài');
+        $this->assertArrayNotHasKey('document_place', $after->json('data.stay_consent_missing_fields'));
+        $this->assertSame($before->json('data.ct01.residence'), $after->json('data.ct01.residence'));
     }
 
     public function test_contract_dates_prefill_stay_period_but_manual_override_controls_consent_preview(): void
@@ -341,6 +370,7 @@ class ResidenceDeclarationApiTest extends TestCase
             ->assertUnprocessable()->assertJsonValidationErrors(['document_place', 'host.full_name', 'host.birth_year', 'guest.permanent_address', 'guest.phone', 'start_date']);
         $preview = $this->getJson("/api/residence-declarations/{$id}")->assertOk()
             ->assertJsonPath('data.stay_consent.guest.permanent_address', null);
+        $this->assertSame('Chưa cập nhật Phường/Xã của nhà trọ.', $preview->json('data.stay_consent_missing_fields')['document_place']);
         $this->assertSame('Bên B chưa có địa chỉ thường trú. Vui lòng cập nhật hồ sơ người thuê trước khi in văn bản.', $preview->json('data.stay_consent_missing_fields')['guest.permanent_address']);
         [$foreign] = $this->fixture();
         $this->actingAs($foreign, 'sanctum')->getJson("/api/residence-declarations/{$id}/documents/residence-stay-consent")->assertNotFound();

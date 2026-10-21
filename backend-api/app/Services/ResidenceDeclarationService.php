@@ -202,7 +202,7 @@ class ResidenceDeclarationService
     {
         $missing = [];
         if (blank($consent['document_place'] ?? null)) {
-            $missing['document_place'] = 'Chưa cấu hình địa danh lập văn bản ở nhờ trong nhà trọ.';
+            $missing['document_place'] = 'Chưa cập nhật Phường/Xã của nhà trọ.';
         }
         foreach (['host.full_name', 'host.birth_year', 'host.permanent_address', 'host.identity_number', 'host.phone',
             'guest.full_name', 'guest.birth_year', 'guest.permanent_address', 'guest.identity_number', 'guest.phone',
