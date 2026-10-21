@@ -46,6 +46,8 @@ class ResidenceDeclarationController extends Controller
                 ...$context['suggested_declaration'],
                 'contract_id' => $contract->id,
                 'declarant_tenant_id' => $active->contains((int) $contract->tenant_id) ? $contract->tenant_id : null,
+                'stay_start_date' => $contract->start_date?->format('Y-m-d'),
+                'stay_end_date' => $contract->end_date?->format('Y-m-d'),
                 'request_content' => 'Đăng ký tạm trú',
                 'members' => $active->reject(fn ($value) => $value === (int) $contract->tenant_id)->map(fn ($tenant) => ['tenant_id' => $tenant, 'relationship_to_household_head' => ''])->values(),
             ];

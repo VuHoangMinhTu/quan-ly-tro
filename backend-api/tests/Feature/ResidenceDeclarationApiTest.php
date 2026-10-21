@@ -209,6 +209,8 @@ class ResidenceDeclarationApiTest extends TestCase
         $this->actingAs($owner, 'sanctum')->getJson("/api/residence/rooms/{$room->id}/context?contract_id={$contract->id}")
             ->assertOk()->assertJsonPath('data.suggested_declaration.authority_name', 'Công an phường đã cấu hình')
             ->assertJsonPath('data.suggested_declaration.declarant_tenant_id', $tenant->id)
+            ->assertJsonPath('data.suggested_declaration.stay_start_date', $contract->start_date->format('Y-m-d'))
+            ->assertJsonPath('data.suggested_declaration.stay_end_date', $contract->end_date->format('Y-m-d'))
             ->assertJsonCount(2, 'data.occupants')->assertJsonMissing(['full_name' => $moved->full_name]);
         $id = $this->postJson('/api/residence-declarations', ['room_id' => $room->id, 'declarant_tenant_id' => $tenant->id])->assertCreated()->json('data.id');
         $this->getJson("/api/residence-declarations/{$id}")->assertJsonPath('data.ct01.authority_name', 'Công an phường đã cấu hình');
@@ -268,6 +270,36 @@ class ResidenceDeclarationApiTest extends TestCase
             ->assertJsonPath('data.is_frozen', true);
         $this->assertSame($snapshot, ResidenceDeclaration::findOrFail($id)->snapshot);
         $this->assertNotSame('Tên tài khoản vận hành', $snapshot['stay_consent']['host']['full_name']);
+    }
+
+    public function test_contract_dates_prefill_stay_period_but_manual_override_controls_consent_preview(): void
+    {
+        [$owner, $room, $tenant, $member] = $this->fixture();
+        $contract = Contract::factory()->create(['room_id' => $room->id, 'tenant_id' => $tenant->id, 'start_date' => '2026-10-20', 'end_date' => '2026-11-21']);
+        $payload = [...$this->payload($room, $tenant, $member), 'contract_id' => $contract->id];
+        $id = $this->actingAs($owner, 'sanctum')->postJson('/api/residence-declarations', $payload)->assertCreated()->json('data.id');
+        $this->assertDatabaseHas('residence_declarations', ['id' => $id, 'stay_start_date' => '2026-10-20', 'stay_end_date' => '2026-11-21']);
+
+        $this->putJson("/api/residence-declarations/{$id}", [...$payload, 'stay_start_date' => '2026-10-22', 'stay_end_date' => '2026-11-25'])->assertOk();
+        $this->getJson("/api/residence-declarations/{$id}")->assertOk()
+            ->assertJsonPath('data.stay_consent.start_date', '2026-10-22')
+            ->assertJsonPath('data.stay_consent.end_date', '2026-11-25');
+    }
+
+    public function test_confirmation_method_choices_are_saved_and_frozen_without_creating_signatures(): void
+    {
+        [$owner, $room, $tenant, $member] = $this->fixture();
+        $payload = [...$this->payload($room, $tenant, $member), 'legal_owner_confirmation_method' => 'SEPARATE_DOCUMENT',
+            'guardian_confirmation_method' => 'NOT_APPLICABLE'];
+        $id = $this->actingAs($owner, 'sanctum')->postJson('/api/residence-declarations', $payload)->assertCreated()->json('data.id');
+        $this->assertDatabaseHas('residence_declarations', ['id' => $id, 'legal_owner_confirmation_method' => 'SEPARATE_DOCUMENT']);
+        $this->putJson("/api/residence-declarations/{$id}/status", ['status' => 'SUBMITTED'])->assertOk();
+        $this->getJson("/api/residence-declarations/{$id}")->assertOk()
+            ->assertJsonPath('data.ct01.confirmation_methods.legal_owner', 'SEPARATE_DOCUMENT')
+            ->assertJsonPath('data.ct01.confirmation_methods.guardian', 'NOT_APPLICABLE')
+            ->assertJsonPath('data.ct01.opinions.legal_owner', null);
+        $this->postJson('/api/residence-declarations', [...$payload, 'legal_owner_confirmation_method' => 'NOT_APPLICABLE'])
+            ->assertUnprocessable()->assertJsonValidationErrors('legal_owner_confirmation_method');
     }
 
     public function test_stay_consent_print_requires_complete_data_and_foreign_house_is_hidden(): void

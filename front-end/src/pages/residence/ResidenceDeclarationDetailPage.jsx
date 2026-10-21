@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { deleteResidenceDeclaration, getResidenceDeclaration, residenceKeys, updateResidenceStatus } from '../../api/residenceApi'
@@ -33,6 +33,11 @@ export default function ResidenceDeclarationDetailPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const query = useQuery({ queryKey: residenceKeys.detail(id), queryFn: () => getResidenceDeclaration(id) })
+  useEffect(() => {
+    if (!query.isSuccess || !location.hash) return
+    const target = document.getElementById(location.hash.slice(1))
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [query.isSuccess, location.hash])
   const remove = useMutation({ mutationFn: () => deleteResidenceDeclaration(id), onSuccess: async () => {
     await client.invalidateQueries({ queryKey: residenceKeys.list }); client.removeQueries({ queryKey: residenceKeys.detail(id) }); navigate('/residence-declarations', { replace: true })
   } })

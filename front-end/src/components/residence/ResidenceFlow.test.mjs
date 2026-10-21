@@ -30,7 +30,7 @@ const Link = ({ to, children, ...props }) => React.createElement('a', { href: to
 const tenant = { id: 1, full_name: 'Nguyễn Văn A', date_of_birth: '2000-09-28', gender: 'MALE', identity_number: '079000000001', phone: null, email: null }
 const context = { room: { id: 11 }, operational_role: 'OWNER', occupants: [{ tenant }, { tenant: { ...tenant, id: 2, full_name: 'Trần Thị B' } }], contracts: [] }
 
-async function formHarness(initial) {
+async function formHarness(initial, formContext = context) {
   let form
   const submitted = []
   const Component = await load('./ResidenceDeclarationForm.jsx', 'ResidenceDeclarationForm', {
@@ -45,7 +45,7 @@ async function formHarness(initial) {
     }, zodResolver, z, Link, formatDateForDisplay, isValidDisplayDate, genderLabels, residenceFormValues, residencePayload,
     applyApiFieldErrors: () => {}, getApiErrorMessage: () => 'Lỗi API',
   })
-  const props = { context, initial, onSubmit: async payload => { submitted.push(payload) } }
+  const props = { context: formContext, initial, onSubmit: async payload => { submitted.push(payload) } }
   const render = () => elements(Component(props))
   render()
   return { form, props, render, submitted, submit: () => render().find(node => node.type === 'form').props.onSubmit() }
@@ -133,7 +133,27 @@ test('manual stay dates use dd/mm/yyyy in form and submit exact date strings', a
   assert.equal(harness.submitted[0].stay_start_date, '2026-11-15')
   assert.equal(harness.submitted[0].stay_end_date, '2027-11-14')
   const buttons = harness.render().filter(node => node.type === 'button').map(node => node.props.children)
-  assert.ok(buttons.includes('Lưu bản nháp') && buttons.includes('Xem trước CT01') && buttons.includes('Hoàn tất'))
+  assert.ok(buttons.includes('Lưu bản nháp') && buttons.includes('Xem trước CT01') && buttons.includes('Xem trước văn bản ở nhờ') && buttons.includes('Hoàn tất'))
+})
+
+test('contract stay dates prefill form and remain editable for the separate consent document', async () => {
+  const contract = { id: 5, contract_code: 'HD-5', start_date: '2026-10-20', end_date: '2026-11-21' }
+  const harness = await formHarness({ contract_id: 5, stay_start_date: contract.start_date, stay_end_date: contract.end_date }, { ...context, contracts: [contract] })
+  assert.equal(harness.form.getValues('stay_start_date'), '20/10/2026')
+  assert.equal(harness.form.getValues('stay_end_date'), '21/11/2026')
+  harness.form.setValue('stay_end_date', '25/11/2026')
+  await harness.submit()
+  assert.equal(harness.submitted[0].stay_start_date, '2026-10-20')
+  assert.equal(harness.submitted[0].stay_end_date, '2026-11-25')
+})
+
+test('no other active occupants has no member checkbox and independent confirmation choices submit', async () => {
+  const harness = await formHarness({ declarant_tenant_id: 1 }, { ...context, occupants: [{ tenant }] })
+  assert.equal(harness.render().filter(node => node.type === 'input' && node.props.type === 'checkbox').length, 0)
+  harness.form.setValue('legal_owner_confirmation_method', 'SEPARATE_DOCUMENT')
+  await harness.submit()
+  assert.equal(harness.submitted[0].legal_owner_confirmation_method, 'SEPARATE_DOCUMENT')
+  assert.equal(harness.submitted[0].guardian_confirmation_method, 'NOT_APPLICABLE')
 })
 
 test('stay consent preview uses frozen data and escapes untrusted person fields', async () => {

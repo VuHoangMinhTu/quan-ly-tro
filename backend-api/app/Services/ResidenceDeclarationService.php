@@ -48,26 +48,35 @@ class ResidenceDeclarationService
                 throw ValidationException::withMessages(['room_id' => 'Không thể chuyển hồ sơ sang phòng khác.']);
             }
             if ($record->exists) {
-                $data = [...$record->only(['contract_id', 'declarant_tenant_id', 'authority_name', 'household_head_mode', 'household_head_name', 'household_head_identity_number', 'relationship_to_household_head', 'request_content', 'stay_start_date', 'stay_end_date', 'household_head_opinion', 'legal_owner_opinion', 'guardian_opinion']), ...$data];
+                $data = [...$record->only(['contract_id', 'declarant_tenant_id', 'authority_name', 'household_head_mode', 'household_head_name', 'household_head_identity_number', 'relationship_to_household_head', 'request_content', 'stay_start_date', 'stay_end_date', 'household_head_opinion', 'legal_owner_opinion', 'guardian_opinion', 'household_head_confirmation_method', 'legal_owner_confirmation_method', 'guardian_confirmation_method']), ...$data];
             } else {
                 $house->load('residenceProfile');
                 $data['authority_name'] = $data['authority_name'] ?? $house->residenceProfile?->residence_authority_name;
                 $data['request_content'] = $data['request_content'] ?? 'Đăng ký tạm trú';
+                $data['guardian_confirmation_method'] ??= 'NOT_APPLICABLE';
             }
             $this->validatePeople($room, $data);
             if (($data['household_head_mode'] ?? null) === 'DECLARANT') {
                 $data['household_head_name'] = null;
                 $data['household_head_identity_number'] = null;
                 $data['relationship_to_household_head'] = 'Chủ hộ';
+                $data['household_head_confirmation_method'] = null;
             } elseif (($data['household_head_mode'] ?? null) !== 'OTHER_PERSON') {
                 $data['household_head_name'] = null;
                 $data['household_head_identity_number'] = null;
                 $data['relationship_to_household_head'] = null;
             }
-            if (! empty($data['contract_id']) && ! $room->contracts()->whereKey($data['contract_id'])->exists()) {
-                throw ValidationException::withMessages(['contract_id' => 'Hợp đồng phải thuộc phòng này.']);
+            if (! empty($data['contract_id'])) {
+                $contract = $room->contracts()->find($data['contract_id']);
+                if ($contract === null) {
+                    throw ValidationException::withMessages(['contract_id' => 'Hợp đồng phải thuộc phòng này.']);
+                }
+                if (! $record->exists) {
+                    $data['stay_start_date'] ??= $contract->start_date?->format('Y-m-d');
+                    $data['stay_end_date'] ??= $contract->end_date?->format('Y-m-d');
+                }
             }
-            $record->fill(Arr::only($data, ['contract_id', 'declarant_tenant_id', 'authority_name', 'household_head_mode', 'household_head_name', 'household_head_identity_number', 'relationship_to_household_head', 'request_content', 'stay_start_date', 'stay_end_date', 'household_head_opinion', 'legal_owner_opinion', 'guardian_opinion']));
+            $record->fill(Arr::only($data, ['contract_id', 'declarant_tenant_id', 'authority_name', 'household_head_mode', 'household_head_name', 'household_head_identity_number', 'relationship_to_household_head', 'request_content', 'stay_start_date', 'stay_end_date', 'household_head_opinion', 'legal_owner_opinion', 'guardian_opinion', 'household_head_confirmation_method', 'legal_owner_confirmation_method', 'guardian_confirmation_method']));
             $record->landlord_id = $house->landlord_id;
             $record->boarding_house_id = $house->id;
             $record->room_id = $room->id;
@@ -121,6 +130,7 @@ class ResidenceDeclarationService
                 'authority_name' => $record->authority_name, 'request_content' => $record->request_content,
                 'relationship_to_household_head' => $record->household_head_mode === 'DECLARANT' ? 'Chủ hộ' : $record->relationship_to_household_head,
                 'opinions' => ['household_head' => $record->household_head_opinion, 'legal_owner' => $record->legal_owner_opinion, 'guardian' => $record->guardian_opinion],
+                'confirmation_methods' => ['household_head' => $record->household_head_confirmation_method, 'legal_owner' => $record->legal_owner_confirmation_method, 'guardian' => $record->guardian_confirmation_method],
                 'declarant' => $this->person($record->declarant),
                 'household_head' => ['name' => match ($record->household_head_mode) {
                     'DECLARANT' => $record->declarant?->full_name,
@@ -163,8 +173,8 @@ class ResidenceDeclarationService
                 'permanent_address' => $declarant['permanent_address'], 'identity_number' => $declarant['identity_number'], 'phone' => $declarant['phone']],
             'stay_address' => $record->boardingHouse->address, 'room_code' => $record->room->room_code,
             'purpose' => 'để ở', 'companions' => $ct01['members'], 'occupant_count' => 1 + count($ct01['members']),
-            'start_date' => $record->contract?->start_date?->format('Y-m-d') ?? $record->stay_start_date?->format('Y-m-d'),
-            'end_date' => $record->contract?->end_date?->format('Y-m-d') ?? $record->stay_end_date?->format('Y-m-d'),
+            'start_date' => $record->stay_start_date?->format('Y-m-d') ?? $record->contract?->start_date?->format('Y-m-d'),
+            'end_date' => $record->stay_end_date?->format('Y-m-d') ?? $record->contract?->end_date?->format('Y-m-d'),
         ];
     }
 

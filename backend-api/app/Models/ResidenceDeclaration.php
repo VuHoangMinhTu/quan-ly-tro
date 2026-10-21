@@ -15,7 +15,7 @@ class ResidenceDeclaration extends Model
 
     public const STATUSES = ['DRAFT', 'PENDING', 'SUBMITTED', 'REGISTERED', 'REJECTED', 'EXPIRED'];
 
-    protected $fillable = ['landlord_id', 'boarding_house_id', 'room_id', 'contract_id', 'declarant_tenant_id', 'authority_name', 'household_head_mode', 'household_head_name', 'household_head_identity_number', 'relationship_to_household_head', 'request_content', 'stay_start_date', 'stay_end_date', 'household_head_opinion', 'legal_owner_opinion', 'guardian_opinion', 'status', 'submitted_at', 'registered_at', 'expires_at', 'snapshot'];
+    protected $fillable = ['landlord_id', 'boarding_house_id', 'room_id', 'contract_id', 'declarant_tenant_id', 'authority_name', 'household_head_mode', 'household_head_name', 'household_head_identity_number', 'relationship_to_household_head', 'request_content', 'stay_start_date', 'stay_end_date', 'household_head_opinion', 'legal_owner_opinion', 'guardian_opinion', 'household_head_confirmation_method', 'legal_owner_confirmation_method', 'guardian_confirmation_method', 'status', 'submitted_at', 'registered_at', 'expires_at', 'snapshot'];
 
     protected $casts = ['snapshot' => 'array', 'submitted_at' => 'datetime', 'registered_at' => 'datetime', 'expires_at' => 'date:Y-m-d', 'stay_start_date' => 'date:Y-m-d', 'stay_end_date' => 'date:Y-m-d'];
 

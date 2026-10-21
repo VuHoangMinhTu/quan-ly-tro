@@ -17,6 +17,9 @@ export function residenceFormValues(record) {
     household_head_opinion: record?.household_head_opinion ?? '',
     legal_owner_opinion: record?.legal_owner_opinion ?? '',
     guardian_opinion: record?.guardian_opinion ?? '',
+    household_head_confirmation_method: record?.household_head_confirmation_method ?? '',
+    legal_owner_confirmation_method: record?.legal_owner_confirmation_method ?? '',
+    guardian_confirmation_method: record?.guardian_confirmation_method ?? 'NOT_APPLICABLE',
     members: (record?.members ?? []).map(member => ({ tenant_id: Number(member.tenant_id), relationship_to_household_head: member.relationship_to_household_head ?? '' })),
   }
 }
@@ -36,6 +39,9 @@ export function residencePayload(roomId, values) {
     household_head_opinion: values.household_head_opinion?.trim() || null,
     legal_owner_opinion: values.legal_owner_opinion?.trim() || null,
     guardian_opinion: values.guardian_opinion?.trim() || null,
+    household_head_confirmation_method: values.household_head_mode === 'OTHER_PERSON' ? values.household_head_confirmation_method || null : null,
+    legal_owner_confirmation_method: values.legal_owner_confirmation_method || null,
+    guardian_confirmation_method: values.guardian_confirmation_method || 'NOT_APPLICABLE',
     members: values.members.map(member => ({ tenant_id: Number(member.tenant_id), relationship_to_household_head: member.relationship_to_household_head.trim() || null })),
   }
 }
