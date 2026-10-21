@@ -65,6 +65,19 @@ test('nullable declaration fields become editable strings and payload is limited
   assert.ok(!('landlord_id' in payload) && !('full_name' in payload) && !('snapshot' in payload))
 })
 
+test('household head choice belongs to the declaration and clears stale details when declarant is head', () => {
+  const values = residenceFormValues({ household_head_mode: 'OTHER_PERSON', household_head_name: 'Chủ hộ riêng', household_head_identity_number: '079888888888', relationship_to_household_head: 'Ở thuê' })
+  assert.equal(values.household_head_name, 'Chủ hộ riêng')
+  const other = residencePayload(11, values)
+  assert.equal(other.household_head_mode, 'OTHER_PERSON')
+  assert.equal(other.household_head_name, 'Chủ hộ riêng')
+  assert.equal(other.relationship_to_household_head, 'Ở thuê')
+  const declarant = residencePayload(11, { ...values, household_head_mode: 'DECLARANT' })
+  assert.equal(declarant.household_head_name, null)
+  assert.equal(declarant.household_head_identity_number, null)
+  assert.equal(declarant.relationship_to_household_head, 'Chủ hộ')
+})
+
 test('draft can save without legal details and selecting roommate sends numeric IDs, not copied master data', async () => {
   const harness = await formHarness()
   await harness.submit()

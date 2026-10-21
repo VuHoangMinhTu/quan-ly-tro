@@ -48,17 +48,26 @@ class ResidenceDeclarationService
                 throw ValidationException::withMessages(['room_id' => 'Không thể chuyển hồ sơ sang phòng khác.']);
             }
             if ($record->exists) {
-                $data = [...$record->only(['contract_id', 'declarant_tenant_id', 'authority_name', 'relationship_to_household_head', 'request_content', 'stay_start_date', 'stay_end_date', 'household_head_opinion', 'legal_owner_opinion', 'guardian_opinion']), ...$data];
+                $data = [...$record->only(['contract_id', 'declarant_tenant_id', 'authority_name', 'household_head_mode', 'household_head_name', 'household_head_identity_number', 'relationship_to_household_head', 'request_content', 'stay_start_date', 'stay_end_date', 'household_head_opinion', 'legal_owner_opinion', 'guardian_opinion']), ...$data];
             } else {
                 $house->load('residenceProfile');
                 $data['authority_name'] = $data['authority_name'] ?? $house->residenceProfile?->residence_authority_name;
                 $data['request_content'] = $data['request_content'] ?? 'Đăng ký tạm trú';
             }
             $this->validatePeople($room, $data);
+            if (($data['household_head_mode'] ?? null) === 'DECLARANT') {
+                $data['household_head_name'] = null;
+                $data['household_head_identity_number'] = null;
+                $data['relationship_to_household_head'] = 'Chủ hộ';
+            } elseif (($data['household_head_mode'] ?? null) !== 'OTHER_PERSON') {
+                $data['household_head_name'] = null;
+                $data['household_head_identity_number'] = null;
+                $data['relationship_to_household_head'] = null;
+            }
             if (! empty($data['contract_id']) && ! $room->contracts()->whereKey($data['contract_id'])->exists()) {
                 throw ValidationException::withMessages(['contract_id' => 'Hợp đồng phải thuộc phòng này.']);
             }
-            $record->fill(Arr::only($data, ['contract_id', 'declarant_tenant_id', 'authority_name', 'relationship_to_household_head', 'request_content', 'stay_start_date', 'stay_end_date', 'household_head_opinion', 'legal_owner_opinion', 'guardian_opinion']));
+            $record->fill(Arr::only($data, ['contract_id', 'declarant_tenant_id', 'authority_name', 'household_head_mode', 'household_head_name', 'household_head_identity_number', 'relationship_to_household_head', 'request_content', 'stay_start_date', 'stay_end_date', 'household_head_opinion', 'legal_owner_opinion', 'guardian_opinion']));
             $record->landlord_id = $house->landlord_id;
             $record->boarding_house_id = $house->id;
             $record->room_id = $room->id;
@@ -107,12 +116,21 @@ class ResidenceDeclarationService
             $record->load(['declarant', 'members.tenant', 'room', 'boardingHouse.residenceProfile', 'contract']);
             $profile = $record->boardingHouse->residenceProfile;
             $ct01 = [
-                'schema_version' => 1, 'captured_at' => now()->toIso8601String(),
+                'schema_version' => 2, 'captured_at' => now()->toIso8601String(),
+                'household_head_mode' => $record->household_head_mode,
                 'authority_name' => $record->authority_name, 'request_content' => $record->request_content,
-                'relationship_to_household_head' => $record->relationship_to_household_head,
+                'relationship_to_household_head' => $record->household_head_mode === 'DECLARANT' ? 'Chủ hộ' : $record->relationship_to_household_head,
                 'opinions' => ['household_head' => $record->household_head_opinion, 'legal_owner' => $record->legal_owner_opinion, 'guardian' => $record->guardian_opinion],
                 'declarant' => $this->person($record->declarant),
-                'household_head' => ['name' => $profile?->household_head_name, 'identity_number' => $profile?->household_head_identity_number],
+                'household_head' => ['name' => match ($record->household_head_mode) {
+                    'DECLARANT' => $record->declarant?->full_name,
+                    'OTHER_PERSON' => $record->household_head_name,
+                    default => null,
+                }, 'identity_number' => match ($record->household_head_mode) {
+                    'DECLARANT' => $record->declarant?->identity_number,
+                    'OTHER_PERSON' => $record->household_head_identity_number,
+                    default => null,
+                }],
                 'residence' => ['boarding_house_name' => $record->boardingHouse->name, 'address' => $record->boardingHouse->address, 'room_code' => $record->room->room_code],
                 'members' => $record->members->map(fn ($member) => [...$this->person($member->tenant), 'relationship_to_household_head' => $member->relationship_to_household_head])->all(),
             ];
@@ -130,16 +148,15 @@ class ResidenceDeclarationService
     {
         $profile = $record->boardingHouse->residenceProfile;
         $declarant = $ct01['declarant'];
-        $hasLegalOwner = filled($profile?->legal_owner_name);
 
         return [
             'type' => 'RESIDENCE_STAY_CONSENT', 'captured_at' => now()->toDateString(),
             'location' => $record->boardingHouse->address,
             'host' => [
-                'full_name' => $hasLegalOwner ? $profile->legal_owner_name : $profile?->household_head_name,
+                'full_name' => $profile?->legal_owner_name,
                 'birth_year' => $profile?->legal_owner_birth_year,
                 'permanent_address' => $profile?->legal_owner_permanent_address,
-                'identity_number' => $hasLegalOwner ? $profile->legal_owner_identity_number : $profile?->household_head_identity_number,
+                'identity_number' => $profile?->legal_owner_identity_number,
                 'phone' => $profile?->legal_owner_phone,
             ],
             'guest' => ['full_name' => $declarant['full_name'], 'birth_year' => $declarant['date_of_birth'] ? substr($declarant['date_of_birth'], 0, 4) : null,
@@ -183,9 +200,12 @@ class ResidenceDeclarationService
     private function missingFields(array $ct01): array
     {
         $missing = [];
-        foreach (['authority_name' => 'Chưa nhập cơ quan đăng ký cư trú.', 'request_content' => 'Chưa nhập nội dung đề nghị.', 'relationship_to_household_head' => 'Chưa nhập quan hệ của người kê khai với chủ hộ.', 'household_head.name' => 'Nhà trọ chưa có thông tin chủ hộ.', 'household_head.identity_number' => 'Số định danh cá nhân của chủ hộ chưa được cập nhật.'] as $field => $message) {
+        if (blank($ct01['household_head_mode'] ?? null)) {
+            $missing[] = ['field' => 'household_head_mode', 'message' => 'Vui lòng xác nhận ai là chủ hộ của hồ sơ cư trú.', 'target' => 'declaration'];
+        }
+        foreach (['authority_name' => 'Chưa nhập cơ quan đăng ký cư trú.', 'request_content' => 'Chưa nhập nội dung đề nghị.', 'relationship_to_household_head' => 'Chưa nhập quan hệ của người kê khai với chủ hộ.', 'household_head.name' => 'Chưa nhập họ tên chủ hộ.', 'household_head.identity_number' => 'Chưa nhập số định danh cá nhân của chủ hộ.'] as $field => $message) {
             if (blank(Arr::get($ct01, $field))) {
-                $missing[] = ['field' => $field, 'message' => $message, 'target' => str_starts_with($field, 'household_head') ? 'profile' : 'declaration'];
+                $missing[] = ['field' => $field, 'message' => $message, 'target' => 'declaration'];
             }
         }
         foreach (['declarant' => $ct01['declarant'], ...array_combine(array_map(fn ($i) => 'members.'.$i, array_keys($ct01['members'])), $ct01['members'])] as $prefix => $person) {

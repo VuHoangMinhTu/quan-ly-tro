@@ -17,7 +17,7 @@ class SaveResidenceDeclarationRequest extends FormRequest
 
     public function attributes(): array
     {
-        return ['room_id' => 'phòng', 'contract_id' => 'hợp đồng', 'declarant_tenant_id' => 'người kê khai', 'authority_name' => 'cơ quan đăng ký cư trú', 'relationship_to_household_head' => 'quan hệ với chủ hộ', 'request_content' => 'nội dung đề nghị', 'stay_start_date' => 'ngày bắt đầu ở nhờ', 'stay_end_date' => 'ngày kết thúc ở nhờ', 'members' => 'thành viên', 'members.*.tenant_id' => 'thành viên', 'members.*.relationship_to_household_head' => 'quan hệ với chủ hộ'];
+        return ['room_id' => 'phòng', 'contract_id' => 'hợp đồng', 'declarant_tenant_id' => 'người kê khai', 'authority_name' => 'cơ quan đăng ký cư trú', 'household_head_mode' => 'lựa chọn chủ hộ', 'household_head_name' => 'họ tên chủ hộ', 'household_head_identity_number' => 'số định danh chủ hộ', 'relationship_to_household_head' => 'quan hệ với chủ hộ', 'request_content' => 'nội dung đề nghị', 'stay_start_date' => 'ngày bắt đầu ở nhờ', 'stay_end_date' => 'ngày kết thúc ở nhờ', 'members' => 'thành viên', 'members.*.tenant_id' => 'thành viên', 'members.*.relationship_to_household_head' => 'quan hệ với chủ hộ'];
     }
 
     /**
@@ -32,6 +32,9 @@ class SaveResidenceDeclarationRequest extends FormRequest
             'contract_id' => ['nullable', 'integer', 'min:1'],
             'declarant_tenant_id' => ['nullable', 'integer', 'min:1'],
             'authority_name' => ['nullable', 'string', 'max:255'],
+            'household_head_mode' => ['nullable', 'in:DECLARANT,OTHER_PERSON'],
+            'household_head_name' => ['nullable', 'string', 'max:255'],
+            'household_head_identity_number' => ['nullable', 'string', 'max:30'],
             'relationship_to_household_head' => ['nullable', 'string', 'max:255'],
             'request_content' => ['nullable', 'string', 'max:5000'],
             'stay_start_date' => ['nullable', 'date_format:Y-m-d'],

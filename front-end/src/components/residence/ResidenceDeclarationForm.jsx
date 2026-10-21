@@ -10,6 +10,9 @@ import { residenceFormValues, residencePayload } from '../../utils/residence'
 
 const schema = z.object({
   declarant_tenant_id: z.string(), contract_id: z.string(), authority_name: z.string().max(255, 'Tên cơ quan không quá 255 ký tự.'),
+  household_head_mode: z.enum(['', 'DECLARANT', 'OTHER_PERSON']),
+  household_head_name: z.string().max(255, 'Họ tên chủ hộ không quá 255 ký tự.'),
+  household_head_identity_number: z.string().max(30, 'Số định danh chủ hộ không quá 30 ký tự.'),
   relationship_to_household_head: z.string().max(255, 'Quan hệ không quá 255 ký tự.'), request_content: z.string().max(5000, 'Nội dung không quá 5.000 ký tự.'),
   members: z.array(z.object({ tenant_id: z.number().int(), relationship_to_household_head: z.string().max(255, 'Quan hệ không quá 255 ký tự.') })),
   stay_start_date: z.string().refine(value => !value || isValidDisplayDate(value), 'Ngày bắt đầu ở nhờ phải đúng dd/mm/yyyy.'),
@@ -41,11 +44,11 @@ export default function ResidenceDeclarationForm({ context, initial, initialPeop
   const form = useForm({ resolver: zodResolver(schema), defaultValues: residenceFormValues(initial) })
   const declarantId = useWatch({ control: form.control, name: 'declarant_tenant_id' })
   const contractId = useWatch({ control: form.control, name: 'contract_id' })
+  const householdHeadMode = useWatch({ control: form.control, name: 'household_head_mode' })
   const members = useWatch({ control: form.control, name: 'members' }) ?? []
   const tenants = context.occupants.map(occupant => occupant.tenant)
   const declarant = tenants.find(tenant => String(tenant.id) === declarantId)
   const selectedContract = context.contracts.find(contract => String(contract.id) === contractId)
-  const profile = context.room.boarding_house?.residence_profile
   const [error, setError] = useState('')
   const { errors, isSubmitting } = form.formState
   const submit = async (values, event) => {
@@ -63,7 +66,7 @@ export default function ResidenceDeclarationForm({ context, initial, initialPeop
     form.setValue('members', selected ? members.filter(member => member.tenant_id !== Number(tenant.id)) : [...members, { tenant_id: Number(tenant.id), relationship_to_household_head: '' }], { shouldDirty: true })
   }
   return <form onSubmit={form.handleSubmit(submit)} className="min-w-0 space-y-5 rounded-xl bg-white p-4 shadow-sm sm:p-6">
-    <p className="text-sm text-slate-500">Có thể lưu nháp khi thiếu thông tin. Dữ liệu người thuê và chủ hộ được tự điền từ hồ sơ hiện tại; khi nộp, BeeHouse chốt một bản snapshot.</p>
+    <p className="text-sm text-slate-500">Có thể lưu nháp khi thiếu thông tin. Chọn rõ chủ hộ của hồ sơ này; khi nộp, BeeHouse chốt một bản snapshot.</p>
     <section className={sectionClass}><h3 className="font-semibold">1. Cơ quan tiếp nhận</h3>
       <label htmlFor="ct01-authority" className="block text-sm">Kính gửi / cơ quan tiếp nhận<input id="ct01-authority" className={inputClass} {...form.register('authority_name')} /></label>{errors.authority_name && <p className="text-sm text-red-700">{errors.authority_name.message}</p>}
       <label htmlFor="ct01-contract" className="block text-sm">Hợp đồng liên quan<select id="ct01-contract" className={inputClass} {...form.register('contract_id')}><option value="">Không liên kết hợp đồng</option>{context.contracts.map(contract => <option key={contract.id} value={String(contract.id)}>{contract.contract_code}</option>)}</select></label>{errors.contract_id && <p className="text-sm text-red-700">{errors.contract_id.message}</p>}
@@ -72,11 +75,12 @@ export default function ResidenceDeclarationForm({ context, initial, initialPeop
       <label htmlFor="ct01-declarant" className="block text-sm">Chọn người kê khai<select id="ct01-declarant" className={inputClass} {...selectDeclarant} onChange={event => { selectDeclarant.onChange(event); form.setValue('members', members.filter(member => String(member.tenant_id) !== event.target.value), { shouldDirty: true }) }}><option value="">Chưa chọn người kê khai</option>{tenants.map(tenant => <option key={tenant.id} value={String(tenant.id)}>{tenant.full_name}</option>)}</select></label>{errors.declarant_tenant_id && <p className="text-sm text-red-700">{errors.declarant_tenant_id.message}</p>}
       <TenantAutofill tenant={declarant} role={context.operational_role} />
     </section>
-    <section className={sectionClass}><h3 className="font-semibold">3. Chủ hộ</h3><dl className="text-sm"><Datum label="7. Họ, chữ đệm và tên chủ hộ" value={profile?.household_head_name} /></dl>
-      <label htmlFor="ct01-relationship" className="block text-sm">8. Mối quan hệ với chủ hộ<input id="ct01-relationship" list="ct01-relationships" className={inputClass} {...form.register('relationship_to_household_head')} /></label>{errors.relationship_to_household_head && <p className="text-sm text-red-700">{errors.relationship_to_household_head.message}</p>}
-      <dl className="text-sm"><Datum label="9. Số định danh cá nhân của chủ hộ" value={profile?.household_head_identity_number} /></dl>
-      <datalist id="ct01-relationships"><option value="Người thuê" /><option value="Ở nhờ" /><option value="Khác" /></datalist>
-      <p className="text-xs text-slate-500">Chủ hộ lấy từ cấu hình nhà trọ, không suy ra từ tài khoản OWNER/MANAGER. Quan hệ cần tự xác nhận.</p>
+    <section className={sectionClass}><h3 className="font-semibold">3. Thông tin chủ hộ</h3><p className="text-sm">Ai là chủ hộ của hồ sơ tạm trú này?</p>
+      <div className="flex flex-wrap gap-4 text-sm"><label className="flex items-center gap-2"><input type="radio" value="DECLARANT" {...form.register('household_head_mode')} />Người kê khai</label><label className="flex items-center gap-2"><input type="radio" value="OTHER_PERSON" {...form.register('household_head_mode')} />Một người khác</label></div>
+      {householdHeadMode === 'DECLARANT' && <dl className="grid gap-2 text-sm sm:grid-cols-2"><Datum label="7. Họ tên chủ hộ" value={declarant?.full_name} /><Datum label="8. Mối quan hệ với chủ hộ" value="Chủ hộ" /><Datum label="9. Số định danh chủ hộ" value={declarant?.identity_number} /></dl>}
+      {householdHeadMode === 'OTHER_PERSON' && <div className="space-y-3"><label className="block text-sm">7. Họ tên chủ hộ<input className={inputClass} {...form.register('household_head_name')} />{errors.household_head_name && <span className="text-red-700">{errors.household_head_name.message}</span>}</label><label className="block text-sm">8. Mối quan hệ với chủ hộ<input list="ct01-relationships" className={inputClass} {...form.register('relationship_to_household_head')} />{errors.relationship_to_household_head && <span className="text-red-700">{errors.relationship_to_household_head.message}</span>}</label><label className="block text-sm">9. Số định danh cá nhân chủ hộ<input className={inputClass} {...form.register('household_head_identity_number')} />{errors.household_head_identity_number && <span className="text-red-700">{errors.household_head_identity_number.message}</span>}</label></div>}
+      <datalist id="ct01-relationships">{['Ở thuê', 'Ở nhờ', 'Cùng ở thuê', 'Cùng ở nhờ', 'Vợ', 'Chồng', 'Con', 'Cha', 'Mẹ', 'Khác'].map(value => <option key={value} value={value} />)}</datalist>
+      <p className="text-xs text-slate-500">Chủ hộ của hồ sơ cư trú không mặc định là chủ sở hữu chỗ ở hợp pháp.</p>
     </section>
     <section className={sectionClass}><h3 className="font-semibold">4. Nội dung đề nghị</h3><label htmlFor="ct01-request" className="block text-sm">10. Nội dung đề nghị<textarea id="ct01-request" rows={3} className={inputClass} {...form.register('request_content')} /></label>{errors.request_content && <p className="text-sm text-red-700">{errors.request_content.message}</p>}</section>
     <fieldset className={sectionClass}><legend className="px-1 font-semibold">5. Thành viên cùng thay đổi</legend><p className="text-sm text-slate-500">11. Chỉ chọn những người đang ở cùng phòng; người đã chuyển đi không xuất hiện.</p>

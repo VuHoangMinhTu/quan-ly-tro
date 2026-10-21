@@ -49,7 +49,7 @@ class ResidenceDeclarationApiTest extends TestCase
             ->assertJsonPath('data.ct01.declarant.full_name', 'Nguyễn Văn A')
             ->assertJsonPath('data.ct01.declarant.date_of_birth', '2000-09-28')
             ->assertJsonPath('data.ct01.members.0.full_name', 'Trần Thị B')
-            ->assertJsonPath('data.ct01.household_head.name', 'Chủ hộ pháp lý');
+            ->assertJsonPath('data.ct01.household_head.name', 'Nguyễn Văn A');
         $this->assertDatabaseHas('residence_declarations', ['id' => $id, 'landlord_id' => $room->boardingHouse->landlord_id, 'status' => 'DRAFT', 'snapshot' => null]);
         $this->assertSame('Nguyễn Văn A', $tenant->fresh()->full_name);
     }
@@ -61,7 +61,7 @@ class ResidenceDeclarationApiTest extends TestCase
         $room->boardingHouse->residenceProfile->update(['household_head_name' => null]);
         $id = $this->actingAs($user, 'sanctum')->postJson('/api/residence-declarations', ['room_id' => $room->id, 'declarant_tenant_id' => $tenant->id])->assertCreated()->json('data.id');
         $response = $this->getJson("/api/residence-declarations/{$id}/export")->assertUnprocessable()
-            ->assertJsonValidationErrors(['declarant.identity_number', 'household_head.name', 'authority_name']);
+            ->assertJsonValidationErrors(['declarant.identity_number', 'household_head_mode', 'household_head.name', 'authority_name']);
         $this->assertSame('Số định danh cá nhân của Nguyễn Văn A chưa được cập nhật.', $response->json('errors')['declarant.identity_number'][0]);
         $this->assertDatabaseHas('residence_declarations', ['id' => $id, 'status' => 'DRAFT', 'snapshot' => null]);
     }
@@ -98,7 +98,7 @@ class ResidenceDeclarationApiTest extends TestCase
         $this->getJson("/api/residence-declarations/{$id}/export")->assertOk()
             ->assertJsonPath('data.ct01.declarant.full_name', 'Nguyễn Văn A')
             ->assertJsonPath('data.ct01.declarant.identity_number', '079000000001')
-            ->assertJsonPath('data.ct01.household_head.name', 'Chủ hộ pháp lý')
+            ->assertJsonPath('data.ct01.household_head.name', 'Nguyễn Văn A')
             ->assertJsonPath('data.ct01.opinions.household_head', 'Ý kiến đã ghi nhận');
         $this->putJson("/api/residence-declarations/{$id}/status", ['status' => 'REGISTERED', 'expires_at' => '2027-12-31'])->assertOk();
         $this->assertSame($snapshot, ResidenceDeclaration::findOrFail($id)->snapshot);
@@ -148,7 +148,47 @@ class ResidenceDeclarationApiTest extends TestCase
 
     private function payload(Room $room, Tenant $tenant, Tenant $member): array
     {
-        return ['room_id' => $room->id, 'declarant_tenant_id' => $tenant->id, 'authority_name' => 'Công an phường', 'relationship_to_household_head' => 'Người thuê', 'request_content' => 'Đăng ký tạm trú tại địa chỉ nhà trọ.', 'members' => [['tenant_id' => $member->id, 'relationship_to_household_head' => 'Người thuê']]];
+        return ['room_id' => $room->id, 'declarant_tenant_id' => $tenant->id, 'authority_name' => 'Công an phường', 'household_head_mode' => 'DECLARANT', 'request_content' => 'Đăng ký tạm trú tại địa chỉ nhà trọ.', 'members' => [['tenant_id' => $member->id, 'relationship_to_household_head' => 'Con']]];
+    }
+
+    public function test_household_head_is_chosen_per_declaration_and_not_copied_from_legal_owner(): void
+    {
+        [$user, $room, $tenant, $member] = $this->fixture();
+        $room->boardingHouse->residenceProfile->update(['legal_owner_name' => 'Chủ sở hữu khác', 'legal_owner_identity_number' => '079999999999']);
+        $payload = [...$this->payload($room, $tenant, $member), 'household_head_mode' => 'OTHER_PERSON',
+            'household_head_name' => 'Chủ hộ riêng', 'household_head_identity_number' => '079888888888',
+            'relationship_to_household_head' => 'Ở thuê'];
+        $id = $this->actingAs($user, 'sanctum')->postJson('/api/residence-declarations', $payload)->assertCreated()->json('data.id');
+
+        $this->getJson("/api/residence-declarations/{$id}")->assertOk()
+            ->assertJsonPath('data.ct01.household_head.name', 'Chủ hộ riêng')
+            ->assertJsonPath('data.ct01.household_head.identity_number', '079888888888')
+            ->assertJsonPath('data.ct01.relationship_to_household_head', 'Ở thuê')
+            ->assertJsonPath('data.ct01.members.0.relationship_to_household_head', 'Con')
+            ->assertJsonPath('data.stay_consent.host.full_name', 'Chủ sở hữu khác');
+
+        $this->putJson("/api/residence-declarations/{$id}/status", ['status' => 'SUBMITTED'])->assertOk();
+        $tenant->update(['full_name' => 'Tên mới']);
+        $member->update(['full_name' => 'Thành viên mới']);
+        $room->boardingHouse->residenceProfile->update(['legal_owner_name' => 'Chủ sở hữu mới']);
+        $this->getJson("/api/residence-declarations/{$id}")->assertOk()
+            ->assertJsonPath('data.ct01.household_head.name', 'Chủ hộ riêng')
+            ->assertJsonPath('data.ct01.declarant.full_name', 'Nguyễn Văn A')
+            ->assertJsonPath('data.ct01.members.0.full_name', 'Trần Thị B')
+            ->assertJsonPath('data.stay_consent.host.full_name', 'Chủ sở hữu khác');
+    }
+
+    public function test_legacy_draft_without_household_head_choice_does_not_guess_from_profile(): void
+    {
+        [$user, $room, $tenant] = $this->fixture();
+        $id = $this->actingAs($user, 'sanctum')->postJson('/api/residence-declarations', [
+            'room_id' => $room->id, 'declarant_tenant_id' => $tenant->id,
+        ])->assertCreated()->json('data.id');
+
+        $this->getJson("/api/residence-declarations/{$id}")->assertOk()
+            ->assertJsonPath('data.ct01.household_head.name', null)
+            ->assertJsonPath('data.ct01.household_head.identity_number', null)
+            ->assertJsonFragment(['field' => 'household_head_mode', 'message' => 'Vui lòng xác nhận ai là chủ hộ của hồ sơ cư trú.', 'target' => 'declaration']);
     }
 
     public function test_zero_optional_ids_return_422_instead_of_a_foreign_key_server_error(): void
@@ -235,9 +275,9 @@ class ResidenceDeclarationApiTest extends TestCase
         [$owner, $room, $tenant, $member] = $this->fixture();
         $id = $this->actingAs($owner, 'sanctum')->postJson('/api/residence-declarations', $this->payload($room, $tenant, $member))->assertCreated()->json('data.id');
 
-        $this->getJson("/api/residence-declarations/{$id}")->assertOk()->assertJsonPath('data.stay_consent.host.full_name', 'Chủ hộ pháp lý');
+        $this->getJson("/api/residence-declarations/{$id}")->assertOk()->assertJsonPath('data.stay_consent.host.full_name', null);
         $this->getJson("/api/residence-declarations/{$id}/documents/residence-stay-consent")
-            ->assertUnprocessable()->assertJsonValidationErrors(['host.birth_year', 'guest.phone', 'start_date']);
+            ->assertUnprocessable()->assertJsonValidationErrors(['host.full_name', 'host.birth_year', 'guest.phone', 'start_date']);
         [$foreign] = $this->fixture();
         $this->actingAs($foreign, 'sanctum')->getJson("/api/residence-declarations/{$id}/documents/residence-stay-consent")->assertNotFound();
     }
