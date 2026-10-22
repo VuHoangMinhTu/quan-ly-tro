@@ -83,6 +83,9 @@ test('document page reads the finalized HTML endpoint; only drafts use preview a
   const final = Page()
   assert.deepEqual(calls[0], ['final', '7'])
   assert.equal(nodes(final).find(node => node.props.dangerouslySetInnerHTML).props.dangerouslySetInnerHTML.__html, data.rendered_html)
+  data.rendered_html = '<div class="document-signatures"><div><p>Chưa ký</p></div></div>'
+  assert.equal(nodes(Page()).find(node => node.props.dangerouslySetInnerHTML).props.dangerouslySetInnerHTML.__html,
+    '<div class="document-signatures"><div><div class="signature-handwritten-space"></div></div></div>')
   await nodes(final).find(node => node.type === 'button').props.onClick()
   assert.equal(printed, 1)
   preview = true
@@ -123,6 +126,7 @@ test('global BeeHouse template is shown for viewing and owner clone opens an edi
     contractTemplateKeys: { all: ['contract-templates'] },
     getContractTemplates: async () => ({}),
     createContractTemplateVersion: async () => ({ data: { data: { id: 9 } } }),
+    deleteContractTemplate: async () => {},
     setContractTemplateStatus: async () => {},
     Link, getApiErrorMessage, formatDate: () => '19/10/2026',
   })

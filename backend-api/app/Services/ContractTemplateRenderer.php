@@ -43,13 +43,13 @@ class ContractTemplateRenderer
     public function unsignedSignatureBlock(?string $type = null): string
     {
         if ($type === 'ROOM_RENTAL') {
-            return '<div class="document-signatures"><div><h3>BÊN CHO THUÊ (BÊN A)</h3><p>Người đại diện (Họ tên, chữ ký)</p><p>Chưa ký</p></div><div><h3>BÊN THUÊ (BÊN B)</h3><p>(Họ tên, chữ ký)</p><p>Chưa ký</p></div></div>';
+            return '<div class="document-signatures"><div><h3>BÊN CHO THUÊ (BÊN A)</h3><p>Người đại diện (Họ tên, chữ ký)</p><div class="signature-handwritten-space"></div></div><div><h3>BÊN THUÊ (BÊN B)</h3><p>(Họ tên, chữ ký)</p><div class="signature-handwritten-space"></div></div></div>';
         }
         if ($type === 'DORM_BED') {
-            return '<div class="document-signatures"><div><h3>ĐẠI DIỆN BÊN CHO THUÊ (BÊN A)</h3><p>(Ký và ghi rõ họ tên)</p><p>Chưa ký</p></div><div><h3>ĐẠI DIỆN BÊN THUÊ (BÊN B)</h3><p>(Ký và ghi rõ họ tên)</p><p>Chưa ký</p></div></div>';
+            return '<div class="document-signatures"><div><h3>ĐẠI DIỆN BÊN CHO THUÊ (BÊN A)</h3><p>(Ký và ghi rõ họ tên)</p><div class="signature-handwritten-space"></div></div><div><h3>ĐẠI DIỆN BÊN THUÊ (BÊN B)</h3><p>(Ký và ghi rõ họ tên)</p><div class="signature-handwritten-space"></div></div></div>';
         }
 
-        return '<div class="document-signatures"><div><h3>BÊN CHO THUÊ (BÊN A)</h3><p>Chưa ký</p></div><div><h3>BÊN THUÊ (BÊN B)</h3><p>Chưa ký</p></div></div>';
+        return '<div class="document-signatures"><div><h3>BÊN CHO THUÊ (BÊN A)</h3><div class="signature-handwritten-space"></div></div><div><h3>BÊN THUÊ (BÊN B)</h3><div class="signature-handwritten-space"></div></div></div>';
     }
 
     private function escape(mixed $value): string

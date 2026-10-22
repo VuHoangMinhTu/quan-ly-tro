@@ -3,7 +3,7 @@
 .contract-document-actions { display: flex; flex-wrap: wrap; gap: 12px; width: min(210mm, 100%); margin: 0 auto 16px; }
 .contract-document-actions > a, .contract-document-actions > button { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px; border: 1px solid #cbd5e1; border-radius: 8px; background: white; font-size: 14px; }
 .contract-document-actions > button { background: #0f172a; color: white; }
-.contract-document-sheet { page: contract-document; box-sizing: border-box; width: min(210mm, 100%); height: auto; margin: 0 auto; padding: 18mm; background: white; box-shadow: 0 2px 12px #0f172a1a; }
+.contract-document-sheet { box-sizing: border-box; width: min(210mm, 100%); height: auto; margin: 0 auto; padding: 18mm; background: white; box-shadow: 0 2px 12px #0f172a1a; }
 .contract-document-html { font-size: 10.5pt; line-height: 1.7; overflow-wrap: anywhere; }
 .contract-document-html h1 { margin: 0 0 18px; font-size: 19pt; font-weight: 700; line-height: 1.4; }
 .contract-document-html h2 { margin: 18px 0 8px; font-size: 13pt; font-weight: 700; }
@@ -21,6 +21,7 @@
 .contract-document-html .document-signatures { display: flex; justify-content: space-around; gap: 20px; margin-top: 24px; }
 .contract-document-html .document-signatures > div { flex: 1; min-width: 0; text-align: center; }
 .contract-document-html .document-signatures img { display: block; width: 100%; max-width: 220px; height: 90px; margin: 12px auto; object-fit: contain; }
+.contract-document-html .signature-handwritten-space { height: 52px; }
 .contract-document-html .word-contract { font-family: 'Times New Roman', Times, serif; font-size: 13pt; line-height: 1.35; color: #111; }
 .contract-document-html .word-contract h1 { font-size: 16pt; margin: 12px 0; text-align: center; }
 .contract-document-html .word-contract h2 { font-size: 13pt; margin: 15px 0 6px; text-align: left; }
@@ -48,10 +49,12 @@
   .no-print { display: none !important; }
   html, body { margin: 0; padding: 0; }
   .contract-document-actions { display: none !important; }
-  .contract-document-page { min-height: 0; height: auto; padding: 0; margin: 0; background: white; }
+  .contract-document-page { page: contract-document; min-height: 0; height: auto; padding: 0; margin: 0; background: white; }
   .contract-document-sheet { width: auto; max-width: none; margin: 0; padding: 0; box-shadow: none; }
   .contract-document-html { font-size: 10.5pt; }
   .contract-document-html .word-contract { font-size: 13pt; }
+  .contract-document-html .word-contract > :last-child { margin-bottom: 0 !important; }
+  .contract-document-html .word-contract > :last-child table:last-child { margin-bottom: 0; }
   .contract-document-html h1, .contract-document-html h2, .contract-document-html h3, .contract-document-html h4 { break-after: avoid; }
   .contract-document-html thead { display: table-header-group; }
   .contract-document-html tr, .contract-document-html .document-signatures { break-inside: avoid; }

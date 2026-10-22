@@ -246,7 +246,8 @@ class ContractSigningApiTest extends TestCase
         $this->getJson("/api/contracts/{$contract->id}/signing")->assertOk()->assertJsonPath('data.status', 'PARTIALLY_SIGNED');
         $partial = $this->getJson($public)->assertOk()->json('data.rendered_html');
         $this->assertSame(1, substr_count($partial, 'data-signature-id='));
-        $this->assertSame(1, substr_count($partial, 'Chưa ký'));
+        $this->assertSame(1, substr_count($partial, 'class="signature-handwritten-space"'));
+        $this->assertStringNotContainsString('Chưa ký', $partial);
         $this->verify($second);
         $this->post($second, $this->payload($document->document_hash), ['Accept' => 'application/json'])->assertOk();
         $this->post($second, $this->payload($document->document_hash), ['Accept' => 'application/json'])->assertOk();

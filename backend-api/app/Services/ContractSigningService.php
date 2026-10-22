@@ -405,7 +405,7 @@ class ContractSigningService
                 $html .= '<img data-signature-id="'.$signature->id.'" data-file-hash="'.$signature->signature_file_hash.'" alt="Chữ ký vẽ tay">'
                     .'<p>'.e($signature->signer_name_snapshot).'</p><p>Ký lúc: '.$signature->signed_at->copy()->timezone(config('signing.display_timezone'))->format('d/m/Y H:i P').'</p>';
             } else {
-                $html .= '<p>Chưa ký</p>';
+                $html .= '<div class="signature-handwritten-space"></div>';
             }
             $html .= '</div>';
         }
