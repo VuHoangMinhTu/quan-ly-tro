@@ -11,7 +11,7 @@
 <p>Ngân hàng: {{lessor.bank_name}} | Số tài khoản: {{lessor.bank_account_number}} | Chủ TK: {{lessor.bank_account_name}}</p>
 <p>BÊN THUÊ - BÊN B:</p>
 <p>Họ và tên: {{tenant.full_name}}</p>
-<p>Ngày sinh: {{tenant.date_of_birth}} Giới tính: {{tenant.gender}}</p>
+<p>Ngày sinh: {{tenant.date_of_birth}} Giới tính: {{tenant.gender_checkboxes}}</p>
 <p>Địa chỉ thường trú: {{tenant.permanent_address}}</p>
 <p>Số CCCD: {{tenant.identity_number}} Ngày cấp: {{tenant.identity_issue_date}}</p>
 <p>Nơi cấp: {{tenant.identity_issue_place}}</p>
@@ -36,7 +36,7 @@
 <p>2. Gia hạn hợp đồng: Trước ngày kết thúc hợp đồng tối thiểu 30 ngày, hai bên có nghĩa vụ thông báo bằng văn bản hoặc tin nhắn/email/zalo về việc tiếp tục gia hạn hoặc dừng thuê.</p>
 <p>3. Quyền ưu tiên: Hết thời hạn hợp đồng, nếu Bên B có nhu cầu và tuân thủ tốt nội quy sẽ được ưu tiên ký tiếp. Trường hợp đến hạn mà không bên nào có thông báo chấm dứt, hợp đồng có thể được xem xét gia hạn thêm theo chính sách hiện hành của Bên A.</p>
 <h2 class="text-center">ĐIỀU 3: GIÁ THUÊ VÀ CHI PHÍ DỊCH VỤ</h2>
-<p>Giá thuê cố định: Giá thuê giường cố định là: {{contract.monthly_rent}}/tháng</p>
+<p>Giá thuê cố định: Giá thuê giường cố định là: {{contract.monthly_rent_value}} VNĐ/tháng</p>
 <p>2. Chi phí tiện ích: Giá thuê trên được áp dụng theo phương án chi phí dịch vụ như sau (đánh dấu)</p>
 <p>[  ] Gói dịch vụ trọn gói: Đã bao gồm tiền điện sinh hoạt, máy lạnh, nước sinh hoạt, wifi, máy giặt, rác và chi phí dọn dẹp vệ sinh khu vực công cộng.</p>
 <p>[  ] Gói tính theo định mức/tiêu thụ: Giá phòng chưa gồm dịch vụ: </p>
@@ -47,7 +47,7 @@
 <p>3. Cam kết ổn định giá: Giá thuê giường không thay đổi trong suốt thời gian có hiệu lực của hợp đồng này.</p>
 <p>4. Kỳ thanh toán đầu: Tiền giường kỳ đầu tiên tính từ ngày ……/….……/20…….… đến ngày ….……/………./20………… là: ……………………………… VNĐ.</p>
 <h2 class="text-center">ĐIỀU 4: TIỀN ĐẶT CỌC VÀ CHÍNH SÁCH HOÀN TRẢ CỌC</h2>
-<p>1. Số tiền cọc: Bên B đặt cọc cho Bên A số tiền bảo đảm là: {{contract.deposit_amount}}</p>
+<p>1. Số tiền cọc: Bên B đặt cọc cho Bên A số tiền bảo đảm là: {{contract.deposit_value}} VNĐ</p>
 <p>2. Điều kiện hoàn cọc: Số tiền cọc này được Bên A hoàn trả cho Bên B sau khi kết thúc hợp đồng và đáp ứng đủ các điều kiện sau:</p>
 <p>Bên B hoàn thành đúng và đủ thời hạn hợp đồng đã cam kết.
 - Bên B đã thanh toán đầy đủ tiền thuê và toàn bộ chi phí dịch vụ kèm theo.

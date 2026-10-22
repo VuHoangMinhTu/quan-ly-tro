@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\ContractTemplate;
+use App\Services\ContractTemplateRenderer;
+use App\Services\ContractTemplateVariableRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -19,7 +21,16 @@ class WordContractTemplatesTest extends TestCase
         $this->assertStringContainsString('BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG', $content);
         $this->assertStringContainsString('Tủ, kệ bếp', $content);
         $this->assertStringContainsString('{{handover_checkin_table}}', $content);
+        $this->assertSame(14, substr_count($content, '<tr>'));
+        $this->assertStringContainsString('Tiền thuê hàng tháng là: {{contract.monthly_rent_value}} VNĐ', $content);
+        $this->assertStringContainsString('Khách hàng đặt cọc số tiền: {{contract.deposit_value}} VNĐ', $content);
         $this->assertStringContainsString('<div class="document-signatures"></div>', $content);
+        $snapshot = app(ContractTemplateRenderer::class)->render($content, [
+            ...app(ContractTemplateVariableRegistry::class)->sample(),
+            'contract' => ['contract_type' => 'ROOM_RENTAL', 'monthly_rent' => 3800000, 'deposit_amount' => 7600000],
+        ]);
+        $this->assertStringContainsString('3.800.000 VNĐ', $snapshot);
+        $this->assertStringContainsString('Người đại diện (Họ tên, chữ ký)', $snapshot);
         $this->assertStringNotContainsString('1041333679', $content);
         $this->assertStringNotContainsString('NGO DUC BINH', $content);
     }
@@ -34,6 +45,16 @@ class WordContractTemplatesTest extends TestCase
         $this->assertStringContainsString('Máy lạnh phòng + Remote điều hòa', $content);
         $this->assertStringContainsString('{{bed.bed_code}}', $content);
         $this->assertStringContainsString('{{handover_checkin_table}}', $content);
+        $this->assertSame(7, substr_count($content, '<tr>'));
+        $this->assertStringContainsString('{{tenant.gender_checkboxes}}', $content);
+        $this->assertStringContainsString('{{contract.monthly_rent_value}} VNĐ/tháng', $content);
+        $snapshot = app(ContractTemplateRenderer::class)->render($content, [
+            ...app(ContractTemplateVariableRegistry::class)->sample(),
+            'contract' => ['contract_type' => 'DORM_BED', 'monthly_rent' => 1500000, 'deposit_amount' => 1500000],
+            'tenant' => ['gender' => 'FEMALE'],
+        ]);
+        $this->assertStringContainsString('☐ Nam ☒ Nữ', $snapshot);
+        $this->assertStringContainsString('(Ký và ghi rõ họ tên)', $snapshot);
         $this->assertStringNotContainsString('115M', $content);
         $this->assertStringNotContainsString('0901 7116 368', $content);
     }

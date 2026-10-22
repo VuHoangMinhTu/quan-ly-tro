@@ -10,8 +10,8 @@ class ContractTemplateVariableRegistry
     public function definitions(): array
     {
         $groups = [
-            'Hợp đồng' => ['contract.code' => 'Mã hợp đồng', 'contract.contract_code' => 'Mã hợp đồng (tên field)', 'contract.start_date' => 'Ngày bắt đầu', 'contract.end_date' => 'Ngày kết thúc', 'contract.signed_date' => 'Ngày ký đã khai báo', 'contract.monthly_rent' => 'Giá thuê hàng tháng', 'contract.deposit' => 'Tiền cọc thỏa thuận', 'contract.deposit_amount' => 'Tiền cọc (tên field)', 'contract.payment_due_day' => 'Ngày thanh toán hàng tháng', 'contract.note' => 'Ghi chú', 'contract.electricity_opening' => 'Chỉ số điện ban đầu'],
-            'Người thuê' => ['tenant.full_name' => 'Họ tên', 'tenant.date_of_birth' => 'Ngày sinh', 'tenant.gender' => 'Giới tính', 'tenant.identity_number' => 'Số định danh', 'tenant.identity_issue_date' => 'Ngày cấp', 'tenant.identity_issued_date' => 'Ngày cấp (bí danh)', 'tenant.identity_issue_place' => 'Nơi cấp', 'tenant.identity_issued_place' => 'Nơi cấp (bí danh)', 'tenant.occupation' => 'Nghề nghiệp', 'tenant.phone' => 'Số điện thoại', 'tenant.email' => 'Email', 'tenant.permanent_address' => 'Địa chỉ thường trú', 'tenant.bank_name' => 'Ngân hàng Bên B', 'tenant.bank_account_number' => 'Số tài khoản Bên B', 'tenant.emergency_name' => 'Người thân liên hệ khẩn cấp', 'tenant.emergency_phone' => 'Điện thoại khẩn cấp', 'tenant.vehicle_type' => 'Loại xe', 'tenant.vehicle_plate' => 'Biển số xe', 'tenant.vehicle_color' => 'Màu xe', 'tenant.vehicle_quantity' => 'Số lượng xe'],
+            'Hợp đồng' => ['contract.code' => 'Mã hợp đồng', 'contract.contract_code' => 'Mã hợp đồng (tên field)', 'contract.start_date' => 'Ngày bắt đầu', 'contract.end_date' => 'Ngày kết thúc', 'contract.signed_date' => 'Ngày ký đã khai báo', 'contract.monthly_rent' => 'Giá thuê hàng tháng', 'contract.monthly_rent_value' => 'Giá thuê dạng số, không kèm đơn vị', 'contract.deposit' => 'Tiền cọc thỏa thuận', 'contract.deposit_amount' => 'Tiền cọc (tên field)', 'contract.deposit_value' => 'Tiền cọc dạng số, không kèm đơn vị', 'contract.payment_due_day' => 'Ngày thanh toán hàng tháng', 'contract.note' => 'Ghi chú', 'contract.electricity_opening' => 'Chỉ số điện ban đầu'],
+            'Người thuê' => ['tenant.full_name' => 'Họ tên', 'tenant.date_of_birth' => 'Ngày sinh', 'tenant.gender' => 'Giới tính', 'tenant.gender_checkboxes' => 'Giới tính dạng ô chọn Nam/Nữ', 'tenant.identity_number' => 'Số định danh', 'tenant.identity_issue_date' => 'Ngày cấp', 'tenant.identity_issued_date' => 'Ngày cấp (bí danh)', 'tenant.identity_issue_place' => 'Nơi cấp', 'tenant.identity_issued_place' => 'Nơi cấp (bí danh)', 'tenant.occupation' => 'Nghề nghiệp', 'tenant.phone' => 'Số điện thoại', 'tenant.email' => 'Email', 'tenant.permanent_address' => 'Địa chỉ thường trú', 'tenant.bank_name' => 'Ngân hàng Bên B', 'tenant.bank_account_number' => 'Số tài khoản Bên B', 'tenant.emergency_name' => 'Người thân liên hệ khẩn cấp', 'tenant.emergency_phone' => 'Điện thoại khẩn cấp', 'tenant.vehicle_type' => 'Loại xe', 'tenant.vehicle_plate' => 'Biển số xe', 'tenant.vehicle_color' => 'Màu xe', 'tenant.vehicle_quantity' => 'Số lượng xe'],
             'Phòng' => ['room.room_code' => 'Mã phòng', 'room.room_name' => 'Tên phòng', 'room.area' => 'Diện tích', 'room.max_tenants' => 'Số người tối đa', 'room.occupants_count' => 'Số người đăng ký ở'],
             'Nhà trọ' => ['boarding_house.name' => 'Tên nhà trọ', 'boarding_house.address' => 'Địa chỉ nhà trọ', 'boarding_house.ward' => 'Phường/Xã'],
             'Bên cho thuê' => ['lessor.full_name' => 'Người đại diện', 'lessor.title' => 'Chức vụ', 'lessor.phone' => 'Điện thoại bên A', 'lessor.bank_name' => 'Ngân hàng nhận tiền', 'lessor.bank_account_name' => 'Chủ tài khoản', 'lessor.bank_account_number' => 'Số tài khoản'],
@@ -60,7 +60,9 @@ class ContractTemplateVariableRegistry
         $values = [
             'contract.code' => $contract['contract_code'] ?? null,
             'contract.monthly_rent' => $this->number($contract['monthly_rent'] ?? null, true),
+            'contract.monthly_rent_value' => $this->number($contract['monthly_rent'] ?? null),
             'contract.deposit' => $this->number($contract['deposit_amount'] ?? null, true),
+            'contract.deposit_value' => $this->number($contract['deposit_amount'] ?? null),
             'contract.payment_due_day' => isset($contract['payment_due_day']) ? 'ngày '.str_pad((string) $contract['payment_due_day'], 2, '0', STR_PAD_LEFT).' hàng tháng' : null,
             'room.room_code' => $room['room_code'] ?? null, 'room.room_name' => $room['room_name'] ?? null,
             'room.area' => isset($room['area']) ? $this->number($room['area']).' m²' : null,
@@ -79,6 +81,11 @@ class ContractTemplateVariableRegistry
             $values['tenant.'.$key] = $tenant[$key] ?? null;
         }
         $values['tenant.gender'] = ['MALE' => 'Nam', 'FEMALE' => 'Nữ', 'OTHER' => 'Khác'][$tenant['gender'] ?? ''] ?? null;
+        $values['tenant.gender_checkboxes'] = match ($tenant['gender'] ?? null) {
+            'MALE' => '☒ Nam ☐ Nữ',
+            'FEMALE' => '☐ Nam ☒ Nữ',
+            default => '☐ Nam ☐ Nữ',
+        };
         $values['tenant.date_of_birth'] = $this->date($tenant['date_of_birth'] ?? null);
         $values['tenant.identity_issue_date'] = $this->date($tenant['identity_issue_date'] ?? null);
         foreach (['full_name', 'title', 'phone', 'bank_name', 'bank_account_name', 'bank_account_number'] as $key) {

@@ -110,7 +110,7 @@ class ContractDocumentsApiTest extends TestCase
 
         $html = $this->getJson("/api/contracts/{$contract->id}/document/preview")->assertOk()->json('data.rendered_html');
 
-        $this->assertStringContainsString('3.800.000 đồng', $html);
+        $this->assertStringContainsString('3.800.000 VNĐ', $html);
         $this->assertStringContainsString('01/11/2026', $html);
         $this->assertStringContainsString('Chưa cập nhật', $html);
         $this->assertStringContainsString('BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG', $html);

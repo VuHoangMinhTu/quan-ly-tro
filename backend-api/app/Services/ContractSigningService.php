@@ -329,8 +329,8 @@ class ContractSigningService
                 $this->audit->record($document, 'SIGNED', $http, $signing);
                 $signatures = $document->signatures()->orderBy('signer_role')->lockForUpdate()->get();
                 if ($signatures->pluck('signer_role')->sort()->values()->all() === ['LESSOR', 'TENANT']) {
-                    $signatureBlock = $this->signatureBlock($signatures->all());
-                    $unsigned = $this->templateRenderer->unsignedSignatureBlock();
+                    $unsigned = $this->unsignedBlockInDocument($document);
+                    $signatureBlock = $this->signatureBlock($signatures->all(), $this->signatureTypeForBlock($unsigned));
                     $html = str_contains($document->rendered_html, $unsigned)
                         ? str_replace($unsigned, $signatureBlock, $document->rendered_html)
                         : $document->rendered_html.$signatureBlock;
@@ -357,20 +357,49 @@ class ContractSigningService
     /** Display current evidence without changing the frozen document or its consent hash. */
     private function withCurrentSignatures(ContractDocument $document): string
     {
-        $unsigned = $this->templateRenderer->unsignedSignatureBlock();
+        $unsigned = $this->unsignedBlockInDocument($document);
         if (! str_contains($document->rendered_html, $unsigned)) {
             return $document->rendered_html;
         }
 
-        return str_replace($unsigned, $this->signatureBlock($document->signatures()->get()->all()), $document->rendered_html);
+        return str_replace($unsigned, $this->signatureBlock($document->signatures()->get()->all(), $this->signatureTypeForBlock($unsigned)), $document->rendered_html);
     }
 
-    private function signatureBlock(array $signatures): string
+    private function unsignedBlockInDocument(ContractDocument $document): string
+    {
+        foreach ([data_get($document->source_snapshot, 'contract.contract_type'), null] as $type) {
+            $block = $this->templateRenderer->unsignedSignatureBlock($type);
+            if (str_contains($document->rendered_html, $block)) {
+                return $block;
+            }
+        }
+
+        return $this->templateRenderer->unsignedSignatureBlock();
+    }
+
+    private function signatureTypeForBlock(string $block): ?string
+    {
+        if (str_contains($block, 'ĐẠI DIỆN BÊN CHO THUÊ')) {
+            return 'DORM_BED';
+        }
+
+        return str_contains($block, 'Người đại diện (Họ tên, chữ ký)') ? 'ROOM_RENTAL' : null;
+    }
+
+    private function signatureBlock(array $signatures, ?string $type = null): string
     {
         $byRole = collect($signatures)->keyBy('signer_role');
         $html = '<div class="document-signatures">';
-        foreach (['LESSOR' => 'BÊN CHO THUÊ (BÊN A)', 'TENANT' => 'BÊN THUÊ (BÊN B)'] as $role => $title) {
-            $html .= '<div><h3>'.$title.'</h3>';
+        $titles = $type === 'DORM_BED'
+            ? ['LESSOR' => 'ĐẠI DIỆN BÊN CHO THUÊ (BÊN A)', 'TENANT' => 'ĐẠI DIỆN BÊN THUÊ (BÊN B)']
+            : ['LESSOR' => 'BÊN CHO THUÊ (BÊN A)', 'TENANT' => 'BÊN THUÊ (BÊN B)'];
+        foreach ($titles as $role => $title) {
+            $caption = match ($type) {
+                'DORM_BED' => '(Ký và ghi rõ họ tên)',
+                'ROOM_RENTAL' => $role === 'LESSOR' ? 'Người đại diện (Họ tên, chữ ký)' : '(Họ tên, chữ ký)',
+                default => null,
+            };
+            $html .= '<div><h3>'.$title.'</h3>'.($caption ? '<p>'.$caption.'</p>' : '');
             $signature = $byRole->get($role);
             if ($signature) {
                 $html .= '<img data-signature-id="'.$signature->id.'" data-file-hash="'.$signature->signature_file_hash.'" alt="Chữ ký vẽ tay">'
