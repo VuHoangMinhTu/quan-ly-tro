@@ -10,7 +10,7 @@ class ContractTemplateVariableRegistry
     public function definitions(): array
     {
         $groups = [
-            'Hợp đồng' => ['contract.code' => 'Mã hợp đồng', 'contract.contract_code' => 'Mã hợp đồng (tên field)', 'contract.start_date' => 'Ngày bắt đầu', 'contract.end_date' => 'Ngày kết thúc', 'contract.signed_date' => 'Ngày ký đã khai báo', 'contract.monthly_rent' => 'Giá thuê hàng tháng', 'contract.monthly_rent_value' => 'Giá thuê dạng số, không kèm đơn vị', 'contract.deposit' => 'Tiền cọc thỏa thuận', 'contract.deposit_amount' => 'Tiền cọc (tên field)', 'contract.deposit_value' => 'Tiền cọc dạng số, không kèm đơn vị', 'contract.payment_due_day' => 'Ngày thanh toán hàng tháng', 'contract.note' => 'Ghi chú', 'contract.electricity_opening' => 'Chỉ số điện ban đầu'],
+            'Hợp đồng' => ['contract.code' => 'Mã hợp đồng', 'contract.contract_code' => 'Mã hợp đồng (tên field)', 'contract.start_date' => 'Ngày bắt đầu', 'contract.end_date' => 'Ngày kết thúc', 'contract.signed_date' => 'Ngày ký đã khai báo', 'contract.document_day' => 'Ngày lập hợp đồng', 'contract.document_month' => 'Tháng lập hợp đồng', 'contract.document_year' => 'Năm lập hợp đồng', 'contract.duration_months' => 'Thời hạn hợp đồng (tháng tròn)', 'contract.monthly_rent' => 'Giá thuê hàng tháng', 'contract.monthly_rent_value' => 'Giá thuê dạng số, không kèm đơn vị', 'contract.deposit' => 'Tiền cọc thỏa thuận', 'contract.deposit_amount' => 'Tiền cọc (tên field)', 'contract.deposit_value' => 'Tiền cọc dạng số, không kèm đơn vị', 'contract.payment_due_day' => 'Ngày thanh toán hàng tháng', 'contract.note' => 'Ghi chú', 'contract.electricity_opening' => 'Chỉ số điện ban đầu'],
             'Người thuê' => ['tenant.full_name' => 'Họ tên', 'tenant.date_of_birth' => 'Ngày sinh', 'tenant.gender' => 'Giới tính', 'tenant.gender_checkboxes' => 'Giới tính dạng ô chọn Nam/Nữ', 'tenant.identity_number' => 'Số định danh', 'tenant.identity_issue_date' => 'Ngày cấp', 'tenant.identity_issued_date' => 'Ngày cấp (bí danh)', 'tenant.identity_issue_place' => 'Nơi cấp', 'tenant.identity_issued_place' => 'Nơi cấp (bí danh)', 'tenant.occupation' => 'Nghề nghiệp', 'tenant.phone' => 'Số điện thoại', 'tenant.email' => 'Email', 'tenant.permanent_address' => 'Địa chỉ thường trú', 'tenant.bank_name' => 'Ngân hàng Bên B', 'tenant.bank_account_number' => 'Số tài khoản Bên B', 'tenant.emergency_name' => 'Người thân liên hệ khẩn cấp', 'tenant.emergency_phone' => 'Điện thoại khẩn cấp', 'tenant.vehicle_type' => 'Loại xe', 'tenant.vehicle_plate' => 'Biển số xe', 'tenant.vehicle_color' => 'Màu xe', 'tenant.vehicle_quantity' => 'Số lượng xe'],
             'Phòng' => ['room.room_code' => 'Mã phòng', 'room.room_name' => 'Tên phòng', 'room.area' => 'Diện tích', 'room.max_tenants' => 'Số người tối đa', 'room.occupants_count' => 'Số người đăng ký ở'],
             'Nhà trọ' => ['boarding_house.name' => 'Tên nhà trọ', 'boarding_house.address' => 'Địa chỉ nhà trọ', 'boarding_house.ward' => 'Phường/Xã'],
@@ -76,6 +76,21 @@ class ContractTemplateVariableRegistry
         ];
         foreach (['start_date', 'end_date', 'signed_date'] as $key) {
             $values['contract.'.$key] = $this->date($contract[$key] ?? null);
+        }
+        $signedDate = explode('T', (string) ($contract['signed_date'] ?? ''))[0];
+        $signedParts = preg_match('/^\d{4}-\d{2}-\d{2}$/', $signedDate) ? explode('-', $signedDate) : [];
+        $values['contract.document_day'] = $signedParts[2] ?? null;
+        $values['contract.document_month'] = $signedParts[1] ?? null;
+        $values['contract.document_year'] = $signedParts[0] ?? null;
+        $start = explode('T', (string) ($contract['start_date'] ?? ''))[0];
+        $end = explode('T', (string) ($contract['end_date'] ?? ''))[0];
+        $values['contract.duration_months'] = null;
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $start, $from) && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $end, $to)) {
+            $months = ((int) $to[1] - (int) $from[1]) * 12 + (int) $to[2] - (int) $from[2];
+            $startDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $start);
+            $inclusiveEnd = $startDate === false ? null : $startDate->modify('+'.($months + 1).' months')->modify('-1 day')->format('Y-m-d');
+            $duration = $from[3] === $to[3] ? $months : ($inclusiveEnd === $end ? $months + 1 : null);
+            $values['contract.duration_months'] = $duration > 0 ? (string) $duration : null;
         }
         foreach (['full_name', 'identity_number', 'identity_issue_place', 'occupation', 'phone', 'email', 'permanent_address', 'bank_name', 'bank_account_number', 'emergency_name', 'emergency_phone', 'vehicle_type', 'vehicle_plate', 'vehicle_color', 'vehicle_quantity'] as $key) {
             $values['tenant.'.$key] = $tenant[$key] ?? null;

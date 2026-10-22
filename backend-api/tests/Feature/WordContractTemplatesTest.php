@@ -82,6 +82,31 @@ class WordContractTemplatesTest extends TestCase
         $this->assertStringContainsString('☐ Internet : …', $rendered);
     }
 
+    public function test_room_rental_word_fills_known_dates_and_renders_only_one_handover_table(): void
+    {
+        $content = file_get_contents(resource_path('views/contracts-room-rental-word.html'));
+        $snapshot = app(ContractTemplateVariableRegistry::class)->sample();
+        $snapshot['contract']['contract_type'] = 'ROOM_RENTAL';
+        $snapshot['contract']['signed_date'] = '2026-10-22';
+        $snapshot['contract']['start_date'] = '2026-10-22';
+        $snapshot['contract']['end_date'] = '2026-12-22';
+        $snapshot['handover_checkin'] = [['name' => 'Giường', 'quantity' => 1, 'condition' => 'GOOD']];
+
+        $rendered = app(ContractTemplateRenderer::class)->render($content, $snapshot);
+
+        $this->assertStringContainsString('ngày 22 tháng 10 năm 2026', $rendered);
+        $this->assertStringContainsString('Thời gian hợp đồng là: 2 tháng', $rendered);
+        $this->assertSame(1, substr_count($rendered, '<table>'));
+        $this->assertStringContainsString('<td>Giường</td>', $rendered);
+        $this->assertStringContainsString('<td>1 · Tốt</td>', $rendered);
+        $this->assertStringNotContainsString('Chưa cập nhật', $rendered);
+
+        $snapshot['contract']['start_date'] = '2026-11-01';
+        $snapshot['contract']['end_date'] = '2027-10-31';
+        $inclusiveYear = app(ContractTemplateRenderer::class)->render($content, $snapshot);
+        $this->assertStringContainsString('Thời gian hợp đồng là: 12 tháng', $inclusiveYear);
+    }
+
     private function assertArticleOrder(string $content, int $count): void
     {
         $previous = -1;

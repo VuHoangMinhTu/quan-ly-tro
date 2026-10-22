@@ -3,23 +3,28 @@
 <p class="text-center"><strong>Độc Lập – Tự Do – Hạnh Phúc</strong></p>
 <p class="text-center"><strong>———•0•———</strong></p>
 <h1 class="text-center">HỢP ĐỒNG CHO THUÊ PHÒNG</h1>
-<p class="text-center">{{boarding_house.ward}}, ngày…...tháng..…..năm………</p>
+<p class="text-center">{{boarding_house.ward}}, ngày {{contract.document_day}} tháng {{contract.document_month}} năm {{contract.document_year}}</p>
 <p>Đại diện các bên xét thấy có đủ năng lực hành vì dân sự và tự chịu trách nhiệm trước pháp luật về mọi hành vi của mình, gồm:</p>
 <p><strong>BÊN CHO THUÊ – BÊN A:</strong></p>
-<p>Đại diện : {{lessor.full_name}}        Chức vụ: {{lessor.title}}</p>
-<p>Điện thoại hỗ trợ: {{lessor.phone}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Đại diện</span>: {{lessor.full_name}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Chức vụ</span>: {{lessor.title}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Điện thoại hỗ trợ</span>: {{lessor.phone}}</p>
 <p><strong>BÊN THUÊ – KHÁCH HÀNG – BÊN B:</strong>(Xin quý khách hàng điền đầy đủ tất cả thông tin)</p>
-<p>Khách hàng : {{tenant.full_name}}</p>
-<p>Địa chỉ : {{tenant.permanent_address}}</p>
-<p>Ngày sinh : {{tenant.date_of_birth}}</p>
-<p>Số CMND/CCCD: {{tenant.identity_number}} Ngày cấp: {{tenant.identity_issue_date}} Nơi cấp: {{tenant.identity_issue_place}}</p>
-<p>Điện thoại : {{tenant.phone}} Nghề nghiệp: {{tenant.occupation}}</p>
-<p>Số tài khoản : {{tenant.bank_account_number}} Ngân hàng: {{tenant.bank_name}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Khách hàng</span>: {{tenant.full_name}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Địa chỉ</span>: {{tenant.permanent_address}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Ngày sinh</span>: {{tenant.date_of_birth}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Số CMND/CCCD</span>: {{tenant.identity_number}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Ngày cấp</span>: {{tenant.identity_issue_date}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Nơi cấp</span>: {{tenant.identity_issue_place}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Điện thoại</span>: {{tenant.phone}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Nghề nghiệp</span>: {{tenant.occupation}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Số tài khoản</span>: {{tenant.bank_account_number}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Ngân hàng</span>: {{tenant.bank_name}}</p>
 <p><strong>Cùng thỏa thuận giao kết hợp đồng cho thuê với các nội dung sau đây:</strong></p>
 <h2 class="text-center">ĐIỀU 1: KHÔNG GIAN CHO THUÊ:</h2>
 <p>Bên A đồng ý cho khách hàng thuê phòng: {{room.room_code}}</p>
 <p>Trong căn nhà số: {{boarding_house.address}}</p>
-<p>Thời gian hợp đồng là:………………………tháng</p>
+<p>Thời gian hợp đồng là: {{contract.duration_months}} tháng</p>
 <p>Từ ngày {{contract.start_date}}</p>
 <p>đến ngày {{contract.end_date}} hợp đồng chính thức hết hiệu lực.</p>
 <p><strong>Chỉ số điện ban đầu</strong>: {{contract.electricity_opening}}</p>
@@ -138,7 +143,8 @@
 <p>Hai bên nhất trí thỏa thuận trên và cam kết thi hành đúng quyền và nghĩa vụ hợp đồng. Nếu bên nào vi phạm phải chịu phạt và bồi thường theo quy định pháp luật. Mọi phát sinh tranh chấp sẽ được giải quyết qua thương lượng, nếu thương lượng không được sẽ yêu cầu tòa án có thẩm quyền giải quyết theo quy định của pháp luật.</p>
 <p>Hợp đồng lập thành 02 bản có giá trị như nhau. Mỗi bên giữ 01 bản.</p>
 <div class="document-signatures"></div>
-<p>BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG: {{room.room_code}}</p>
+<div class="page-break"></div>
+<p><strong>BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG: {{room.room_code}}</strong></p>
 <table><tbody><tr><td>STT</td><td>Thiết bị và dụng cụ</td><td>Ngày nhận:..................</td><td>Ngày trả:………….......</td></tr><tr><td>1</td><td>Phòng mới không có lỗ đinh, 
 Tường trắng sạch sẽ</td><td>Mới, tốt  Cũ, hư 
 ……………………..</td><td>Mới, tốt  Cũ, hư 
