@@ -25,6 +25,10 @@
 .contract-document-html .word-contract h1 { font-size: 16pt; margin: 12px 0; text-align: center; }
 .contract-document-html .word-contract h2 { font-size: 13pt; margin: 15px 0 6px; text-align: left; }
 .contract-document-html .word-contract p { margin: 5px 0; }
+  .contract-document-html .word-contract ol { margin: 5px 0 5px 2.7em; padding-left: 1.1em; list-style: decimal outside; }
+  .contract-document-html .word-contract ol li { padding-left: 0.25em; margin: 2px 0; text-align: justify; }
+  .contract-document-html .word-contract ol li p { margin: 2px 0 0; }
+  .contract-document-html .word-contract strong { font-weight: 700; }
 .contract-document-html .word-contract table { font-size: 10pt; margin: 9px 0; }
 .contract-document-html .word-contract td, .contract-document-html .word-contract th { padding: 5px; }
 @media screen and (max-width: 640px) {

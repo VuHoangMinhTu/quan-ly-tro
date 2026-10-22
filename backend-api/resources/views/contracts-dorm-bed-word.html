@@ -1,15 +1,15 @@
 <div class="word-contract">
-<p class="text-center">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
-<p class="text-center">Độc lập – Tự do – Hạnh phúc</p>
-<p class="text-center">———•0•———</p>
+<p class="text-center"><strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong></p>
+<p class="text-center"><strong>Độc lập – Tự do – Hạnh phúc</strong></p>
+<p class="text-center"><strong>———•0•———</strong></p>
 <h1 class="text-center">HỢP ĐỒNG CHO THUÊ GIƯỜNG KÝ TÚC XÁ</h1>
 <p class="text-center">{{boarding_house.ward}}, ngày……..tháng….…..năm…….…… </p>
 <p>Đại diện các bên xét thấy có đủ năng lực hành vì dân sự và tự chịu trách nhiệm trước pháp luật về mọi hành vi của mình, gồm:</p>
-<p>BÊN CHO THUÊ - BÊN A:</p>
+<p><strong>BÊN CHO THUÊ - BÊN A:</strong></p>
 <p>Đại diện : {{lessor.full_name}}        Chức vụ: {{lessor.title}}</p>
 <p>Điện thoại hỗ trợ: {{lessor.phone}}</p>
 <p>Ngân hàng: {{lessor.bank_name}} | Số tài khoản: {{lessor.bank_account_number}} | Chủ TK: {{lessor.bank_account_name}}</p>
-<p>BÊN THUÊ - BÊN B:</p>
+<p><strong>BÊN THUÊ - BÊN B:</strong></p>
 <p>Họ và tên: {{tenant.full_name}}</p>
 <p>Ngày sinh: {{tenant.date_of_birth}} Giới tính: {{tenant.gender_checkboxes}}</p>
 <p>Địa chỉ thường trú: {{tenant.permanent_address}}</p>
@@ -28,42 +28,42 @@
 <p>Ghi chú: {{contract.note}}</p>
 <p>Hai bên thống nhất giao kết Hợp đồng thuê chỗ ở / giường Ký túc xá với các nội dung chi tiết sau:</p>
 <h2 class="text-center">ĐIỀU 1: ĐỐI TƯỢNG HỢP ĐỒNG &amp; KHÔNG GIAN CHO THUÊ</h2>
-<p>1. Không gian riêng: Bên A đồng ý cho Bên B thuê chỗ ở tại vị trí giường, số phòng và tầng cụ thể đã được ghi nhận chi tiết tại phần thông tin ban đầu của hợp đồng, thuộc căn nhà tại địa chỉ: {{boarding_house.address}}.</p>
-<p>2. Khu vực sử dụng chung: Bên B được quyền sử dụng các không gian và tiện ích chung của tòa nhà bao gồm: Nhà vệ sinh chung, khu vực nấu ăn/bếp chung, tủ lạnh chung, máy giặt chung, sân phơi, khu sinh hoạt chung và khu để xe theo nội quy.</p>
+<p><strong>1. Không gian riêng: </strong>Bên A đồng ý cho Bên B thuê chỗ ở tại vị trí giường, số phòng và tầng cụ thể đã được ghi nhận chi tiết tại phần thông tin ban đầu của hợp đồng, thuộc căn nhà tại địa chỉ: {{boarding_house.address}}.</p>
+<p><strong>2. Khu vực sử dụng chung:</strong> Bên B được quyền sử dụng các không gian và tiện ích chung của tòa nhà bao gồm: Nhà vệ sinh chung, khu vực nấu ăn/bếp chung, tủ lạnh chung, máy giặt chung, sân phơi, khu sinh hoạt chung và khu để xe theo nội quy.</p>
 <h2 class="text-center">ĐIỀU 2: THỜI HẠN HỢP ĐỒNG</h2>
-<p>Thời hạn: Thời hạn thuê là ……… tháng, </p>
+<p><strong>Thời hạn:</strong> Thời hạn thuê là ……… tháng, </p>
 <p>tính từ ngày {{contract.start_date}} đến ngày {{contract.end_date}}</p>
-<p>2. Gia hạn hợp đồng: Trước ngày kết thúc hợp đồng tối thiểu 30 ngày, hai bên có nghĩa vụ thông báo bằng văn bản hoặc tin nhắn/email/zalo về việc tiếp tục gia hạn hoặc dừng thuê.</p>
-<p>3. Quyền ưu tiên: Hết thời hạn hợp đồng, nếu Bên B có nhu cầu và tuân thủ tốt nội quy sẽ được ưu tiên ký tiếp. Trường hợp đến hạn mà không bên nào có thông báo chấm dứt, hợp đồng có thể được xem xét gia hạn thêm theo chính sách hiện hành của Bên A.</p>
+<p><strong>2. Gia hạn hợp đồng:</strong> Trước ngày kết thúc hợp đồng tối thiểu 30 ngày, hai bên có nghĩa vụ thông báo bằng văn bản hoặc tin nhắn/email/zalo về việc tiếp tục gia hạn hoặc dừng thuê.</p>
+<p><strong>3. Quyền ưu tiên:</strong> Hết thời hạn hợp đồng, nếu Bên B có nhu cầu và tuân thủ tốt nội quy sẽ được ưu tiên ký tiếp. Trường hợp đến hạn mà không bên nào có thông báo chấm dứt, hợp đồng có thể được xem xét gia hạn thêm theo chính sách hiện hành của Bên A.</p>
 <h2 class="text-center">ĐIỀU 3: GIÁ THUÊ VÀ CHI PHÍ DỊCH VỤ</h2>
-<p>Giá thuê cố định: Giá thuê giường cố định là: {{contract.monthly_rent_value}} VNĐ/tháng</p>
-<p>2. Chi phí tiện ích: Giá thuê trên được áp dụng theo phương án chi phí dịch vụ như sau (đánh dấu)</p>
-<p>[  ] Gói dịch vụ trọn gói: Đã bao gồm tiền điện sinh hoạt, máy lạnh, nước sinh hoạt, wifi, máy giặt, rác và chi phí dọn dẹp vệ sinh khu vực công cộng.</p>
-<p>[  ] Gói tính theo định mức/tiêu thụ: Giá phòng chưa gồm dịch vụ: </p>
+<p><strong>Giá thuê cố định:</strong> Giá thuê giường cố định là: {{contract.monthly_rent_value}} VNĐ/tháng</p>
+<p><strong>2. Chi phí tiện ích:</strong> Giá thuê trên được áp dụng theo phương án chi phí dịch vụ như sau (đánh dấu)</p>
+<p><strong>[  ] Gói dịch vụ trọn gói: </strong>Đã bao gồm tiền điện sinh hoạt, máy lạnh, nước sinh hoạt, wifi, máy giặt, rác và chi phí dọn dẹp vệ sinh khu vực công cộng.</p>
+<p><strong>[  ] Gói tính theo định mức/tiêu thụ: </strong>Giá phòng chưa gồm dịch vụ: </p>
 <p>Tiền điện (………..………đ/kWh); </p>
 <p>Tiền nước (……….……đ/tháng/người); </p>
 <p>Phí dịch vụ &amp; rác (…….………đ/tháng); </p>
 <p>Phí giữ xe (……….……đ/tháng/xe).</p>
-<p>3. Cam kết ổn định giá: Giá thuê giường không thay đổi trong suốt thời gian có hiệu lực của hợp đồng này.</p>
-<p>4. Kỳ thanh toán đầu: Tiền giường kỳ đầu tiên tính từ ngày ……/….……/20…….… đến ngày ….……/………./20………… là: ……………………………… VNĐ.</p>
+<p><strong>3. Cam kết ổn định giá:</strong> Giá thuê giường không thay đổi trong suốt thời gian có hiệu lực của hợp đồng này.</p>
+<p><strong>4. Kỳ thanh toán đầu:</strong> Tiền giường kỳ đầu tiên tính từ ngày ……/….……/20…….… đến ngày ….……/………./20………… là: ……………………………… VNĐ.</p>
 <h2 class="text-center">ĐIỀU 4: TIỀN ĐẶT CỌC VÀ CHÍNH SÁCH HOÀN TRẢ CỌC</h2>
-<p>1. Số tiền cọc: Bên B đặt cọc cho Bên A số tiền bảo đảm là: {{contract.deposit_value}} VNĐ</p>
-<p>2. Điều kiện hoàn cọc: Số tiền cọc này được Bên A hoàn trả cho Bên B sau khi kết thúc hợp đồng và đáp ứng đủ các điều kiện sau:</p>
+<p><strong>1. Số tiền cọc:</strong> Bên B đặt cọc cho Bên A số tiền bảo đảm là: {{contract.deposit_value}} VNĐ</p>
+<p><strong>2. Điều kiện hoàn cọc:</strong> Số tiền cọc này được Bên A hoàn trả cho Bên B sau khi kết thúc hợp đồng và đáp ứng đủ các điều kiện sau:</p>
 <p>Bên B hoàn thành đúng và đủ thời hạn hợp đồng đã cam kết.
 - Bên B đã thanh toán đầy đủ tiền thuê và toàn bộ chi phí dịch vụ kèm theo.
 - Bên B bàn giao lại vị trí giường, tủ đồ cá nhân và trang thiết bị chung nguyên vẹn, sạch sẽ như lúc ban đầu tiếp nhận.</p>
 <p>- Trường hợp Bên B có nhu cầu trả chỗ ở trước thời hạn hợp đồng, Bên B phải thông báo cho Bên A trước ít nhất 60 ngày. Trong trường hợp này, Bên B được nhận lại 40% tiền đặt cọc.</p>
 <p>- Trường hợp Bên B trả chỗ ở trước hạn nhưng không thông báo đủ 60 ngày, Bên B không được hoàn trả tiền đặt cọc.
 - Thời gian hoàn trả tiền cọc: Tối đa từ 03 đến 07 ngày làm việc kể từ thời điểm hoàn tất biên bản bàn giao phòng/giường.</p>
-<p>3. Các trường hợp chấm dứt trước hạn: Xử lý tiền cọc khi kết thúc trước thời hạn:</p>
+<p><strong>3. Các trường hợp chấm dứt trước hạn:</strong> Xử lý tiền cọc khi kết thúc trước thời hạn:</p>
 <p>- Trường hợp Bên B tự ý chuyển đi trước thời hạn hợp đồng: Bên B phải thông báo trước ít nhất 60 ngày. Trong thời gian thông báo, Bên B có trách nhiệm chủ động tìm kiếm khách thuê thay thế và được Bên A chấp thuận. Nếu Bên B tự tìm được khách thuê thay thế đáp ứng điều kiện thuê và hoàn tất việc bàn giao theo thỏa thuận, Bên B được hoàn trả 100% tiền đặt cọc.</p>
 <p>- Trường hợp Bên A hỗ trợ tìm khách thuê thay thế: Nếu Bên B yêu cầu Bên A tìm kiếm khách thuê thay thế, Bên B đồng ý khấu trừ 60% số tiền đặt cọc để thanh toán phí dịch vụ tìm kiếm khách thuê và hoa hồng kinh doanh. Số tiền đặt cọc còn lại (40%) được hoàn trả cho Bên B sau khi hoàn tất việc bàn giao và thanh toán đầy đủ các khoản phí liên quan.</p>
 <p>- Trường hợp Bên B chuyển sang phòng khác trong cùng hệ thống của Bên A: Nếu được Bên A chấp thuận, Bên B được giữ nguyên số tiền đặt cọc để chuyển sang phòng mới. Việc chuyển phòng và các điều kiện thuê tại phòng mới sẽ được hai bên xác nhận trước khi thực hiện.</p>
 <p>- Trách nhiệm trong thời gian báo trước: Trong thời hạn 60 ngày kể từ ngày thông báo chuyển đi, Bên B có trách nhiệm thực hiện đầy đủ nghĩa vụ thanh toán tiền thuê, các khoản phí liên quan và bảo quản chỗ ở cho đến khi hoàn tất bàn giao, trừ khi hai bên có thỏa thuận khác bằng văn bản.</p>
 <h2 class="text-center">ĐIỀU 5: QUY TRÌNH THANH TOÁN VÀ XỬ LÝ CHẬM NỘP</h2>
-<p>1. Kỳ hạn đóng tiền: Thời hạn thanh toán định kỳ hàng tháng từ ngày 01 đến ngày 05 hàng tháng.</p>
-<p>2. Phương thức: Ưu tiên chuyển khoản ngân hàng tới số tài khoản Bên A đã chỉ định ở đầu hợp đồng. Tiền thuê phòng không bao gồm phí giao dịch chuyển tiền ngoài ngân hàng. </p>
-<p>3. Chế tài chậm nộp: Quy trình xử lý vi phạm thời hạn nộp tiền:</p>
+<p><strong>1. Kỳ hạn đóng tiền:</strong> Thời hạn thanh toán định kỳ hàng tháng từ ngày 01 đến ngày 05 hàng tháng.</p>
+<p><strong>2. Phương thức: </strong>Ưu tiên chuyển khoản ngân hàng tới số tài khoản Bên A đã chỉ định ở đầu hợp đồng. Tiền thuê phòng không bao gồm phí giao dịch chuyển tiền ngoài ngân hàng. </p>
+<p><strong>3. Chế tài chậm nộp:</strong> Quy trình xử lý vi phạm thời hạn nộp tiền:</p>
 <p>Sau ngày 05 hàng tháng, nếu chưa thanh toán mà không có thông báo thỏa thuận hợp lệ, Bên B chịu phí chậm nộp 50.000đ – 100.000đ/ngày trễ.</p>
 <p>Quá thời hạn 03 ngày (sau ngày 08): Bên A có quyền tạm ngắt/khóa các tiện ích sử dụng liên quan.</p>
 <p>Quá thời hạn 05 ngày (sau ngày 10): Hợp đồng mặc nhiên chấm dứt do Bên B vi phạm. Bên A có quyền thu hồi chỗ ở, khóa phòng/giường và Bên B mất toàn bộ tiền đặt cọc. Mọi đồ đạc cá nhân Bên B phải thu dọn trong vòng 24h, quá hạn Bên A không chịu trách nhiệm bảo quản.</p>
@@ -73,15 +73,15 @@
 <p>Các hành vi nghiêm cấm: Nghiêm cấm hoàn toàn hành vi hút thuốc lá, sử dụng chất gây nghiện, </p>
 <p>chất kích thích, cờ bạc, mại dâm, tàng trữ vũ khí, chất cháy nổ trong tòa nhà. Nghiêm cấm nuôi hoặc dẫn thú cưng (chó, mèo, v.v.) vào khuôn viên KTX.</p>
 <p>Trật tự sinh hoạt: Giữ gìn trật tự công cộng, không mở loa ngoài âm lượng lớn, không nói chuyệnto làm ảnh hưởng đến bạn cùng phòng sau 22h00 đêm.</p>
-<p>5. Giữ gìn vệ sinh: Giữ vệ sinh chung tại khu vực nấu ăn, rửa chén bát và dọn bếp ngay sau khi sử dụng. Giữ sạch sẽ nhà vệ sinh chung, tuyệt đối không vứt rác, băng vệ sinh vào bồn cầu gây tắc nghẽn.</p>
-<p>6. Tài sản cá nhân: Tự quản lý và bảo quản tư trang cá nhân có giá trị (tiền mặt, máy tính, điện thoại, giấy tờ). Bên A có camera an ninh khu vực chung nhưng không chịu trách nhiệm bồi thường cho mất mát cá nhân do sơ suất bảo quản.</p>
-<p>7. Nội quy nhà xe: Xếp xe gọn gàng đúng vị trí vạch kẻ trong nhà xe, tắt máy khi dắt xe vào nhà, khóa cổ xe cẩn thận.</p>
-<p>8. Đăng ký tạm trú: Cung cấp CCCD hợp lệ ngay sau khi ký hợp đồng để Bên A làm thủ tục khai báo đăng ký tạm trú theo quy định pháp luật.</p>
+<p><strong>5. Giữ gìn vệ sinh:</strong> Giữ vệ sinh chung tại khu vực nấu ăn, rửa chén bát và dọn bếp ngay sau khi sử dụng. Giữ sạch sẽ nhà vệ sinh chung, tuyệt đối không vứt rác, băng vệ sinh vào bồn cầu gây tắc nghẽn.</p>
+<p><strong>6. Tài sản cá nhân:</strong> Tự quản lý và bảo quản tư trang cá nhân có giá trị (tiền mặt, máy tính, điện thoại, giấy tờ). Bên A có camera an ninh khu vực chung nhưng không chịu trách nhiệm bồi thường cho mất mát cá nhân do sơ suất bảo quản.</p>
+<p><strong>7. Nội quy nhà xe:</strong> Xếp xe gọn gàng đúng vị trí vạch kẻ trong nhà xe, tắt máy khi dắt xe vào nhà, khóa cổ xe cẩn thận.</p>
+<p><strong>8. Đăng ký tạm trú:</strong> Cung cấp CCCD hợp lệ ngay sau khi ký hợp đồng để Bên A làm thủ tục khai báo đăng ký tạm trú theo quy định pháp luật.</p>
 <h2 class="text-center">ĐIỀU 7: QUYỀN VÀ TRÁCH NHIỆM CỦA BÊN A</h2>
-<p>1. Bàn giao: Bàn giao đúng vị trí giường, tủ cá nhân và các thiết bị kèm theo trong tình trạng sử dụng tốt và sạch sẽ.</p>
-<p>2. Dịch vụ &amp; Bảo trì: Đảm bảo cung cấp ổn định các dịch vụ tiện ích cơ bản (điện, nước, internet). Chịu trách nhiệm sửa chữa, khắc phục những sự cố hư hỏng khách quan do hao mòn kỹ thuật theo thời gian.</p>
-<p>3. Thủ tục lưu trú: Hỗ trợ tiến hành các thủ tục đăng ký tạm trú với cơ quan Công an có thẩm quyền cho Bên B.</p>
-<p>4. Quản lý: Có quyền kiểm tra định kỳ, lập biên bản nhắc nhở hoặc chấm dứt hợp đồng nếu Bên B vi phạm nghiêm trọng nội quy KTX.</p>
+<p><strong>1. Bàn giao:</strong> Bàn giao đúng vị trí giường, tủ cá nhân và các thiết bị kèm theo trong tình trạng sử dụng tốt và sạch sẽ.</p>
+<p><strong>2. Dịch vụ &amp; Bảo trì:</strong> Đảm bảo cung cấp ổn định các dịch vụ tiện ích cơ bản (điện, nước, internet). Chịu trách nhiệm sửa chữa, khắc phục những sự cố hư hỏng khách quan do hao mòn kỹ thuật theo thời gian.</p>
+<p><strong>3. Thủ tục lưu trú:</strong> Hỗ trợ tiến hành các thủ tục đăng ký tạm trú với cơ quan Công an có thẩm quyền cho Bên B.</p>
+<p><strong>4. Quản lý:</strong> Có quyền kiểm tra định kỳ, lập biên bản nhắc nhở hoặc chấm dứt hợp đồng nếu Bên B vi phạm nghiêm trọng nội quy KTX.</p>
 <h2 class="text-center">ĐIỀU 8: ĐƠN PHƯƠNG CHẤM DỨT HỢP ĐỒNG</h2>
 <p>Bên A có quyền đơn phương chấm dứt hợp đồng ngay lập tức, thu hồi chỗ ở và không hoàn trả tiền cọc khi Bên B vi phạm một trong các trường hợp sau:</p>
 <p>Không nộp tiền thuê giường và chi phí dịch vụ quá 05 ngày so với hạn quy định.</p>
@@ -89,18 +89,18 @@
 <p>Cố ý phá hoại, tự ý đục phá, sửa chữa cơ sở vật chất của tòa nhà mà không được phép.</p>
 <p>Vi phạm nội quy KTX đã được lập biên bản hoặc nhắc nhở từ 02 lần trở lên.</p>
 <h2 class="text-center">ĐIỀU 9: ĐIỀU KHOẢN CHUNG VÀ CAM KẾT THI HÀNH</h2>
-<p>1. Cam kết chung: Hai bên cam kết thực hiện đúng và đầy đủ các điều khoản trong hợp đồng này trên tinh thần bình đẳng, tôn trọng lẫn nhau.</p>
-<p>2. Tranh chấp: Mọi tranh chấp phát sinh trong quá trình thực hiện hợp đồng sẽ được ưu tiên giải quyết thông qua thương lượng hòa giải. Nếu không thống nhất được, vụ việc sẽ được đưa ra cơ quan Tòa án có thẩm quyền để giải quyết.</p>
-<p>3. Hiệu lực: Hợp đồng gồm có …… trang, được lập thành 02 bản có giá trị pháp lý như nhau, mỗi bên giữ 01 bản để thực hiện. Hợp đồng có hiệu lực kể từ ngày hai bên ký tên.</p>
-<p>XÁC NHẬN CÁC KHOẢN THANH TOÁN KHI KÝ HỢP ĐỒNG:</p>
+<p><strong>1. Cam kết chung:</strong> Hai bên cam kết thực hiện đúng và đầy đủ các điều khoản trong hợp đồng này trên tinh thần bình đẳng, tôn trọng lẫn nhau.</p>
+<p><strong>2. Tranh chấp:</strong> Mọi tranh chấp phát sinh trong quá trình thực hiện hợp đồng sẽ được ưu tiên giải quyết thông qua thương lượng hòa giải. Nếu không thống nhất được, vụ việc sẽ được đưa ra cơ quan Tòa án có thẩm quyền để giải quyết.</p>
+<p><strong>3. Hiệu lực:</strong> Hợp đồng gồm có …… trang, được lập thành 02 bản có giá trị pháp lý như nhau, mỗi bên giữ 01 bản để thực hiện. Hợp đồng có hiệu lực kể từ ngày hai bên ký tên.</p>
+<p><strong>XÁC NHẬN CÁC KHOẢN THANH TOÁN KHI KÝ HỢP ĐỒNG:</strong></p>
 <p>1. Tiền thuê giường kỳ đầu (từ ……/……/20…… đến ……/……/20……):………………… VNĐ
 2. Tiền đặt cọc bảo đảm: …………………………………………………….…………….… VNĐ
 3. Tiền cọc đã ứng trước (nếu có): ……………………………………………………..….… VNĐ
 4. Số tiền thực thanh toán khi nhận giường: ………………………………………………… VNĐ</p>
 <div class="document-signatures"></div>
-<p>PHỤ LỤC: BIÊN BẢN BÀN GIAO HIỆN TRẠNG TRANG THIẾT BỊ</p>
+<p><strong>PHỤ LỤC: BIÊN BẢN BÀN GIAO HIỆN TRẠNG TRANG THIẾT BỊ</strong></p>
 <p>Phòng số: {{room.room_code}} | Giường số: {{bed.bed_code}} | Ngày nhận bàn giao: {{contract.start_date}}</p>
 <table><tbody><tr><td>STT</td><td>Hạng mục / Trang thiết bị</td><td>SL</td><td>Tình trạng khi nhận</td></tr><tr><td>1</td><td>Khung giường, vạt giường, rèm che riêng tư</td><td>01 bộ</td><td>☐ Tốt   ☐ Hư hỏng   ☐ Thiếu</td></tr><tr><td>2</td><td>Nệm nằm, drap/ga bọc nệm (nếu có)</td><td>01 bộ</td><td>☐ Tốt   ☐ Hư hỏng   ☐ Thiếu</td></tr><tr><td>3</td><td>Tủ quần áo/tủ đồ cá nhân + chìa khóa</td><td>01 tủ</td><td>☐ Tốt   ☐ Hư hỏng   ☐ Thiếu</td></tr><tr><td>4</td><td>Đèn đọc sách tại giường, ổ cắm điện</td><td>01 bộ</td><td>☐ Tốt   ☐ Hư hỏng   ☐ Thiếu</td></tr><tr><td>5</td><td>Khóa vân tay / Thẻ từ / Chìa khóa cửa chính KTX</td><td>…… cái</td><td>☐ Tốt   ☐ Hư hỏng   ☐ Thiếu</td></tr><tr><td>6</td><td>Máy lạnh phòng + Remote điều hòa</td><td>01 Bộ</td><td>☐ Tốt   ☐ Hư hỏng   ☐ Thiếu</td></tr></tbody></table>
-<p>Ghi chú: Biên bản này là một phần không thể tách rời của Hợp đồng thuê KTX. Khi trả chỗ ở, Bên B có trách nhiệm bàn giao lại đầy đủ và nguyên vẹn các hạng mục đã tiếp nhận bên trên để hoàn tất thủ tục hoàn cọc.</p>
+<p><strong>Ghi chú: </strong>Biên bản này là một phần không thể tách rời của Hợp đồng thuê KTX. Khi trả chỗ ở, Bên B có trách nhiệm bàn giao lại đầy đủ và nguyên vẹn các hạng mục đã tiếp nhận bên trên để hoàn tất thủ tục hoàn cọc.</p>
 <div>{{handover_checkin_table}}</div>
 </div>
