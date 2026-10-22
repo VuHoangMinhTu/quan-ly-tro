@@ -32,6 +32,11 @@ class BoardingHouse extends Model
         return $this->hasMany(Room::class);
     }
 
+    public function floors()
+    {
+        return $this->hasMany(Floor::class);
+    }
+
     public function services()
     {
         return $this->hasMany(Service::class);

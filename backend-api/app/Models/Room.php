@@ -13,6 +13,8 @@ class Room extends Model
 
     protected $fillable = [
         'boarding_house_id',
+        'floor_id',
+        'room_type',
         'room_code',
         'room_name',
         'area',
@@ -36,6 +38,11 @@ class Room extends Model
     public function boardingHouse()
     {
         return $this->belongsTo(BoardingHouse::class);
+    }
+
+    public function floor()
+    {
+        return $this->belongsTo(Floor::class);
     }
 
     public function amenities()

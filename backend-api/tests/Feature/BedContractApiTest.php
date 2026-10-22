@@ -16,6 +16,7 @@ class BedContractApiTest extends TestCase
     {
         $contract = Contract::factory()->create();
         $room = $contract->room;
+        $room->update(['room_type' => 'DORMITORY']);
         $owner = $room->boardingHouse->landlord->user;
 
         $this->getJson("/api/rooms/{$room->id}/beds")->assertUnauthorized();

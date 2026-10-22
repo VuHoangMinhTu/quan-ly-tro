@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AmenityController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BedController;
+use App\Http\Controllers\Api\FloorController;
 use App\Http\Controllers\Api\BoardingHouseController;
 use App\Http\Controllers\Api\BoardingHouseManagerController;
 use App\Http\Controllers\Api\ContractController;
@@ -112,12 +113,15 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::delete('/boarding-houses/{id}', [BoardingHouseController::class, 'destroy']);
 
     Route::get('/boarding-houses/{boardingHouseId}/rooms', [RoomController::class, 'index']);
+    Route::get('/boarding-houses/{boardingHouseId}/floors', [FloorController::class, 'index']);
+    Route::post('/boarding-houses/{boardingHouseId}/floors', [FloorController::class, 'store']);
     Route::post('/boarding-houses/{boardingHouseId}/rooms', [RoomController::class, 'store']);
     Route::post('/boarding-houses/{boardingHouseId}/rooms/bulk', [RoomController::class, 'storeBulk']);
 
     Route::get('/rooms/{id}', [RoomController::class, 'show']);
     Route::get('/rooms/{roomId}/beds', [BedController::class, 'index']);
     Route::post('/rooms/{roomId}/beds', [BedController::class, 'store']);
+    Route::put('/beds/{id}', [BedController::class, 'update']);
 
     Route::put('/rooms/{id}', [RoomController::class, 'update']);
     Route::delete('/rooms/{id}', [RoomController::class, 'destroy']);

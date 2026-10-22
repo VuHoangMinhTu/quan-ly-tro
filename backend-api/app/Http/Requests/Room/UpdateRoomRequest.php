@@ -48,6 +48,7 @@ class UpdateRoomRequest extends FormRequest
                 'string',
                 'max:255',
             ],
+            'floor_id' => ['nullable', 'integer', Rule::exists('floors', 'id')->where('boarding_house_id', $boardingHouseId ?? 0)],
 
             'area' => [
                 'nullable',

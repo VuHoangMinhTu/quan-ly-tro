@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Room;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreBulkRoomsRequest extends FormRequest
 {
@@ -27,9 +28,13 @@ class StoreBulkRoomsRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'floor_id' => ['nullable', 'integer'],
             'rooms' => ['required', 'array', 'list', 'min:1', 'max:200'],
-            'rooms.*' => ['required', 'array:room_code,area,monthly_rent,max_tenants'],
+            'rooms.*' => ['required', 'array:room_code,room_type,room_name,area,monthly_rent,max_tenants,description'],
             'rooms.*.room_code' => ['required', 'string', 'max:50', 'distinct:ignore_case'],
+            'rooms.*.room_type' => ['sometimes', Rule::in(['PRIVATE_ROOM'])],
+            'rooms.*.room_name' => ['nullable', 'string', 'max:255'],
+            'rooms.*.description' => ['nullable', 'string'],
             'rooms.*.area' => ['nullable', 'numeric', 'min:0', 'max:99999999.99'],
             'rooms.*.monthly_rent' => ['nullable', 'numeric', 'min:0', 'max:9999999999999.99'],
             'rooms.*.max_tenants' => ['nullable', 'integer', 'min:1', 'max:4294967295'],

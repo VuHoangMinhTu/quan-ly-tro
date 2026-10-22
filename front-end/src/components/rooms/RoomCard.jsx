@@ -27,11 +27,11 @@ export default function RoomCard({ room, actions }) {
           {statusLabels[room.status] || room.status}
         </span>
       </div>
-      <p className="mt-5 break-words text-lg font-semibold text-slate-900 sm:text-xl">{room.monthly_rent == null ? 'Chưa thiết lập giá thuê' : formatCurrency(room.monthly_rent)}{room.monthly_rent != null && <span className="text-sm font-normal text-slate-500">/tháng</span>}</p>
+      <p className="mt-5 break-words text-lg font-semibold text-slate-900 sm:text-xl">{room.room_type === 'DORMITORY' ? `${room.beds_count ?? 0} giường` : room.monthly_rent == null ? 'Chưa thiết lập giá thuê' : formatCurrency(room.monthly_rent)}{room.room_type !== 'DORMITORY' && room.monthly_rent != null && <span className="text-sm font-normal text-slate-500">/tháng</span>}</p>
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-600">
         {room.active_occupants_count != null && <span className="w-full">{room.active_occupants_count > 0 ? `Đang có người · ${room.active_occupants_count} người ở` : 'Chưa có người ở'}</span>}
         <span>{formatArea(room.area)}</span>
-        <span className="inline-flex items-center gap-1"><Users size={15} /> {room.max_tenants ? `Tối đa ${room.max_tenants}` : 'Chưa đặt'}</span>
+        <span className="inline-flex items-center gap-1"><Users size={15} /> {room.room_type === 'DORMITORY' ? 'Phòng KTX' : room.max_tenants ? `Tối đa ${room.max_tenants}` : 'Chưa đặt'}</span>
       </div>
       {actions && <div className="mt-5 border-t border-slate-100 pt-4">{actions}</div>}
     </article>

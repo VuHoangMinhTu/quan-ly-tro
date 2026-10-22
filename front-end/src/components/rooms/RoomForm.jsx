@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { getAmenities } from '../../api/amenityApi'
 import { getApiErrorMessage, applyApiFieldErrors } from '../../api/getApiErrorMessage'
 import { roomKeys } from '../../api/roomKeys'
+import { getFloors } from '../../api/roomApi'
 import MoneyInput from '../ui/MoneyInput'
 
 const optionalNumber = z.preprocess(
@@ -21,6 +22,7 @@ const optionalInteger = z.preprocess(
 const schema = z.object({
   room_code: z.string().trim().min(1, 'Vui lòng nhập mã phòng').max(50),
   room_name: z.string().max(255).optional(),
+  floor_id: z.string().optional(),
   area: optionalNumber,
   monthly_rent: optionalNumber,
   max_tenants: optionalInteger,
@@ -30,18 +32,20 @@ const schema = z.object({
 })
 
 const emptyValues = {
-  room_code: '', room_name: '', area: '', monthly_rent: '', max_tenants: '', status: 'AVAILABLE', description: '', amenity_ids: [],
+  room_code: '', room_name: '', floor_id: '', area: '', monthly_rent: '', max_tenants: '', status: 'AVAILABLE', description: '', amenity_ids: [],
 }
 
 export default function RoomForm({ initialValues = emptyValues, onSubmit, submitLabel }) {
   const [submitError, setSubmitError] = useState('')
   const amenitiesQuery = useQuery({ queryKey: roomKeys.amenities, queryFn: getAmenities })
+  const floorsQuery = useQuery({ queryKey: ['floors', initialValues.boarding_house_id], queryFn: () => getFloors(initialValues.boarding_house_id), enabled: Boolean(initialValues.boarding_house_id) })
   const form = useForm({ resolver: zodResolver(schema), defaultValues: emptyValues })
 
   useEffect(() => {
     form.reset({
       room_code: initialValues.room_code || '',
       room_name: initialValues.room_name || '',
+      floor_id: initialValues.floor_id == null ? '' : String(initialValues.floor_id),
       area: initialValues.area ?? '',
       monthly_rent: initialValues.monthly_rent ?? '',
       max_tenants: initialValues.max_tenants ?? '',
@@ -57,6 +61,7 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
       await onSubmit({
         ...values,
         room_name: values.room_name?.trim() || null,
+        floor_id: values.floor_id ? Number(values.floor_id) : null,
         description: values.description?.trim() || null,
         amenity_ids: (values.amenity_ids || []).map(Number),
       })
@@ -82,6 +87,7 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
           <input id="room-name" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('room_name')} />
           {errors.room_name && <p className="mt-1 text-sm text-red-600">{errors.room_name.message}</p>}
         </div>
+        <div><label htmlFor="room-floor" className="block text-sm font-medium text-slate-700">Tầng</label><select id="room-floor" className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2" {...form.register('floor_id')}><option value="">Chưa thiết lập tầng</option>{(floorsQuery.data?.data?.data || []).map((floor) => <option key={floor.id} value={String(floor.id)}>{floor.name}</option>)}</select>{errors.floor_id && <p className="text-sm text-red-600">{errors.floor_id.message}</p>}</div>
         <div>
           <label htmlFor="room-area" className="block text-sm font-medium text-slate-700">Diện tích (m²)</label>
           <input id="room-area" type="number" min="0" step="0.01" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('area', { valueAsNumber: true })} />

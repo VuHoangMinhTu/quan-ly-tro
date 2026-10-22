@@ -20,7 +20,7 @@ class RoomController extends Controller
     public function index(Request $request, int $boardingHouseId): JsonResponse
     {
         $boardingHouse = $this->findOwnedBoardingHouse($request, $boardingHouseId);
-        $rooms = $boardingHouse->rooms()->with('amenities')->withActiveOccupancy()->latest()->get();
+        $rooms = $boardingHouse->rooms()->with(['amenities', 'floor'])->withCount('beds')->withActiveOccupancy()->latest()->get();
 
         return ApiResponse::success($rooms, 'Lấy danh sách phòng thành công.');
     }
@@ -30,13 +30,26 @@ class RoomController extends Controller
         $boardingHouse = $this->findOwnedBoardingHouse($request, $boardingHouseId);
         $data = $request->validated();
         $amenityIds = $data['amenity_ids'] ?? [];
-        unset($data['amenity_ids']);
+        $beds = $data['beds'] ?? [];
+        unset($data['amenity_ids'], $data['beds']);
 
-        $room = DB::transaction(function () use ($boardingHouse, $data, $amenityIds): Room {
+        if (($data['room_type'] ?? 'PRIVATE_ROOM') !== 'DORMITORY' && $beds !== []) {
+            throw ValidationException::withMessages(['beds' => 'Chỉ phòng KTX mới có giường.']);
+        }
+
+        $room = DB::transaction(function () use ($boardingHouse, $data, $amenityIds, $beds): Room {
             $room = $boardingHouse->rooms()->create($data);
             $room->amenities()->sync($amenityIds);
+            foreach ($beds as $bed) {
+                $room->beds()->create([
+                    'bed_code' => trim($bed['bed_code']),
+                    'monthly_rent' => $bed['monthly_rent'] ?? null,
+                    'status' => $bed['status'] ?? 'AVAILABLE',
+                    'note' => $bed['note'] ?? null,
+                ]);
+            }
 
-            return $room->load('amenities');
+            return $room->load(['amenities', 'floor', 'beds']);
         });
 
         return ApiResponse::success($room, 'Tạo phòng thành công.', 201);
@@ -45,9 +58,14 @@ class RoomController extends Controller
     public function storeBulk(StoreBulkRoomsRequest $request, int $boardingHouseId): JsonResponse
     {
         $boardingHouse = $this->findOwnedBoardingHouse($request, $boardingHouseId);
-        $rooms = $request->validated()['rooms'];
+        $validated = $request->validated();
+        $rooms = $validated['rooms'];
+        $floorId = $validated['floor_id'] ?? null;
+        if ($floorId !== null && ! $boardingHouse->floors()->whereKey($floorId)->exists()) {
+            throw ValidationException::withMessages(['floor_id' => 'Tầng không thuộc nhà trọ này.']);
+        }
 
-        DB::transaction(function () use ($boardingHouse, $rooms): void {
+        DB::transaction(function () use ($boardingHouse, $rooms, $floorId): void {
             // Serialize batch additions to this house; no room is written if any code already exists.
             $boardingHouse->newQuery()->whereKey($boardingHouse->id)->lockForUpdate()->firstOrFail();
             $existingCodes = $boardingHouse->rooms()->pluck('room_code')
@@ -64,6 +82,10 @@ class RoomController extends Controller
             foreach ($rooms as $room) {
                 $boardingHouse->rooms()->create([
                     'room_code' => $room['room_code'],
+                    'room_name' => $room['room_name'] ?? null,
+                    'description' => $room['description'] ?? null,
+                    'floor_id' => $floorId,
+                    'room_type' => $room['room_type'] ?? 'PRIVATE_ROOM',
                     'area' => $room['area'] ?? null,
                     'monthly_rent' => $room['monthly_rent'] ?? null,
                     'max_tenants' => $room['max_tenants'] ?? null,
@@ -78,7 +100,7 @@ class RoomController extends Controller
     public function show(Request $request, int $id): JsonResponse
     {
         return ApiResponse::success(
-            $this->findOwnedRoom($request, $id)->load('amenities')->loadCount(['roomTenants as active_occupants_count' => fn ($occupants) => $occupants->where('status', 'ACTIVE')->whereHas('tenant')]),
+            $this->findOwnedRoom($request, $id)->load(['amenities', 'floor'])->loadCount(['beds', 'roomTenants as active_occupants_count' => fn ($occupants) => $occupants->where('status', 'ACTIVE')->whereHas('tenant')]),
             'Lấy thông tin phòng thành công.'
         );
     }
@@ -90,6 +112,9 @@ class RoomController extends Controller
         $room = $this->findOwnedRoom($request, $id);
 
         $data = $request->validated();
+        if (array_key_exists('floor_id', $data) && $data['floor_id'] !== null && ! $room->boardingHouse->floors()->whereKey($data['floor_id'])->exists()) {
+            throw ValidationException::withMessages(['floor_id' => 'Tầng không thuộc nhà trọ này.']);
+        }
 
         $hasAmenities = array_key_exists(
             'amenity_ids',

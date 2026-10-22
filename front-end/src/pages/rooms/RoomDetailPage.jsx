@@ -7,6 +7,7 @@ import { getContractsByRoom } from '../../api/contractApi'
 import { contractKeys } from '../../api/contractKeys'
 import ContractStatusBadge from '../../components/contracts/ContractStatusBadge'
 import RoomOccupantsSection from '../../components/rooms/RoomOccupantsSection'
+import RoomBedsSection from '../../components/rooms/RoomBedsSection'
 import RoomUtilitiesSection from '../../components/rooms/RoomUtilitiesSection'
 import RoomServicesSection from '../../components/rooms/RoomServicesSection'
 import AmenityIcon from '../../components/amenities/AmenityIcon'
@@ -72,9 +73,11 @@ export default function RoomDetailPage() {
       <div className="min-w-0 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
         <h3 className="text-lg font-semibold">Thông tin phòng</h3>
         <dl className="mt-5 grid gap-5 sm:grid-cols-2">
-          <div><dt className="text-sm text-slate-500">Giá thuê</dt><dd className="mt-1 break-words font-medium">{room.monthly_rent == null ? 'Chưa thiết lập giá thuê' : formatCurrency(room.monthly_rent) + '/tháng'}</dd></div>
+          <div><dt className="text-sm text-slate-500">Loại phòng</dt><dd className="mt-1 font-medium">{room.room_type === 'DORMITORY' ? 'Phòng KTX' : 'Phòng trọ'}</dd></div>
+          <div><dt className="text-sm text-slate-500">Tầng</dt><dd className="mt-1 font-medium">{room.floor?.name || 'Chưa thiết lập tầng'}</dd></div>
+          {room.room_type !== 'DORMITORY' && <div><dt className="text-sm text-slate-500">Giá thuê</dt><dd className="mt-1 break-words font-medium">{room.monthly_rent == null ? 'Chưa thiết lập giá thuê' : formatCurrency(room.monthly_rent) + '/tháng'}</dd></div>}
           <div><dt className="text-sm text-slate-500">Diện tích</dt><dd className="mt-1 break-words font-medium">{formatArea(room.area)}</dd></div>
-          <div><dt className="text-sm text-slate-500">Số người tối đa</dt><dd className="mt-1 break-words font-medium">{room.max_tenants || 'Chưa đặt'}</dd></div>
+          {room.room_type !== 'DORMITORY' && <div><dt className="text-sm text-slate-500">Số người tối đa</dt><dd className="mt-1 break-words font-medium">{room.max_tenants || 'Chưa đặt'}</dd></div>}
           <div><dt className="text-sm text-slate-500">Trạng thái</dt><dd className="mt-1 break-words font-medium">{room.status}</dd></div>
           <div className="sm:col-span-2"><dt className="text-sm text-slate-500">Mô tả</dt><dd className="mt-1 whitespace-pre-wrap break-words">{room.description || 'Chưa có mô tả.'}</dd></div>
         </dl>
@@ -85,7 +88,8 @@ export default function RoomDetailPage() {
         {room.amenities?.length ? <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{room.amenities.map((amenity) => <div key={amenity.id} className="flex min-w-0 items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700"><AmenityIcon name={amenity.name} icon={amenity.icon} /><span className="min-w-0 break-words">{amenity.name}</span></div>)}</div> : <p className="mt-3 text-sm text-slate-500">Chưa có tiện nghi nào.</p>}
       </div>
 
-      <RoomOccupantsSection roomId={id} />
+      {room.room_type === 'DORMITORY' && <RoomBedsSection room={room} />}
+      <RoomOccupantsSection roomId={id} room={room} />
 
       <RoomServicesSection key={`room-services-${room.id}`} room={room} />
       <section className="mt-6 min-w-0 rounded-xl bg-white p-4 shadow-sm sm:p-6"><h3 className="text-lg font-semibold">Khai báo cư trú</h3><p className="mt-1 text-sm text-slate-500">Tự điền CT01 từ hồ sơ những người đang ở trong phòng.</p><div className="mt-3 flex flex-wrap gap-3"><Link to={`/residence-declarations/new?room_id=${room.id}`} className="inline-flex min-h-11 items-center rounded-lg bg-slate-900 px-3 text-sm text-white">Tạo hồ sơ tạm trú</Link><Link to={`/residence-declarations?room_id=${room.id}`} className="inline-flex min-h-11 items-center rounded-lg border px-3 text-sm">Xem hồ sơ của phòng</Link></div></section>

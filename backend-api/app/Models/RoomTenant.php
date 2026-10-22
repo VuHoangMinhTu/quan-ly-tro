@@ -18,6 +18,7 @@ class RoomTenant extends Model
 {
     protected $fillable = [
         'room_id',
+        'bed_id',
         'contract_id',
         'tenant_id',
         'is_primary',
@@ -35,6 +36,11 @@ class RoomTenant extends Model
     public function room()
     {
         return $this->belongsTo(Room::class);
+    }
+
+    public function bed(): BelongsTo
+    {
+        return $this->belongsTo(Bed::class);
     }
 
     public function tenant()
