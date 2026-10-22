@@ -16,7 +16,7 @@ class ContractTemplateVariableRegistry
             'Nhà trọ' => ['boarding_house.name' => 'Tên nhà trọ', 'boarding_house.address' => 'Địa chỉ nhà trọ', 'boarding_house.ward' => 'Phường/Xã'],
             'Bên cho thuê' => ['lessor.full_name' => 'Người đại diện', 'lessor.title' => 'Chức vụ', 'lessor.phone' => 'Điện thoại bên A', 'lessor.bank_name' => 'Ngân hàng nhận tiền', 'lessor.bank_account_name' => 'Chủ tài khoản', 'lessor.bank_account_number' => 'Số tài khoản'],
             'Giường' => ['bed.bed_code' => 'Mã giường', 'bed.floor_label' => 'Tầng'],
-            'Danh sách' => ['services_table' => 'Bảng dịch vụ thỏa thuận', 'occupants_table' => 'Danh sách người ở', 'vehicles_table' => 'Danh sách phương tiện', 'handover_checkin_table' => 'Biên bản bàn giao'],
+            'Danh sách' => ['services_table' => 'Bảng dịch vụ thỏa thuận', 'room_rental_services' => 'Dịch vụ Điều 4 hợp đồng phòng trọ', 'occupants_table' => 'Danh sách người ở', 'vehicles_table' => 'Danh sách phương tiện', 'handover_checkin_table' => 'Biên bản bàn giao'],
         ];
         $result = [];
         foreach ($groups as $group => $items) {

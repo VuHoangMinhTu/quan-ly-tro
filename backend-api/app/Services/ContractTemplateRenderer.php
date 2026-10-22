@@ -30,7 +30,7 @@ class ContractTemplateRenderer
     {
         $content = $this->prepare($content);
         $values = $this->registry->values($snapshot);
-        $blocks = ['services_table' => $this->services($snapshot['services'] ?? []), 'occupants_table' => $this->occupants($snapshot['occupants'] ?? []),
+        $blocks = ['services_table' => $this->services($snapshot['services'] ?? []), 'room_rental_services' => $this->roomRentalServices($snapshot['services'] ?? []), 'occupants_table' => $this->occupants($snapshot['occupants'] ?? []),
             'vehicles_table' => $this->vehicles($snapshot['vehicles'] ?? []), 'handover_checkin_table' => $this->handover($snapshot['handover_checkin'] ?? [])];
 
         $rendered = preg_replace_callback('/\{\{(.*?)\}\}/s', fn ($match) => $blocks[trim($match[1])] ?? $this->escape($values[trim($match[1])]), $content);
@@ -99,6 +99,61 @@ class ContractTemplateRenderer
         }
 
         return $rows === [] ? '<p>Chưa có dịch vụ được ghi nhận.</p>' : $this->table(['Dịch vụ', 'Cách tính', 'Giá thỏa thuận', 'VAT', 'Hiệu lực từ'], $rows);
+    }
+
+    private function roomRentalServices(array $services): string
+    {
+        // Render only the prices agreed in this contract snapshot, never today's mutable Service price.
+        $slots = [
+            'ELECTRICITY' => 'Tiền điện',
+            'WATER' => 'Tiền nước',
+            'INTERNET' => 'Internet',
+            'LAUNDRY' => 'Máy giặt',
+            'PARKING' => 'Giữ xe',
+            'SERVICE' => 'Dịch vụ',
+        ];
+        $grouped = [];
+        foreach ($services as $service) {
+            if (! ($service['is_active'] ?? true)) {
+                continue;
+            }
+            $type = $service['service_type'] ?? $service['type'] ?? '';
+            $slot = match ($type) {
+                'OTHER', 'SERVICE' => str_contains(mb_strtolower((string) ($service['service_name'] ?? '')), 'giặt') ? 'LAUNDRY' : 'SERVICE',
+                'TRASH', 'CLEANING' => 'SERVICE',
+                default => $type,
+            };
+            if (isset($slots[$slot])) {
+                $grouped[$slot][] = $service;
+            }
+        }
+
+        $html = '';
+        foreach ($slots as $type => $label) {
+            $terms = array_map(fn ($service) => $this->roomRentalServicePrice($service, $type === 'SERVICE'), $grouped[$type] ?? []);
+            $html .= '<p>'.($terms === [] ? '☐' : '☑').' '.$this->escape($label).' : '.($terms === [] ? '…………………………………………' : implode('; ', $terms)).'</p>';
+        }
+
+        return $html;
+    }
+
+    private function roomRentalServicePrice(array $service, bool $includeName): string
+    {
+        $name = $includeName ? $this->escape($service['service_name'] ?? '').' — ' : '';
+        $method = $service['billing_method'] ?? '';
+        if ($method === 'TIERED') {
+            $tiers = array_map(fn ($tier) => $this->escape($this->registry->number($tier['from_quantity'] ?? 0)).'–'.
+                ($tier['to_quantity'] ?? null ? $this->escape($this->registry->number($tier['to_quantity'])) : 'không giới hạn').': '.
+                $this->escape($this->registry->number($tier['unit_price'] ?? null, true)).
+                (empty($service['unit']) ? '' : ' / '.$this->escape($service['unit'])), $service['pricing_snapshot'] ?? []);
+
+            return $name.'bậc thang: '.implode('; ', $tiers);
+        }
+
+        $price = $this->escape($this->registry->number($service['base_price'] ?? null, true));
+        $unit = trim((string) ($service['unit'] ?? ''));
+
+        return $name.$price.($unit === '' ? '' : ' / '.$this->escape($unit));
     }
 
     private function occupants(array $occupants): string

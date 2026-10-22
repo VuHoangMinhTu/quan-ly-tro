@@ -44,6 +44,18 @@ class ServiceApiTest extends TestCase
         ]);
     }
 
+    public function test_landlord_can_create_general_service_type(): void
+    {
+        $landlord = $this->createLandlord();
+        $boardingHouse = $this->createBoardingHouse($landlord);
+
+        $this->withBearerToken($landlord)->postJson("/api/boarding-houses/{$boardingHouse->id}/services", $this->servicePayload([
+            'name' => 'Phí dịch vụ', 'type' => 'SERVICE', 'billing_method' => 'FIXED', 'unit' => 'tháng', 'base_price' => 150000,
+        ]))->assertCreated();
+
+        $this->assertDatabaseHas('services', ['boarding_house_id' => $boardingHouse->id, 'name' => 'Phí dịch vụ', 'type' => 'SERVICE']);
+    }
+
     public function test_landlord_cannot_create_service_for_another_landlords_boarding_house(): void
     {
         $boardingHouse = $this->createBoardingHouse($this->createLandlord());

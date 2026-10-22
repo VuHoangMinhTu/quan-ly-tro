@@ -59,6 +59,29 @@ class WordContractTemplatesTest extends TestCase
         $this->assertStringNotContainsString('0901 7116 368', $content);
     }
 
+    public function test_room_rental_article_four_uses_agreed_service_prices_from_snapshot(): void
+    {
+        $content = ContractTemplate::query()->where('scope_key', 'GLOBAL')
+            ->where('template_key', 'ROOM_RENTAL_STANDARD')->where('is_active', true)->sole()->content_html;
+        $this->assertStringContainsString('{{room_rental_services}}', $content);
+
+        $rendered = app(ContractTemplateRenderer::class)->render($content, [
+            ...app(ContractTemplateVariableRegistry::class)->sample(),
+            'contract' => ['contract_type' => 'ROOM_RENTAL'],
+            'services' => [
+                ['service_name' => 'Điện', 'service_type' => 'ELECTRICITY', 'billing_method' => 'PER_UNIT', 'base_price' => '3800.00', 'unit' => 'kWh', 'is_active' => true],
+                ['service_name' => 'Nước', 'service_type' => 'WATER', 'billing_method' => 'FIXED', 'base_price' => '150000.00', 'unit' => 'tháng', 'is_active' => true],
+                ['service_name' => 'Phí quản lý', 'service_type' => 'SERVICE', 'billing_method' => 'FIXED', 'base_price' => '25000.00', 'unit' => 'tháng', 'is_active' => true],
+                ['service_name' => 'Phí vệ sinh cũ', 'service_type' => 'OTHER', 'billing_method' => 'FIXED', 'base_price' => '30000.00', 'unit' => 'tháng', 'is_active' => true],
+            ],
+        ]);
+
+        $this->assertStringContainsString('☑ Tiền điện : 3.800 đồng / kWh', $rendered);
+        $this->assertStringContainsString('☑ Tiền nước : 150.000 đồng / tháng', $rendered);
+        $this->assertStringContainsString('☑ Dịch vụ : Phí quản lý — 25.000 đồng / tháng; Phí vệ sinh cũ — 30.000 đồng / tháng', $rendered);
+        $this->assertStringContainsString('☐ Internet : …', $rendered);
+    }
+
     private function assertArticleOrder(string $content, int $count): void
     {
         $previous = -1;

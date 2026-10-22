@@ -5,6 +5,7 @@ export const SERVICE_TYPE_LABELS = {
   PARKING: 'Giữ xe',
   TRASH: 'Rác',
   CLEANING: 'Vệ sinh',
+  SERVICE: 'Dịch vụ',
   OTHER: 'Khác',
 }
 
