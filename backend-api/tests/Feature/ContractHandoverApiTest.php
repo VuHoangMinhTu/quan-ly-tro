@@ -30,7 +30,10 @@ class ContractHandoverApiTest extends TestCase
         $items = $this->getJson("/api/contracts/{$contract->id}/handover-check-in")->assertOk()->json('data.items');
 
         $this->assertSame('DRAFT', ContractHandoverReport::query()->sole()->status);
-        $this->assertCount(7, $items);
+        $this->assertCount(13, $items);
+        $this->assertSame('Phòng mới không có lỗ đinh, Tường trắng sạch sẽ', $items[0]['name']);
+        $this->assertSame('Tủ, kệ bếp', $items[12]['name']);
+        $this->assertNull($items[0]['condition']);
         $this->assertCount(1, array_filter($items, fn (array $item) => $item['name'] === 'Máy lạnh'));
         $this->assertContains('Tivi', array_column($items, 'name'));
         $this->postJson("/api/contracts/{$contract->id}/handover-check-in")->assertUnprocessable();
@@ -44,13 +47,13 @@ class ContractHandoverApiTest extends TestCase
         $this->putJson("/api/contracts/{$contract->id}/handover-check-in", ['items' => $items])->assertOk();
         $draft = $this->getJson("/api/contracts/{$contract->id}/document/preview")->assertOk()->json('data.rendered_html');
         $this->assertSame(1, substr_count($draft, 'class="contract-handover-table"'));
-        $this->assertStringNotContainsString('<td>Tivi</td>', $draft);
+        $this->assertStringContainsString('<td>Tivi</td><td>Mới, tốt ☐ &nbsp; Cũ, hư ☐', $draft);
 
         $this->postJson("/api/contracts/{$contract->id}/handover-check-in/confirm")->assertOk();
         $confirmed = $this->getJson("/api/contracts/{$contract->id}/document/preview")->assertOk()->json('data.rendered_html');
 
         $this->assertStringContainsString('<td>Tivi</td>', $confirmed);
-        $this->assertStringContainsString('Hư hỏng', $confirmed);
+        $this->assertStringContainsString('<td>Tivi</td><td>Mới, tốt ☐ &nbsp; Cũ, hư ☑<br>Trầy nhẹ', $confirmed);
         $this->assertDatabaseHas('contract_handover_reports', ['contract_id' => $contract->id, 'type' => 'CHECK_IN', 'status' => 'CONFIRMED']);
         $this->putJson("/api/contracts/{$contract->id}/handover-check-in", ['items' => $items])->assertUnprocessable();
         $this->postJson("/api/contracts/{$contract->id}/handover-check-in/confirm")->assertUnprocessable();
@@ -113,7 +116,7 @@ class ContractHandoverApiTest extends TestCase
         $this->postJson("/api/contracts/{$contract->id}/finalize")->assertOk();
 
         $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'status' => 'ACTIVE']);
-        $this->assertStringContainsString('Giường', $contract->document()->sole()->rendered_html);
+        $this->assertStringContainsString('Ballet, nệm.', $contract->document()->sole()->rendered_html);
     }
 
     public function test_direct_active_create_cannot_skip_the_handover_step(): void

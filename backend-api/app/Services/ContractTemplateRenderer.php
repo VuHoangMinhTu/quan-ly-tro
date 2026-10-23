@@ -33,7 +33,8 @@ class ContractTemplateRenderer
         $isRoomRentalWord = str_contains($content, 'class="word-contract"') && ($snapshot['contract']['contract_type'] ?? null) === 'ROOM_RENTAL';
         $isWordContract = str_contains($content, 'class="word-contract"');
         $blocks = ['services_table' => $this->services($snapshot['services'] ?? []), 'room_rental_services' => $this->roomRentalServices($snapshot['services'] ?? []), 'occupants_table' => $this->occupants($snapshot['occupants'] ?? []),
-            'vehicles_table' => $this->vehicles($snapshot['vehicles'] ?? []), 'handover_checkin_table' => $isWordContract ? $this->wordHandover($snapshot['handover_checkin'] ?? []) : $this->handover($snapshot['handover_checkin'] ?? [])];
+            'vehicles_table' => $this->vehicles($snapshot['vehicles'] ?? []), 'handover_checkin_table' => $isRoomRentalWord
+                ? $this->roomRentalHandover($snapshot) : ($isWordContract ? $this->wordHandover($snapshot['handover_checkin'] ?? []) : $this->handover($snapshot['handover_checkin'] ?? []))];
 
         $rendered = preg_replace_callback('/\{\{(.*?)\}\}/s', function ($match) use ($blocks, $values, $isRoomRentalWord) {
             $key = trim($match[1]);
@@ -220,5 +221,75 @@ class ContractTemplateRenderer
         }
 
         return $this->table(['STT', 'Thiết bị và dụng cụ', 'Số lượng', 'Tình trạng khi nhận', 'Ghi chú'], $rows === [] ? [['', '', '', '', '']] : $rows, 'contract-handover-table');
+    }
+
+    private function roomRentalHandover(array $snapshot): string
+    {
+        $checkIn = $this->handoverItemsByName($snapshot['handover_checkin'] ?? []);
+        $checkOut = $this->handoverItemsByName($snapshot['handover_checkout'] ?? []);
+        $names = ContractHandoverService::ROOM_RENTAL_ITEMS;
+        foreach (array_keys($checkIn + $checkOut) as $name) {
+            if (! in_array($name, $names, true)) {
+                $names[] = $name;
+            }
+        }
+
+        $rows = [];
+        foreach ($names as $index => $name) {
+            $received = $checkIn[$name] ?? [];
+            $returned = $checkOut[$name] ?? [];
+            $label = $name === 'Phòng mới không có lỗ đinh, Tường trắng sạch sẽ'
+                ? 'Phòng mới không có lỗ đinh,<br>Tường trắng sạch sẽ' : $this->escape($name);
+            if ($name === 'Khóa cửa') {
+                $keyCount = $received['key_count'] ?? (($received['name'] ?? '') === 'Khóa/chìa khóa' ? ($received['quantity'] ?? null) : null);
+                $label .= '<br>Số lượng chìa: '.$this->escape($keyCount ?? '…………');
+            }
+            if ($name === 'Máy lạnh') {
+                $label .= '<br>Remote: '.$this->escape($received['remote_count'] ?? '…………');
+            }
+            $rows[] = [
+                $this->escape($index + 1), $label,
+                $this->roomRentalHandoverCondition($received),
+                $this->roomRentalHandoverCondition($returned),
+            ];
+        }
+
+        $receivedDate = $this->registry->date($snapshot['contract']['start_date'] ?? null);
+        $returnedDate = $this->registry->date($snapshot['handover_checkout_date'] ?? null);
+
+        return $this->table([
+            'STT', 'Thiết bị và dụng cụ',
+            'Ngày nhận: '.($receivedDate === 'Chưa cập nhật' ? '…………' : $receivedDate),
+            'Ngày trả: '.($returnedDate === 'Chưa cập nhật' ? '…………' : $returnedDate),
+        ], $rows, 'contract-handover-table');
+    }
+
+    private function handoverItemsByName(array $items): array
+    {
+        $byName = [];
+        foreach ($items as $item) {
+            $name = trim(preg_replace('/\s+/u', ' ', (string) ($item['name'] ?? '')));
+            $name = match (mb_strtolower($name)) {
+                'nệm' => 'Ballet, nệm.',
+                'khóa/chìa khóa' => 'Khóa cửa',
+                default => $name,
+            };
+            if ($name !== '' && ! isset($byName[$name])) {
+                $byName[$name] = $item;
+            }
+        }
+
+        return $byName;
+    }
+
+    private function roomRentalHandoverCondition(array $item): string
+    {
+        $condition = $item['condition'] ?? null;
+        $note = trim((string) ($item['note'] ?? ''));
+        $legacy = ['MISSING' => 'Thiếu', 'OTHER' => 'Khác'][$condition ?? ''] ?? (in_array($condition, [null, 'GOOD', 'DAMAGED'], true) ? null : $condition);
+        $detail = trim(($legacy === null ? '' : $legacy.' — ').$note, ' —');
+
+        return 'Mới, tốt '.($condition === 'GOOD' ? '☑' : '☐').' &nbsp; Cũ, hư '.($condition === 'DAMAGED' ? '☑' : '☐')
+            .'<br>'.$this->escape($detail === '' ? '……………………' : $detail);
     }
 }

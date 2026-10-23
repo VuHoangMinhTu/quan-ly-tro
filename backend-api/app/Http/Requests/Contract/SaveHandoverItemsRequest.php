@@ -25,9 +25,11 @@ class SaveHandoverItemsRequest extends FormRequest
         return [
             'items' => ['required', 'array', 'min:1', 'max:100'],
             'items.*.name' => ['required', 'string', 'max:255'],
-            'items.*.quantity' => ['required', 'integer', 'min:0', 'max:100000'],
-            'items.*.condition' => ['required', 'in:GOOD,DAMAGED,MISSING,OTHER'],
+            'items.*.quantity' => ['sometimes', 'integer', 'min:0', 'max:100000'],
+            'items.*.condition' => ['nullable', 'in:GOOD,DAMAGED,MISSING,OTHER'],
             'items.*.note' => ['nullable', 'string', 'max:1000'],
+            'items.*.key_count' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'items.*.remote_count' => ['nullable', 'integer', 'min:0', 'max:100000'],
         ];
     }
 }

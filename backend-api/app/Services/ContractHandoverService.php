@@ -10,7 +10,21 @@ use Illuminate\Validation\ValidationException;
 
 class ContractHandoverService
 {
-    private const DEFAULT_ITEMS = ['Giường', 'Nệm', 'Tủ', 'Khóa/chìa khóa', 'Đèn/ổ cắm', 'Máy lạnh'];
+    public const ROOM_RENTAL_ITEMS = [
+        'Phòng mới không có lỗ đinh, Tường trắng sạch sẽ',
+        'Ballet, nệm.',
+        'Thiết bị nhà vệ sinh',
+        'Tivi',
+        'Bàn ghế, sofa.',
+        'Tủ quần áo, giá treo đồ',
+        'Cục phát wifi',
+        'Khóa cửa',
+        'Máy lạnh',
+        'Tủ lạnh',
+        'Máy nước nóng',
+        'Rèm cửa',
+        'Tủ, kệ bếp',
+    ];
 
     private const DORM_BED_ITEMS = [
         'Khung giường, vạt giường, rèm che riêng tư',
@@ -36,12 +50,13 @@ class ContractHandoverService
             if ($contract->handoverReports()->where('type', 'CHECK_IN')->exists()) {
                 throw ValidationException::withMessages(['report' => 'Biên bản CHECK_IN đã tồn tại.']);
             }
-            $defaults = $contract->contract_type === 'DORM_BED' ? self::DORM_BED_ITEMS : self::DEFAULT_ITEMS;
+            $defaults = $contract->contract_type === 'DORM_BED' ? self::DORM_BED_ITEMS : self::ROOM_RENTAL_ITEMS;
             $names = collect($defaults)->concat($contract->room->amenities()->pluck('name'))
-                ->map(fn (string $name) => trim($name))->filter()->unique(fn (string $name) => Str::lower($name))->values();
+                ->map(fn (string $name) => $contract->contract_type === 'ROOM_RENTAL' && Str::lower(trim($name)) === 'nệm' ? 'Ballet, nệm.' : trim($name))
+                ->filter()->unique(fn (string $name) => Str::lower($name))->values();
             $contract->handoverReports()->create([
                 'type' => 'CHECK_IN', 'status' => 'DRAFT',
-                'items' => $names->map(fn (string $name) => ['name' => $name, 'quantity' => 1, 'condition' => 'GOOD', 'note' => null])->all(),
+                'items' => $names->map(fn (string $name) => ['name' => $name, 'quantity' => 1, 'condition' => null, 'note' => null])->all(),
             ]);
         }, 3);
     }
@@ -52,7 +67,8 @@ class ContractHandoverService
             $report = $this->lockedReport($user, $contractId);
             $this->ensureDraft($report);
             $report->update(['items' => array_map(fn (array $item) => [
-                'name' => trim($item['name']), 'quantity' => $item['quantity'], 'condition' => $item['condition'], 'note' => $item['note'] ?? null,
+                'name' => trim($item['name']), 'quantity' => $item['quantity'] ?? 1, 'condition' => $item['condition'] ?? null,
+                'note' => $item['note'] ?? null, 'key_count' => $item['key_count'] ?? null, 'remote_count' => $item['remote_count'] ?? null,
             ], $items)]);
         });
     }

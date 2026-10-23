@@ -96,8 +96,12 @@ class WordContractTemplatesTest extends TestCase
         $this->assertStringContainsString('ngày 22 tháng 10 năm 2026', $rendered);
         $this->assertStringContainsString('Thời gian hợp đồng là: 2 tháng', $rendered);
         $this->assertSame(1, substr_count($rendered, 'class="contract-handover-table"'));
+        $this->assertSame(15, substr_count($rendered, '<tr>'));
+        $this->assertSame(4, substr_count($rendered, '<th>'));
+        $this->assertStringContainsString('<th>Ngày nhận: 22/10/2026</th>', $rendered);
+        $this->assertStringContainsString('<th>Ngày trả: …………</th>', $rendered);
         $this->assertStringContainsString('<td>Giường</td>', $rendered);
-        $this->assertStringContainsString('<td>1</td><td>Tốt</td>', $rendered);
+        $this->assertStringContainsString('Mới, tốt ☑ &nbsp; Cũ, hư ☐', $rendered);
         $this->assertStringNotContainsString('Chưa cập nhật', $rendered);
 
         $snapshot['contract']['start_date'] = '2026-11-01';
@@ -125,9 +129,9 @@ class WordContractTemplatesTest extends TestCase
             $rendered = app(ContractTemplateRenderer::class)->render(file_get_contents(resource_path('views/'.$filename)), $snapshot);
 
             $this->assertSame(1, substr_count($rendered, 'class="contract-handover-table"'));
-            $this->assertSame(7, substr_count($rendered, '<tr>'));
+            $this->assertSame($type === 'ROOM_RENTAL' ? 16 : 7, substr_count($rendered, '<tr>'));
             $this->assertStringContainsString('<td>Tủ lạnh</td>', $rendered);
-            $this->assertStringContainsString('<td>Hư hỏng</td><td>Trầy cửa</td>', $rendered);
+            $this->assertStringContainsString($type === 'ROOM_RENTAL' ? 'Cũ, hư ☑<br>Trầy cửa' : '<td>Hư hỏng</td><td>Trầy cửa</td>', $rendered);
             $this->assertStringNotContainsString('<td>Giường</td>', $rendered);
             $this->assertStringNotContainsString('Chưa ký', $rendered);
         }
@@ -141,8 +145,37 @@ class WordContractTemplatesTest extends TestCase
         $rendered = app(ContractTemplateRenderer::class)->render(file_get_contents(resource_path('views/contracts-room-rental-word.html')), $snapshot);
 
         $this->assertSame(1, substr_count($rendered, 'class="contract-handover-table"'));
-        $this->assertSame(2, substr_count($rendered, '<tr>'));
+        $this->assertSame(14, substr_count($rendered, '<tr>'));
+        $this->assertSame(13, substr_count($rendered, 'Mới, tốt ☐ &nbsp; Cũ, hư ☐<br>……………………') / 2);
         $this->assertStringNotContainsString('<td>Giường</td>', $rendered);
+    }
+
+    public function test_room_rental_handover_maps_check_in_and_future_check_out_into_the_same_word_table(): void
+    {
+        $snapshot = app(ContractTemplateVariableRegistry::class)->sample();
+        $snapshot['contract']['contract_type'] = 'ROOM_RENTAL';
+        $snapshot['contract']['start_date'] = '2026-10-22';
+        $snapshot['handover_checkin'] = [
+            ['name' => 'Khóa/chìa khóa', 'quantity' => 2, 'condition' => 'GOOD'],
+            ['name' => 'Máy lạnh', 'remote_count' => 1, 'condition' => 'GOOD', 'note' => 'Remote đầy đủ'],
+        ];
+        $snapshot['handover_checkout_date'] = '2027-10-22';
+        $snapshot['handover_checkout'] = [
+            ['name' => 'Máy lạnh', 'condition' => 'DAMAGED', 'note' => 'Remote bị hỏng'],
+        ];
+
+        $rendered = app(ContractTemplateRenderer::class)->render(
+            file_get_contents(resource_path('views/contracts-room-rental-word.html')), $snapshot
+        );
+
+        $this->assertSame(1, substr_count($rendered, 'class="contract-handover-table"'));
+        $this->assertSame(14, substr_count($rendered, '<tr>'));
+        $this->assertSame(4, substr_count($rendered, '<th>'));
+        $this->assertStringContainsString('<th>Ngày nhận: 22/10/2026</th>', $rendered);
+        $this->assertStringContainsString('<th>Ngày trả: 22/10/2027</th>', $rendered);
+        $this->assertStringContainsString('Khóa cửa<br>Số lượng chìa: 2</td><td>Mới, tốt ☑ &nbsp; Cũ, hư ☐', $rendered);
+        $this->assertStringContainsString('Máy lạnh<br>Remote: 1</td><td>Mới, tốt ☑ &nbsp; Cũ, hư ☐<br>Remote đầy đủ</td><td>Mới, tốt ☐ &nbsp; Cũ, hư ☑<br>Remote bị hỏng', $rendered);
+        $this->assertStringNotContainsString('<th>Số lượng</th>', $rendered);
     }
 
     private function assertArticleOrder(string $content, int $count): void
