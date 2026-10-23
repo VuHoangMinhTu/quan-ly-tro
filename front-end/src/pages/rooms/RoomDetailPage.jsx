@@ -35,11 +35,16 @@ export default function RoomDetailPage() {
   const invoicesQuery = useQuery({ queryKey: invoiceKeys.byRoom(id), queryFn: () => getInvoicesByRoom(id) })
   const deleteMutation = useMutation({
     mutationFn: () => deleteRoom(id),
-    onSuccess: async () => {
+    onSuccess: async (response) => {
       const room = roomQuery.data.data.data
       await queryClient.invalidateQueries({ queryKey: roomKeys.byBoardingHouse(room.boarding_house_id) })
-      queryClient.removeQueries({ queryKey: roomKeys.detail(id) })
-      navigate(`/boarding-houses/${room.boarding_house_id}/rooms`, { replace: true, state: { message: 'Xóa phòng thành công.' } })
+      if (response.data.data.archived) {
+        setIsConfirmingDelete(false)
+        await queryClient.invalidateQueries({ queryKey: roomKeys.detail(id) })
+      } else {
+        queryClient.removeQueries({ queryKey: roomKeys.detail(id) })
+        navigate(`/boarding-houses/${room.boarding_house_id}/rooms`, { replace: true, state: { message: 'Xóa phòng thành công.' } })
+      }
     },
     onError: (error) => setDeleteError(getApiErrorMessage(error)),
   })
@@ -60,9 +65,9 @@ export default function RoomDetailPage() {
         <div className="flex flex-wrap items-center gap-3">
           <Link to={`/rooms/${id}/edit`} className="inline-flex items-center gap-2 min-h-11 sm:min-h-0 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"><Pencil size={16} /> Sửa</Link>
           {isConfirmingDelete ? (
-            <span className="flex flex-wrap items-center gap-2"><button onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending} className="min-h-11 sm:min-h-0 rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">{deleteMutation.isPending ? 'Đang xóa...' : 'Xác nhận xóa'}</button><button onClick={() => setIsConfirmingDelete(false)} className="min-h-11 sm:min-h-0 px-2 text-sm text-slate-600">Hủy</button></span>
+            <span className="flex flex-wrap items-center gap-2"><span className="w-full text-sm text-slate-700">{room.has_history ? 'Phòng này đã có dữ liệu lịch sử nên không thể xóa vĩnh viễn.' : 'Phòng chưa có dữ liệu phát sinh và sẽ bị xóa vĩnh viễn.'}</span><button onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending} className="min-h-11 sm:min-h-0 rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">{deleteMutation.isPending ? 'Đang xử lý...' : room.has_history ? 'Ngừng sử dụng phòng' : 'Xác nhận xóa'}</button><button onClick={() => setIsConfirmingDelete(false)} className="min-h-11 sm:min-h-0 px-2 text-sm text-slate-600">Hủy</button></span>
           ) : (
-            <button onClick={() => setIsConfirmingDelete(true)} className="inline-flex items-center gap-2 min-h-11 sm:min-h-0 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"><Trash2 size={16} /> Xóa</button>
+            room.status !== 'INACTIVE' && <button onClick={() => setIsConfirmingDelete(true)} className="inline-flex items-center gap-2 min-h-11 sm:min-h-0 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"><Trash2 size={16} /> {room.has_history ? 'Ngừng sử dụng' : 'Xóa'}</button>
           )}
         </div>
       </div>
@@ -78,7 +83,7 @@ export default function RoomDetailPage() {
           {room.room_type !== 'DORMITORY' && <div><dt className="text-sm text-slate-500">Giá thuê</dt><dd className="mt-1 break-words font-medium">{room.monthly_rent == null ? 'Chưa thiết lập giá thuê' : formatCurrency(room.monthly_rent) + '/tháng'}</dd></div>}
           <div><dt className="text-sm text-slate-500">Diện tích</dt><dd className="mt-1 break-words font-medium">{formatArea(room.area)}</dd></div>
           {room.room_type !== 'DORMITORY' && <div><dt className="text-sm text-slate-500">Số người tối đa</dt><dd className="mt-1 break-words font-medium">{room.max_tenants || 'Chưa đặt'}</dd></div>}
-          <div><dt className="text-sm text-slate-500">Trạng thái</dt><dd className="mt-1 break-words font-medium">{room.status}</dd></div>
+          <div><dt className="text-sm text-slate-500">Trạng thái</dt><dd className="mt-1 break-words font-medium">{room.status === 'INACTIVE' ? 'Ngừng sử dụng' : room.status}</dd></div>
           <div className="sm:col-span-2"><dt className="text-sm text-slate-500">Mô tả</dt><dd className="mt-1 whitespace-pre-wrap break-words">{room.description || 'Chưa có mô tả.'}</dd></div>
         </dl>
       </div>

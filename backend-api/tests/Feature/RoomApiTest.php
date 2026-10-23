@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Amenity;
 use App\Models\BoardingHouse;
+use App\Models\Contract;
 use App\Models\Landlord;
 use App\Models\Room;
 use App\Models\User;
@@ -199,9 +200,25 @@ class RoomApiTest extends TestCase
         $this->withBearerToken($landlord)->deleteJson("/api/rooms/{$room->id}")
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data', null);
+            ->assertJsonPath('data.archived', false);
 
-        $this->assertSoftDeleted('rooms', ['id' => $room->id]);
+        $this->assertDatabaseMissing('rooms', ['id' => $room->id]);
+        $this->withBearerToken($landlord)->postJson("/api/boarding-houses/{$room->boarding_house_id}/rooms", $this->roomPayload())->assertCreated();
+    }
+
+    public function test_room_with_contract_history_is_archived_and_keeps_its_code(): void
+    {
+        $landlord = $this->createLandlord();
+        $room = $this->createRoom($this->createBoardingHouse($landlord));
+        Contract::factory()->create(['room_id' => $room->id, 'status' => 'TERMINATED']);
+
+        $this->withBearerToken($landlord)->deleteJson("/api/rooms/{$room->id}")
+            ->assertOk()->assertJsonPath('data.archived', true);
+
+        $this->assertDatabaseHas('rooms', ['id' => $room->id, 'status' => 'INACTIVE', 'deleted_at' => null]);
+        $this->getJson("/api/rooms/{$room->id}")->assertOk()->assertJsonPath('data.has_history', true);
+        $this->postJson("/api/boarding-houses/{$room->boarding_house_id}/rooms", $this->roomPayload())
+            ->assertUnprocessable()->assertJsonValidationErrors('room_code');
     }
 
     public function test_landlord_cannot_delete_another_landlords_room(): void

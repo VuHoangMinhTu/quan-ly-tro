@@ -6,6 +6,7 @@ const statusStyles = {
   RENTED: 'bg-blue-100 text-blue-800',
   RESERVED: 'bg-amber-100 text-amber-800',
   MAINTENANCE: 'bg-slate-200 text-slate-700',
+  INACTIVE: 'bg-slate-200 text-slate-700',
 }
 
 const statusLabels = {
@@ -13,6 +14,7 @@ const statusLabels = {
   RENTED: 'Đã thuê',
   RESERVED: 'Đã đặt',
   MAINTENANCE: 'Bảo trì',
+  INACTIVE: 'Ngừng sử dụng',
 }
 
 export default function RoomCard({ room, actions }) {

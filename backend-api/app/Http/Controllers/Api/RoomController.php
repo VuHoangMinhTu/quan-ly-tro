@@ -20,7 +20,15 @@ class RoomController extends Controller
     public function index(Request $request, int $boardingHouseId): JsonResponse
     {
         $boardingHouse = $this->findOwnedBoardingHouse($request, $boardingHouseId);
-        $rooms = $boardingHouse->rooms()->with(['amenities', 'floor'])->withCount('beds')->withActiveOccupancy()->latest()->get();
+        $rooms = $boardingHouse->rooms()->with(['amenities', 'floor'])->withCount('beds')->withActiveOccupancy()
+            ->withExists(['contracts as has_contracts', 'roomTenants as has_occupants', 'invoices as has_invoices',
+                'utilityMeters as has_meters', 'services as has_services', 'residenceDeclarations as has_residence'])
+            ->latest()->get();
+        $rooms->each(function (Room $room): void {
+            $room->setAttribute('has_history', $room->has_contracts || $room->has_occupants || $room->has_invoices
+                || $room->has_meters || $room->has_services || $room->has_residence);
+            unset($room->has_contracts, $room->has_occupants, $room->has_invoices, $room->has_meters, $room->has_services, $room->has_residence);
+        });
 
         return ApiResponse::success($rooms, 'Lấy danh sách phòng thành công.');
     }
@@ -99,8 +107,11 @@ class RoomController extends Controller
 
     public function show(Request $request, int $id): JsonResponse
     {
+        $room = $this->findOwnedRoom($request, $id)->load(['amenities', 'floor'])->loadCount(['beds', 'roomTenants as active_occupants_count' => fn ($occupants) => $occupants->where('status', 'ACTIVE')->whereHas('tenant')]);
+        $room->setAttribute('has_history', $room->hasHistory());
+
         return ApiResponse::success(
-            $this->findOwnedRoom($request, $id)->load(['amenities', 'floor'])->loadCount(['beds', 'roomTenants as active_occupants_count' => fn ($occupants) => $occupants->where('status', 'ACTIVE')->whereHas('tenant')]),
+            $room,
             'Lấy thông tin phòng thành công.'
         );
     }
@@ -112,6 +123,9 @@ class RoomController extends Controller
         $room = $this->findOwnedRoom($request, $id);
 
         $data = $request->validated();
+        if ($room->status === 'INACTIVE' && ($data['status'] ?? 'INACTIVE') !== 'INACTIVE') {
+            throw ValidationException::withMessages(['status' => 'Phòng đã ngừng sử dụng không thể chuyển lại trạng thái hoạt động.']);
+        }
         if (array_key_exists('floor_id', $data) && $data['floor_id'] !== null && ! $room->boardingHouse->floors()->whereKey($data['floor_id'])->exists()) {
             throw ValidationException::withMessages(['floor_id' => 'Tầng không thuộc nhà trọ này.']);
         }
@@ -143,9 +157,22 @@ class RoomController extends Controller
 
     public function destroy(Request $request, int $id): JsonResponse
     {
-        $this->findOwnedRoom($request, $id)->delete();
+        $archived = DB::transaction(function () use ($request, $id): bool {
+            $room = $this->findOwnedRoom($request, $id);
+            $room = Room::query()->whereKey($room->id)->lockForUpdate()->firstOrFail();
+            if ($room->hasHistory()) {
+                $room->update(['status' => 'INACTIVE']);
 
-        return ApiResponse::success(null, 'Xóa phòng thành công.');
+                return true;
+            }
+
+            // SoftDeletes remains for legacy rows; a never-used room is actually removed.
+            $room->forceDelete();
+
+            return false;
+        });
+
+        return ApiResponse::success(['archived' => $archived], $archived ? 'Đã ngừng sử dụng phòng.' : 'Xóa phòng thành công.');
     }
 
     private function findOwnedBoardingHouse(Request $request, int $boardingHouseId): BoardingHouse

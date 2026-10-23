@@ -75,6 +75,7 @@ class UpdateRoomRequest extends FormRequest
                     'RENTED',
                     'RESERVED',
                     'MAINTENANCE',
+                    'INACTIVE',
                 ]),
             ],
 

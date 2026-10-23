@@ -77,6 +77,9 @@ class ContractService
             $house = $this->access->house($user, $room->boarding_house_id, true);
             // All activation decisions for this room share a lock, including overlap/capacity.
             $room = Room::query()->lockForUpdate()->findOrFail($roomId);
+            if ($room->status === 'INACTIVE' && $id === null) {
+                throw ValidationException::withMessages(['room_id' => 'Phòng đã ngừng sử dụng, không thể tạo hợp đồng mới.']);
+            }
             // A locking read also avoids a stale REPEATABLE READ snapshot after
             // another finalize request commits while this one waits for the room.
             $contract = $id === null ? new Contract(['room_id' => $roomId, 'status' => 'DRAFT', 'deposit_amount' => 0]) : Contract::query()->where('room_id', $roomId)->lockForUpdate()->findOrFail($id);
@@ -206,6 +209,9 @@ class ContractService
 
     private function activate(Contract $contract, Room $room, BoardingHouse $house, ?array $representative): void
     {
+        if ($room->status === 'INACTIVE') {
+            throw ValidationException::withMessages(['room_id' => 'Phòng đã ngừng sử dụng, không thể kích hoạt hợp đồng.']);
+        }
         $errors = [];
         foreach (['start_date', 'monthly_rent', 'lessor_representative_user_id'] as $key) {
             if ($contract->{$key} === null) {
@@ -235,36 +241,41 @@ class ContractService
         if (! $contract->handoverReports()->where('type', 'CHECK_IN')->where('status', 'CONFIRMED')->exists()) {
             throw ValidationException::withMessages(['handover_checkin' => 'Vui lòng tạo và xác nhận biên bản bàn giao trước khi chốt hợp đồng.']);
         }
+        $ids = [(int) $contract->tenant_id, ...($contract->occupant_tenant_ids ?? [])];
+        $otherActive = fn ($query) => $query->where(function ($scope) use ($contract) {
+            $scope->whereNull('contract_id')->orWhere('contract_id', '!=', $contract->id);
+        });
+        if ($room->room_type === 'PRIVATE_ROOM') {
+            $primary = $otherActive($room->roomTenants()->where('status', 'ACTIVE')->where('is_primary', true))
+                ->with('tenant:id,full_name')->first();
+            if ($primary) {
+                $name = $primary->tenant?->full_name ?? 'người thuê trước';
+                $date = $primary->move_in_date?->format('d/m/Y') ?? 'không rõ ngày';
+                throw ValidationException::withMessages(['tenant_id' => "Phòng {$room->room_code} hiện vẫn ghi nhận {$name} là người đứng tên đang ở từ ngày {$date}. Hãy ghi nhận chuyển đi trước khi kích hoạt hợp đồng mới."]);
+            }
+        }
+        if ($otherActive($room->roomTenants()->where('status', 'ACTIVE')->whereIn('tenant_id', $ids))->exists()) {
+            throw ValidationException::withMessages(['occupant_tenant_ids' => 'Người ở vẫn được ghi nhận ACTIVE trong hợp đồng khác. Hãy ghi nhận chuyển đi trước khi kích hoạt hợp đồng mới.']);
+        }
+        $unrelated = $otherActive($room->roomTenants()->where('status', 'ACTIVE')->whereNotIn('tenant_id', $ids))->count();
+        if ($room->max_tenants !== null && count($ids) + $unrelated > $room->max_tenants) {
+            throw ValidationException::withMessages(['occupant_tenant_ids' => 'Số người đăng ký vượt quá số người tối đa của phòng.']);
+        }
         $this->terms->finalize($contract, $room);
         $this->saveOpenings($contract, $room, $contract->utilityOpenings()->get()->map(fn ($opening) => [
             'utility_meter_id' => $opening->utility_meter_id, 'opening_reading' => $opening->opening_reading,
             'reading_date' => $opening->reading_date->format('Y-m-d'),
         ])->all());
-        $ids = [(int) $contract->tenant_id, ...($contract->occupant_tenant_ids ?? [])];
-        $unrelated = $room->roomTenants()->where('status', 'ACTIVE')->whereNotIn('tenant_id', $ids)->count();
-        if ($room->max_tenants !== null && count($ids) + $unrelated > $room->max_tenants) {
-            throw ValidationException::withMessages(['occupant_tenant_ids' => 'Số người đăng ký vượt quá số người tối đa của phòng.']);
-        }
+        $contract->status = 'ACTIVE';
+        $contract->finalized_at = now();
+        $contract->save();
         foreach ($ids as $tenantId) {
-            $membership = $room->roomTenants()->where('tenant_id', $tenantId)->where('status', 'ACTIVE')->first();
-            if ($membership && $membership->contract_id !== null && (int) $membership->contract_id !== (int) $contract->id) {
-                $previous = $membership->contract;
-                if (! $previous?->end_date || $previous->end_date >= $contract->start_date) {
-                    throw ValidationException::withMessages(['occupant_tenant_ids' => 'Người ở đã thuộc một hợp đồng khác đang hiệu lực.']);
-                }
-                $membership->update(['status' => 'MOVED_OUT', 'move_out_date' => $previous->end_date->format('Y-m-d')]);
-                $membership = null;
-            }
+            $membership = $room->roomTenants()->where('contract_id', $contract->id)->where('tenant_id', $tenantId)->where('status', 'ACTIVE')->first();
             if (! $membership) {
                 $membership = new RoomTenant(['room_id' => $room->id, 'tenant_id' => $tenantId, 'move_in_date' => $contract->start_date->format('Y-m-d')]);
             }
-            if ($contract->contract_type !== 'DORM_BED' && $tenantId === (int) $contract->tenant_id && $room->roomTenants()->where('status', 'ACTIVE')->where('is_primary', true)->where('tenant_id', '!=', $tenantId)->exists()) {
-                throw ValidationException::withMessages(['tenant_id' => 'Phòng đã có người đứng tên đang ở. Vui lòng xác nhận lịch sử chuyển đi trước.']);
-            }
             $membership->fill(['contract_id' => $contract->id, 'status' => 'ACTIVE', 'move_out_date' => null, 'is_primary' => $tenantId === (int) $contract->tenant_id])->save();
         }
-        $contract->status = 'ACTIVE';
-        $contract->finalized_at = now();
         $contract->signing_snapshot = $this->sourceSnapshot($contract, $room, $house, $representative, $ids);
         $contract->save();
         $this->documents->capture($contract, $contract->signing_snapshot);
@@ -322,16 +333,15 @@ class ContractService
         if ($target === 'EXPIRED' && (! $contract->end_date || $contract->end_date->format('Y-m-d') > now()->toDateString())) {
             throw ValidationException::withMessages(['status' => 'Chỉ đánh dấu hết hạn khi đã đến ngày kết thúc hợp đồng.']);
         }
-        if (! $moveOutDate) {
-            throw ValidationException::withMessages(['move_out_date' => 'Vui lòng xác nhận ngày chuyển đi để kết thúc hợp đồng và lưu lịch sử người ở.']);
-        }
-        $memberships = $contract->occupants()->where('status', 'ACTIVE')->get();
-        foreach ($memberships as $membership) {
-            if ($moveOutDate < $membership->move_in_date->format('Y-m-d')) {
-                throw ValidationException::withMessages(['move_out_date' => 'Ngày chuyển đi không được trước ngày vào ở.']);
+        if ($moveOutDate) {
+            $memberships = $contract->occupants()->where('status', 'ACTIVE')->get();
+            foreach ($memberships as $membership) {
+                if ($moveOutDate < $membership->move_in_date->format('Y-m-d')) {
+                    throw ValidationException::withMessages(['move_out_date' => 'Ngày chuyển đi không được trước ngày vào ở.']);
+                }
             }
+            $contract->occupants()->where('status', 'ACTIVE')->update(['status' => 'MOVED_OUT', 'move_out_date' => $moveOutDate]);
         }
-        $contract->occupants()->where('status', 'ACTIVE')->update(['status' => 'MOVED_OUT', 'move_out_date' => $moveOutDate]);
         $contract->status = $target;
     }
 

@@ -94,6 +94,21 @@ class Room extends Model
         return $this->hasMany(UtilityMeter::class);
     }
 
+    public function residenceDeclarations()
+    {
+        return $this->hasMany(ResidenceDeclaration::class);
+    }
+
+    public function hasHistory(): bool
+    {
+        return $this->contracts()->exists()
+            || $this->roomTenants()->exists()
+            || $this->invoices()->exists()
+            || $this->utilityMeters()->exists()
+            || $this->services()->exists()
+            || $this->residenceDeclarations()->exists();
+    }
+
     public function services(): BelongsToMany
     {
         return $this->belongsToMany(Service::class, 'room_services')

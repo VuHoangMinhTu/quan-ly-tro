@@ -26,7 +26,7 @@ const schema = z.object({
   area: optionalNumber,
   monthly_rent: optionalNumber,
   max_tenants: optionalInteger,
-  status: z.enum(['AVAILABLE', 'RENTED', 'RESERVED', 'MAINTENANCE']),
+  status: z.enum(['AVAILABLE', 'RENTED', 'RESERVED', 'MAINTENANCE', 'INACTIVE']),
   description: z.string().optional(),
   amenity_ids: z.array(z.number().int()).default([]),
 })
@@ -105,11 +105,12 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
         </div>
         <div>
           <label htmlFor="room-status" className="block text-sm font-medium text-slate-700">Trạng thái</label>
-          <select id="room-status" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('status')}>
+          <select id="room-status" disabled={initialValues.status === 'INACTIVE'} className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('status')}>
             <option value="AVAILABLE">Còn trống</option>
             <option value="RENTED">Đã thuê</option>
             <option value="RESERVED">Đã đặt</option>
             <option value="MAINTENANCE">Bảo trì</option>
+            {initialValues.status === 'INACTIVE' && <option value="INACTIVE">Ngừng sử dụng</option>}
           </select>
           {errors.status && <p className="mt-1 text-sm text-red-600">{errors.status.message}</p>}
         </div>

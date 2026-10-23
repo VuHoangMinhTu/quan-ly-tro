@@ -66,6 +66,21 @@ class ContractLifecycleApiTest extends TestCase
         $this->assertDatabaseCount('room_tenants', 0);
     }
 
+    public function test_inactive_room_cannot_create_or_activate_a_contract(): void
+    {
+        [$contract, $owner] = $this->fixture();
+        $contract->room->update(['status' => 'INACTIVE']);
+
+        $this->login($owner)->postJson("/api/rooms/{$contract->room_id}/contracts", [
+            'tenant_id' => $contract->tenant_id, 'contract_code' => 'INACTIVE-DRAFT', 'status' => 'DRAFT',
+        ])->assertUnprocessable()->assertJsonValidationErrors('room_id');
+        $this->putJson("/api/contracts/{$contract->id}", $this->activate($contract, $owner))
+            ->assertUnprocessable()->assertJsonValidationErrors('room_id');
+
+        $this->assertDatabaseMissing('contracts', ['contract_code' => 'INACTIVE-DRAFT']);
+        $this->assertDatabaseCount('room_tenants', 0);
+    }
+
     public function test_activation_requires_date_price_and_representative_and_rolls_back(): void
     {
         [$contract, $owner] = $this->fixture();
@@ -124,13 +139,50 @@ class ContractLifecycleApiTest extends TestCase
         $this->getJson("/api/contracts/{$contract->id}")->assertJsonPath('data.active_occupants_count', 1);
     }
 
-    public function test_existing_unlinked_active_membership_is_adopted_without_duplication(): void
+    public function test_existing_unlinked_active_primary_blocks_activation(): void
     {
         [$contract, $owner] = $this->fixture();
         $membership = RoomTenant::create(['room_id' => $contract->room_id, 'tenant_id' => $contract->tenant_id, 'move_in_date' => '2026-09-01', 'is_primary' => true, 'status' => 'ACTIVE']);
-        $this->login($owner)->putJson("/api/contracts/{$contract->id}", $this->activate($contract, $owner))->assertOk();
+        $this->login($owner)->putJson("/api/contracts/{$contract->id}", $this->activate($contract, $owner))
+            ->assertUnprocessable()->assertJsonValidationErrors('tenant_id');
         $this->assertDatabaseCount('room_tenants', 1);
-        $this->assertDatabaseHas('room_tenants', ['id' => $membership->id, 'contract_id' => $contract->id, 'move_in_date' => '2026-09-01']);
+        $this->assertDatabaseHas('room_tenants', ['id' => $membership->id, 'contract_id' => null, 'status' => 'ACTIVE']);
+        $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'status' => 'DRAFT']);
+    }
+
+    public function test_terminated_contract_with_moved_out_primary_allows_new_contract_without_changing_history(): void
+    {
+        [$old, $owner] = $this->fixture();
+        $old->tenant->update(['full_name' => 'Nguyễn Văn Cũ']);
+        $this->login($owner)->putJson("/api/contracts/{$old->id}", $this->activate($old, $owner))->assertOk();
+        $oldOccupancy = $old->occupants()->where('is_primary', true)->sole();
+        $this->putJson("/api/contracts/{$old->id}/status", ['status' => 'TERMINATED', 'move_out_date' => '2026-10-23'])->assertOk();
+        $new = Contract::factory()->create(['room_id' => $old->room_id, 'tenant_id' => $old->tenant_id, 'contract_code' => 'NEW-SAME-TENANT', 'start_date' => null, 'monthly_rent' => null]);
+        $new->handoverReports()->create(['type' => 'CHECK_IN', 'status' => 'CONFIRMED', 'items' => [['name' => 'Giường', 'quantity' => 1, 'condition' => 'GOOD']], 'confirmed_at' => now()]);
+
+        $this->putJson("/api/contracts/{$new->id}", $this->activate($new, $owner, ['start_date' => '2026-10-24']))->assertOk();
+        $this->putJson("/api/contracts/{$new->id}/status", ['status' => 'ACTIVE'])->assertOk();
+
+        $this->assertDatabaseHas('room_tenants', ['id' => $oldOccupancy->id, 'status' => 'MOVED_OUT', 'move_out_date' => '2026-10-23']);
+        $this->assertDatabaseHas('room_tenants', ['contract_id' => $new->id, 'tenant_id' => $old->tenant_id, 'status' => 'ACTIVE', 'is_primary' => true]);
+        $this->assertDatabaseCount('room_tenants', 2);
+    }
+
+    public function test_terminated_contract_without_move_out_keeps_primary_and_blocks_new_activation(): void
+    {
+        [$old, $owner] = $this->fixture();
+        $old->tenant->update(['full_name' => 'Nguyễn Văn Đang Ở']);
+        $this->login($owner)->putJson("/api/contracts/{$old->id}", $this->activate($old, $owner))->assertOk();
+        $this->putJson("/api/contracts/{$old->id}/status", ['status' => 'TERMINATED'])->assertOk();
+        $new = Contract::factory()->create(['room_id' => $old->room_id, 'contract_code' => 'NEW-OTHER-TENANT', 'start_date' => null, 'monthly_rent' => null]);
+        $new->handoverReports()->create(['type' => 'CHECK_IN', 'status' => 'CONFIRMED', 'items' => [['name' => 'Giường', 'quantity' => 1, 'condition' => 'GOOD']], 'confirmed_at' => now()]);
+
+        $this->putJson("/api/contracts/{$new->id}", $this->activate($new, $owner, ['start_date' => '2026-10-24']))
+            ->assertUnprocessable()->assertJsonValidationErrors('tenant_id');
+
+        $this->assertDatabaseHas('contracts', ['id' => $new->id, 'status' => 'DRAFT']);
+        $this->assertDatabaseHas('room_tenants', ['contract_id' => $old->id, 'status' => 'ACTIVE', 'move_out_date' => null]);
+        $this->assertDatabaseCount('room_tenants', 1);
     }
 
     public function test_duplicate_foreign_and_over_capacity_occupants_are_rejected_atomically(): void
@@ -238,15 +290,15 @@ class ContractLifecycleApiTest extends TestCase
         $this->putJson("/api/contracts/{$contract->id}/status", ['status' => 'ACTIVE'])->assertUnprocessable();
     }
 
-    public function test_early_expiry_is_rejected_and_termination_requires_explicit_move_out_date(): void
+    public function test_early_expiry_is_rejected_and_termination_can_keep_occupancy_active(): void
     {
         $this->travelTo('2026-10-15');
         [$contract, $owner] = $this->fixture();
         $this->login($owner)->putJson("/api/contracts/{$contract->id}", $this->activate($contract, $owner))->assertOk();
         $this->putJson("/api/contracts/{$contract->id}/status", ['status' => 'EXPIRED', 'move_out_date' => '2026-10-15'])->assertUnprocessable();
-        $this->putJson("/api/contracts/{$contract->id}/status", ['status' => 'TERMINATED'])->assertUnprocessable();
-        $this->putJson("/api/contracts/{$contract->id}/status", ['status' => 'TERMINATED', 'move_out_date' => '2026-10-15'])->assertOk();
+        $this->putJson("/api/contracts/{$contract->id}/status", ['status' => 'TERMINATED'])->assertOk();
         $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'status' => 'TERMINATED']);
+        $this->assertDatabaseHas('room_tenants', ['contract_id' => $contract->id, 'status' => 'ACTIVE', 'move_out_date' => null]);
     }
 
     public function test_lists_omit_pii_and_legacy_contract_does_not_fabricate_snapshot(): void
