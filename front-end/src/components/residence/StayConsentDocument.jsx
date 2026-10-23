@@ -3,7 +3,7 @@ import { wholeMonthsBetweenDates } from '../../utils/residence'
 import './StayConsentDocument.css'
 
 function Blank({ value, className = '' }) {
-  return <span className={`stay-consent-blank ${className}`}>{value ?? ''}</span>
+  return <span className={`stay-consent-value ${className}`}>{value ?? ''}</span>
 }
 
 export default function StayConsentDocument({ data }) {
@@ -18,21 +18,21 @@ export default function StayConsentDocument({ data }) {
     <header className="stay-consent-heading"><strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><strong className="stay-consent-motto">Độc lập - Tự do - Hạnh phúc</strong><p className="stay-consent-location"><Blank value={data.document_place} />, ngày <Blank value={day} /> tháng <Blank value={month} /> năm <Blank value={year} /></p><h1>VĂN BẢN ĐỒNG Ý CHO Ở NHỜ NHÀ</h1></header>
     <div className="stay-consent-body">
       <p className="stay-consent-indented">Hôm nay, ngày <Blank value={day} /> tháng <Blank value={month} /> năm <Blank value={year} />, tại số <Blank value={data.location} className="stay-consent-grow" /></p>
-      <p className="stay-consent-dotted">&nbsp;</p>
+      <p className="stay-consent-writing-space">&nbsp;</p>
       <p>Chúng tôi gồm:</p>
       <p><strong>Bên cho ở nhờ:</strong> <em>(sau đây gọi tắt là Bên cho ở nhờ - Bên A):</em></p>
       <p className="stay-consent-indented">Ông/bà: <Blank value={host.full_name} className="stay-consent-grow" /> – Năm sinh: <Blank value={host.birth_year} /></p>
       <p className="stay-consent-indented">Địa chỉ thường trú : <Blank value={host.permanent_address} className="stay-consent-grow" /></p>
-      <p className="stay-consent-dotted">&nbsp;</p>
+      <p className="stay-consent-writing-space">&nbsp;</p>
       <p className="stay-consent-indented">CCCD: <Blank value={host.identity_number} className="stay-consent-grow" /> – Số ĐT: <Blank value={host.phone} className="stay-consent-grow" /></p>
       <p><strong>Bên ở nhờ</strong><em>(sau đây gọi tắt là Bên ở nhờ - Bên B):</em></p>
       <p className="stay-consent-indented">Ông/bà: <Blank value={guest.full_name} className="stay-consent-grow" /> – Năm sinh: <Blank value={guest.birth_year} /></p>
       <p className="stay-consent-indented">Địa chỉ thường trú: <Blank value={guest.permanent_address} className="stay-consent-grow" /></p>
-      <p className="stay-consent-dotted">&nbsp;</p>
+      <p className="stay-consent-writing-space">&nbsp;</p>
       <p className="stay-consent-indented">CCCD: <Blank value={guest.identity_number} className="stay-consent-grow" /> – Số ĐT: <Blank value={guest.phone} className="stay-consent-grow" /></p>
       <p className="stay-consent-indented">Bên A đồng ý cho Bên B được phép ở nhờ tại <Blank value={stayAddress} className="stay-consent-grow" /></p>
-      <p className="stay-consent-dotted">&nbsp;</p>
-      <p className="stay-consent-dotted">&nbsp;</p>
+      <p className="stay-consent-writing-space">&nbsp;</p>
+      <p className="stay-consent-writing-space">&nbsp;</p>
       <p className="stay-consent-section"><strong>I. Mục đích, số người ở nhờ, thời hạn ở nhờ:</strong></p>
       <p><strong>1. Mục đích ở nhờ:</strong> <Blank value={data.purpose} /></p>
       <p className="stay-consent-indented"><strong>Số người ở nhờ kèm theo:</strong></p>

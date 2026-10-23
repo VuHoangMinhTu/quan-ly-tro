@@ -124,6 +124,7 @@ test('CT01 matches the Word section order and leaves missing fields blank', asyn
   assert.equal((markup.match(/<tr>/g) ?? []).length, 9)
   assert.equal((markup.match(/class="ct01-signature"/g) ?? []).length, 4)
   assert.doesNotMatch(markup, /Chưa cập nhật|null|undefined/)
+  assert.doesNotMatch(markup, /\.{3,}|…{2,}|ct01-dotted/)
 })
 
 test('manual stay dates use dd/mm/yyyy in form and submit exact date strings', async () => {
@@ -174,7 +175,8 @@ test('stay consent preview uses frozen data and escapes untrusted person fields'
   assert.match(markup, /2\. Hợp đồng được lập thành 02 bản và có giá trị như nhau/)
   assert.equal((markup.match(/class="stay-consent-companion"/g) ?? []).length, 5)
   assert.doesNotMatch(markup, /Chưa cập nhật|null|undefined/)
-  assert.doesNotMatch(markup, /<span class="stay-consent-blank stay-consent-month-count">01<\/span>/)
+  assert.doesNotMatch(markup, /<span class="stay-consent-value stay-consent-month-count">01<\/span>/)
+  assert.doesNotMatch(markup, /\.{3,}|…{2,}|stay-consent-dotted/)
 })
 
 test('stay consent fills exact whole months without timezone conversion or rounding', async () => {

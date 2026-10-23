@@ -11,7 +11,7 @@
 .ct01-fields > p, .ct01-inline-pair > p { min-height: 5.8mm; }
 .ct01-fields > p:not(.ct01-identity-row), .ct01-inline-pair > p { display: flex; align-items: baseline; gap: 2mm; }
 .ct01-value { min-width: 0; white-space: pre-wrap; }
-.ct01-dotted { flex: 1; min-height: 5mm; border-bottom: 1px dotted #333; }
+.ct01-fill-space { flex: 1; min-height: 5mm; }
 .ct01-inline-pair { display: grid; grid-template-columns: 68% 32%; }
 .ct01-inline-pair > p { min-width: 0; }
 .ct01-inline-pair > p:last-child { padding-left: 2mm; }
@@ -23,12 +23,15 @@
 .ct01-member-table { width: 100%; margin-top: 5mm; border-collapse: collapse; table-layout: fixed; font-size: 11pt; }
 .ct01-member-table th, .ct01-member-table td { padding: 1mm; border: 1px solid #000; overflow-wrap: anywhere; }
 .ct01-member-table th { height: 13.5mm; text-align: center; line-height: 1.05; }
-.ct01-member-table td { height: 8mm; border-top: 0; border-bottom: 1px dotted #555; vertical-align: middle; }
+.ct01-member-table td { height: 8mm; border-top: 0; vertical-align: middle; }
 .ct01-member-table tbody tr:last-child td { border-bottom: 1px solid #000; }
 .ct01-member-table td:first-child { text-align: center; }
 .ct01-signatures { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1mm; margin: 5mm -20mm 0; text-align: center; font-size: 9pt; }
 .ct01-signature { position: relative; min-height: 43mm; }
 .ct01-signature-date { font-style: italic; }
+.ct01-date-space { display: inline-block; width: 2.5mm; }
+.ct01-year-space { width: 5mm; }
+.ct01-extra-space { display: inline-block; min-width: 17mm; }
 .ct01-signature strong { display: block; font-size: 9pt; line-height: 1.15; }
 .ct01-opinion { padding: 2mm; text-align: left; white-space: pre-wrap; }
 .ct01-signature-extra { position: absolute; bottom: 0; left: 0; width: 100%; text-align: left; font-size: 8pt; }

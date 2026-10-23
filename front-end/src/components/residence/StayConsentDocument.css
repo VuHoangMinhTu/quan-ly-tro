@@ -11,8 +11,7 @@
 .stay-consent-body > p:has(.stay-consent-grow) { display: flex; align-items: baseline; gap: 1mm; }
 .stay-consent-body > p:has(.stay-consent-grow) > .stay-consent-grow { flex: 1; }
 .stay-consent-indented { padding-left: 12mm; }
-.stay-consent-dotted, .stay-consent-blank { border-bottom: 1px dotted #333; }
-.stay-consent-blank { display: inline-block; min-width: 16mm; text-align: left; }
+.stay-consent-value { display: inline-block; min-width: 16mm; text-align: left; }
 .stay-consent-grow { min-width: 20mm; }
 .stay-consent-section { margin-top: 1mm !important; }
 .stay-consent-companion { display: flex; gap: 1mm; padding-left: 16mm; }
