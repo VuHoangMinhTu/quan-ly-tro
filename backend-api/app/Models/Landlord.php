@@ -3,6 +3,7 @@
 /**
  * @property \App\Models\Landlord|null $landlord
  */
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -32,5 +33,15 @@ class Landlord extends Model
     public function tenants()
     {
         return $this->hasMany(Tenant::class);
+    }
+
+    public function paymentProfile()
+    {
+        return $this->hasOne(LandlordPaymentProfile::class);
+    }
+
+    public function payosConfig()
+    {
+        return $this->hasOne(LandlordPayOSConfig::class);
     }
 }

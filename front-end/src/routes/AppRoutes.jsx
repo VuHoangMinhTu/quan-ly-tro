@@ -39,6 +39,7 @@ import InvoiceListPage from '../pages/invoices/InvoiceListPage'
 import InvoicePrintPage from '../pages/invoices/InvoicePrintPage'
 import ModuleNavigationPage from '../pages/navigation/ModuleNavigationPage'
 import PayOSReturnPage from '../pages/payments/PayOSReturnPage'
+import PaymentSettingsPage from '../pages/payments/PaymentSettingsPage'
 import ResidenceDeclarationListPage from '../pages/residence/ResidenceDeclarationListPage'
 import ResidenceDeclarationEditPage from '../pages/residence/ResidenceDeclarationEditPage'
 import ResidenceDeclarationDetailPage from '../pages/residence/ResidenceDeclarationDetailPage'
@@ -74,6 +75,7 @@ export default function AppRoutes() {
             <Route path="/residence-declarations/:id/edit" element={<ResidenceDeclarationEditPage />} />
             <Route path="/residence-declarations/:id" element={<ResidenceDeclarationDetailPage />} />
             <Route path="/change-password" element={<ChangePasswordPage />} />
+            <Route path="/payment-settings" element={<PaymentSettingsPage />} />
             <Route path="/rooms" element={<ModuleNavigationPage module="rooms" />} />
             <Route path="/contracts" element={<ContractNavigationPage />} />
             <Route path="/contract-templates" element={<ContractTemplateListPage />} />

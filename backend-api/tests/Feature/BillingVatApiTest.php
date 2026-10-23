@@ -86,6 +86,8 @@ class BillingVatApiTest extends TestCase
     public function test_real_payos_flow_uses_the_remaining_amount_including_tax(): void
     {
         [$user, $invoice] = $this->fixture('PER_UNIT');
+        config(['services.payos.global_fallback_landlord_id' => $user->landlord->id,
+            'services.payos.client_id' => 'test-client', 'services.payos.api_key' => 'test-api', 'services.payos.checksum_key' => 'test-checksum']);
         $this->actingAs($user, 'sanctum')->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
         $this->postJson("/api/invoices/{$invoice->id}/payments", ['amount' => 10000, 'payment_method' => 'CASH', 'paid_at' => '2026-10-15 10:00:00'])->assertCreated();
         $service = Mockery::mock(PayOSService::class)->makePartial()->shouldAllowMockingProtectedMethods();

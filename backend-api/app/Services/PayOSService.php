@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Exceptions\PayOSReconciliationException;
 use App\Models\Invoice;
+use App\Models\Landlord;
+use App\Models\LandlordPayOSConfig;
 use App\Models\Payment;
 use App\Models\PayOSPaymentRequest;
 use Carbon\Carbon;
@@ -29,6 +31,15 @@ class PayOSService
 
     public function createOrReuse(Invoice $invoice): PayOSPaymentRequest
     {
+        $merchant = $invoice->room->boardingHouse->landlord;
+        $this->credentialsFor($merchant);
+        $configId = $merchant->payosConfig()->where('is_active', true)->value('id');
+        $otherMerchant = $invoice->payosPaymentRequests()->whereIn('status', [...PayOSPaymentRequest::REUSABLE_STATUSES,
+            'CREATING', 'CREATION_FAILED', 'RECONCILIATION_REQUIRED', 'STALE']);
+        if ($configId === null ? $otherMerchant->whereNotNull('payos_config_id')->exists()
+            : $otherMerchant->where(fn ($query) => $query->whereNull('payos_config_id')->orWhere('payos_config_id', '!=', $configId))->exists()) {
+            throw ValidationException::withMessages(['payos' => 'Hóa đơn còn mã QR của kết nối PayOS trước. Vui lòng đối soát hoặc hủy mã đó trước khi tạo mã mới.']);
+        }
         // Chốt số tiền còn lại dưới row lock để không đọc trúng invoice đang
         // được webhook hoặc một luồng thanh toán khác cập nhật đồng thời.
         $amount = DB::transaction(function () use ($invoice) {
@@ -98,7 +109,7 @@ class PayOSService
         // nhằm tránh tạo order thay thế trong lúc order cũ vẫn có thể nhận tiền.
         $this->cancelStaleRequests($invoice, $amount);
 
-        $request = DB::transaction(function () use ($invoice, $amount) {
+        $request = DB::transaction(function () use ($invoice, $amount, $configId) {
             /*
              * Đây là hàng rào chống race condition cuối cùng. Nhiều tab, frontend
              * retry hoặc nhiều HTTP request gần như cùng lúc đều có thể vượt qua
@@ -123,7 +134,7 @@ class PayOSService
 
             // Ghi placeholder CREATING và order_code khi vẫn đang giữ lock. Nhờ đó
             // mọi request đến sau nhìn thấy dấu vết local trước khi gọi PayOS remote.
-            $paymentRequest = $invoice->payosPaymentRequests()->create(['amount' => $amount, 'status' => 'CREATING']);
+            $paymentRequest = $invoice->payosPaymentRequests()->create(['amount' => $amount, 'status' => 'CREATING', 'payos_config_id' => $configId]);
             $orderCode = self::ORDER_CODE_OFFSET + $paymentRequest->id;
 
             // Description là snapshot của QR này: tính một lần trước khi gọi SDK,
@@ -237,23 +248,32 @@ class PayOSService
         };
     }
 
-    public function verifyWebhook(array $payload): WebhookData
+    public function verifyWebhook(array $payload, ?LandlordPayOSConfig $config = null): WebhookData
     {
-        return $this->client()->webhooks->verify($payload);
+        return ($config ? $this->clientForConfig($config) : $this->client())->webhooks->verify($payload);
     }
 
-    public function confirmWebhook(): ConfirmWebhookResponse|array
+    public function confirmWebhook(?LandlordPayOSConfig $config = null): ConfirmWebhookResponse|array
     {
-        return $this->client()->webhooks->confirm($this->configuration('webhook_url'));
+        return ($config ? $this->clientForConfig($config) : $this->client())->webhooks->confirm(
+            $config ? $this->webhookUrl($config) : $this->configuration('webhook_url')
+        );
     }
 
-    public function processVerifiedWebhook(WebhookData $data): ?Payment
+    public function processVerifiedWebhook(WebhookData $data, ?int $expectedLandlordId = null, ?int $expectedConfigId = null): ?Payment
     {
-        return DB::transaction(function () use ($data) {
+        return DB::transaction(function () use ($data, $expectedLandlordId, $expectedConfigId) {
             $request = PayOSPaymentRequest::query()->where('order_code', $data->orderCode)->lockForUpdate()->first();
 
             if (! $request) {
                 Log::warning('payOS webhook has an unknown order code.', ['order_code' => $data->orderCode]);
+
+                return null;
+            }
+
+            if ($expectedLandlordId === null || (int) $request->invoice->room->boardingHouse->landlord_id !== $expectedLandlordId
+                || $request->payos_config_id !== $expectedConfigId) {
+                Log::warning('payOS webhook merchant does not own the order.', ['order_code' => $data->orderCode]);
 
                 return null;
             }
@@ -456,7 +476,7 @@ class PayOSService
     protected function fetchPaymentLink(PayOSPaymentRequest $request): PaymentLink
     {
         /** @var PaymentLink $response */
-        $response = $this->client()->paymentRequests->get($request->payment_link_id ?: $request->order_code);
+        $response = $this->clientForRequest($request)->paymentRequests->get($request->payment_link_id ?: $request->order_code);
 
         return $response;
     }
@@ -464,7 +484,7 @@ class PayOSService
     protected function cancelPaymentLink(PayOSPaymentRequest $request): PaymentLink
     {
         /** @var PaymentLink $response */
-        $response = $this->client()->paymentRequests->cancel(
+        $response = $this->clientForRequest($request)->paymentRequests->cancel(
             $request->payment_link_id ?: $request->order_code,
             'Invoice payment amount changed.',
         );
@@ -475,7 +495,7 @@ class PayOSService
     protected function createPaymentLink(Invoice $invoice, PayOSPaymentRequest $request): CreatePaymentLinkResponse
     {
         /** @var CreatePaymentLinkResponse $response */
-        $response = $this->client()->paymentRequests->create(new CreatePaymentLinkRequest(
+        $response = $this->clientForRequest($request)->paymentRequests->create(new CreatePaymentLinkRequest(
             $request->order_code,
             (int) $request->amount,
             $request->description,
@@ -505,7 +525,72 @@ class PayOSService
 
     protected function client(): PayOS
     {
-        $config = config('services.payos');
+        return $this->makeClient(config('services.payos'));
+    }
+
+    public function usesGlobalFallback(Landlord $landlord): bool
+    {
+        return ! $landlord->payosConfig()->where('is_active', true)->exists()
+            && (int) config('services.payos.global_fallback_landlord_id', 0) > 0
+            && (int) config('services.payos.global_fallback_landlord_id') === (int) $landlord->id
+            && filled(config('services.payos.client_id'))
+            && filled(config('services.payos.api_key'))
+            && filled(config('services.payos.checksum_key'));
+    }
+
+    public function availableFor(Landlord $landlord): bool
+    {
+        return $landlord->payosConfig()->where('is_active', true)->exists() || $this->usesGlobalFallback($landlord);
+    }
+
+    public function webhookUrl(LandlordPayOSConfig $config): string
+    {
+        return rtrim(config('app.url'), '/').'/api/webhooks/payos/'.$config->webhook_uuid;
+    }
+
+    private function credentialsFor(Landlord $landlord): array
+    {
+        if ($config = $landlord->payosConfig()->where('is_active', true)->first()) {
+            if (blank($config->client_id) || blank($config->api_key) || blank($config->checksum_key)) {
+                throw ValidationException::withMessages(['payos' => 'Cấu hình PayOS chưa đầy đủ.']);
+            }
+
+            return ['client_id' => $config->client_id, 'api_key' => $config->api_key, 'checksum_key' => $config->checksum_key];
+        }
+        if ($this->usesGlobalFallback($landlord)) {
+            Log::warning('Using legacy global PayOS fallback for landlord.', ['landlord_id' => $landlord->id]);
+
+            return config('services.payos');
+        }
+
+        throw ValidationException::withMessages(['payos' => 'Chủ trọ chưa cấu hình PayOS.']);
+    }
+
+    private function clientForRequest(PayOSPaymentRequest $request): PayOS
+    {
+        if ($request->payos_config_id !== null) {
+            $config = LandlordPayOSConfig::query()->where('landlord_id', $request->invoice->room->boardingHouse->landlord_id)->findOrFail($request->payos_config_id);
+
+            return $this->clientForConfig($config);
+        }
+
+        $landlord = $request->invoice->room->boardingHouse->landlord;
+        // An old global order still needs its original merchant for cancellation
+        // and reconciliation even after this landlord activates a new config.
+        if ((int) config('services.payos.global_fallback_landlord_id', 0) !== (int) $landlord->id) {
+            throw ValidationException::withMessages(['payos' => 'Mã PayOS cũ cần cấu hình fallback đúng chủ trọ để đối soát.']);
+        }
+
+        return $this->client();
+    }
+
+    private function clientForConfig(LandlordPayOSConfig $config): PayOS
+    {
+        return $this->makeClient(['client_id' => $config->client_id, 'api_key' => $config->api_key, 'checksum_key' => $config->checksum_key]);
+    }
+
+    private function makeClient(array $config): PayOS
+    {
         if (blank($config['client_id'] ?? null) || blank($config['api_key'] ?? null) || blank($config['checksum_key'] ?? null)) {
             throw new RuntimeException('payOS credentials are not configured.');
         }

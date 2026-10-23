@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { getApiErrorMessage } from '../api/getApiErrorMessage'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Building2, FileText, Gauge, KeyRound, LayoutDashboard, LogOut, Menu, Receipt, UserRound, Users, X } from 'lucide-react'
+import { Building2, CreditCard, FileText, Gauge, KeyRound, LayoutDashboard, LogOut, Menu, Receipt, UserRound, Users, X } from 'lucide-react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { logout } from '../api/authApi'
 import { APP_NAME } from '../utils/brand'
@@ -19,6 +19,7 @@ const menus = [
   ['Điện nước', '/utilities', Gauge, (p) => p === '/utilities' || /^\/utility-meters\//.test(p)],
   ['Hóa đơn', '/invoices', Receipt, (p) => p === '/invoices' || /^\/invoices\//.test(p) || /^\/rooms\/[^/]+\/invoices/.test(p)],
   ['Khai báo cư trú', '/residence-declarations', FileText, (p) => p.startsWith('/residence-declarations')],
+  ['Cài đặt thanh toán', '/payment-settings', CreditCard, (p) => p === '/payment-settings'],
 ]
 
 function Brand() {
@@ -30,7 +31,7 @@ function Brand() {
 
 function Navigation({ pathname, onNavigate, canManageTemplates = false }) {
   return <nav aria-label="Điều hướng chính" className="mt-8">
-    {menus.filter(([, to]) => to !== '/contract-templates' || canManageTemplates).map(([name, to, Icon, matches]) => <Link
+    {menus.filter(([, to]) => !['/contract-templates', '/payment-settings'].includes(to) || canManageTemplates).map(([name, to, Icon, matches]) => <Link
       key={name}
       to={to}
       onClick={onNavigate}

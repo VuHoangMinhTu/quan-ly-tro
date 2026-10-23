@@ -12,6 +12,7 @@ class PayOSPaymentRequest extends Model
 
     protected $fillable = [
         'invoice_id',
+        'payos_config_id',
         'order_code',
         'payment_link_id',
         'checkout_url',
@@ -24,6 +25,7 @@ class PayOSPaymentRequest extends Model
     ];
 
     protected $casts = [
+        'payos_config_id' => 'integer',
         'amount' => 'decimal:2',
         'expired_at' => 'datetime',
         'cancelled_at' => 'datetime',

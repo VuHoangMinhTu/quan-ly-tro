@@ -3,7 +3,6 @@
 use App\Http\Controllers\Api\AmenityController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BedController;
-use App\Http\Controllers\Api\FloorController;
 use App\Http\Controllers\Api\BoardingHouseController;
 use App\Http\Controllers\Api\BoardingHouseManagerController;
 use App\Http\Controllers\Api\ContractController;
@@ -13,9 +12,11 @@ use App\Http\Controllers\Api\ContractServiceController;
 use App\Http\Controllers\Api\ContractSigningController;
 use App\Http\Controllers\Api\ContractTemplateController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\FloorController;
 use App\Http\Controllers\Api\GoogleAuthController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\InvoiceItemController;
+use App\Http\Controllers\Api\LandlordPaymentSettingsController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PayOSPaymentController;
 use App\Http\Controllers\Api\PublicContractSigningController;
@@ -49,6 +50,7 @@ Route::post('/auth/google/exchange', [GoogleAuthController::class, 'exchange']);
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
 Route::post('/webhooks/payos', [PayOSPaymentController::class, 'webhook']);
+Route::post('/webhooks/payos/{webhookUuid}', [PayOSPaymentController::class, 'landlordWebhook']);
 Route::post('/email/verification-notification', [AuthController::class, 'resendVerification'])->middleware('throttle:6,1');
 Route::get('/email/verify/{id}/{hash}', function (int $id, string $hash) {
     $user = User::query()->findOrFail($id);
@@ -103,6 +105,11 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::delete('/residence-declarations/{id}', [ResidenceDeclarationController::class, 'destroy']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+    Route::get('/landlord/payment-profile', [LandlordPaymentSettingsController::class, 'profile']);
+    Route::put('/landlord/payment-profile', [LandlordPaymentSettingsController::class, 'saveProfile']);
+    Route::get('/landlord/payos-config', [LandlordPaymentSettingsController::class, 'payos']);
+    Route::put('/landlord/payos-config', [LandlordPaymentSettingsController::class, 'savePayos']);
+    Route::delete('/landlord/payos-config', [LandlordPaymentSettingsController::class, 'deletePayos']);
     Route::put('/auth/password', [AuthController::class, 'changePassword']);
 
     Route::get('/boarding-houses', [BoardingHouseController::class, 'index']);

@@ -46,6 +46,8 @@ class InvoiceController extends Controller
         $invoice = Invoice::query()->whereHas('room', fn ($query) => $query->whereIn('boarding_house_id', $access->houses($r->user())->select('boarding_houses.id')))
             ->with(['room.boardingHouse', 'contract.tenant', 'items', 'payosPaymentRequest'])->findOrFail($id);
         $invoice->setAttribute('can_manage', $access->isOwner($r->user(), $invoice->room->boardingHouse));
+        $invoice->setAttribute('payos_available', app(PayOSService::class)->availableFor($invoice->room->boardingHouse->landlord));
+        $invoice->setAttribute('payment_profile', $invoice->room->boardingHouse->landlord->paymentProfile?->only(['bank_name', 'bank_account_name', 'bank_account_number']));
 
         return ApiResponse::success($invoice, 'Lấy thông tin hóa đơn thành công.');
     }

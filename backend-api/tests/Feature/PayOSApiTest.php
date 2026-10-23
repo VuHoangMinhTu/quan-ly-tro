@@ -579,6 +579,7 @@ class PayOSApiTest extends TestCase
 
     public function test_invalid_payos_webhook_does_not_create_a_payment(): void
     {
+        config(['services.payos.global_fallback_landlord_id' => 1]);
         $service = Mockery::mock(PayOSService::class);
         $service->shouldReceive('verifyWebhook')->once()->andThrow(new WebhookException('Invalid signature'));
         $this->app->instance(PayOSService::class, $service);
@@ -592,6 +593,7 @@ class PayOSApiTest extends TestCase
 
     public function test_unknown_order_code_is_acknowledged_without_creating_a_payment(): void
     {
+        config(['services.payos.global_fallback_landlord_id' => 1]);
         $data = new WebhookData(9_999_999_999, 100_000, 'Invoice', '123', 'UNKNOWN', '2026-09-29T10:00:00+07:00', 'VND', 'link', '00', 'success');
         $service = Mockery::mock(PayOSService::class)->makePartial();
         $service->shouldReceive('verifyWebhook')->once()->andReturn($data);
@@ -651,6 +653,9 @@ class PayOSApiTest extends TestCase
     private function ownerAndInvoice(int $total = 1_000_000, int $paid = 0, string $status = 'UNPAID'): array
     {
         $user = $this->owner();
+        // Legacy fixtures exercise the deliberately opt-in single-landlord migration path.
+        config(['services.payos.global_fallback_landlord_id' => $user->landlord->id,
+            'services.payos.client_id' => 'test-client', 'services.payos.api_key' => 'test-api', 'services.payos.checksum_key' => 'test-checksum']);
         $boardingHouse = BoardingHouse::create(['landlord_id' => $user->landlord->id, 'name' => 'House', 'address' => 'Address']);
         $room = Room::create(['boarding_house_id' => $boardingHouse->id, 'room_code' => 'P'.Room::query()->count(), 'monthly_rent' => 1, 'status' => 'AVAILABLE']);
         $invoice = Invoice::create([

@@ -15,6 +15,7 @@ class ContractTemplateVariableRegistry
             'Phòng' => ['room.room_code' => 'Mã phòng', 'room.room_name' => 'Tên phòng', 'room.area' => 'Diện tích', 'room.max_tenants' => 'Số người tối đa', 'room.occupants_count' => 'Số người đăng ký ở'],
             'Nhà trọ' => ['boarding_house.name' => 'Tên nhà trọ', 'boarding_house.address' => 'Địa chỉ nhà trọ', 'boarding_house.ward' => 'Phường/Xã'],
             'Bên cho thuê' => ['lessor.full_name' => 'Người đại diện', 'lessor.title' => 'Chức vụ', 'lessor.phone' => 'Điện thoại bên A', 'lessor.bank_name' => 'Ngân hàng nhận tiền', 'lessor.bank_account_name' => 'Chủ tài khoản', 'lessor.bank_account_number' => 'Số tài khoản'],
+            'Tài khoản nhận tiền' => ['payment.bank_name' => 'Ngân hàng', 'payment.account_name' => 'Tên chủ tài khoản', 'payment.account_number' => 'Số tài khoản'],
             'Giường' => ['bed.bed_code' => 'Mã giường', 'bed.floor_label' => 'Tầng'],
             'Danh sách' => ['services_table' => 'Bảng dịch vụ thỏa thuận', 'room_rental_services' => 'Dịch vụ Điều 4 hợp đồng phòng trọ', 'occupants_table' => 'Danh sách người ở', 'vehicles_table' => 'Danh sách phương tiện', 'handover_checkin_table' => 'Biên bản bàn giao'],
         ];
@@ -106,12 +107,22 @@ class ContractTemplateVariableRegistry
         foreach (['full_name', 'title', 'phone', 'bank_name', 'bank_account_name', 'bank_account_number'] as $key) {
             $values['lessor.'.$key] = $snapshot['lessor'][$key] ?? null;
         }
+        $payment = $snapshot['payment'] ?? [];
+        $values['payment.bank_name'] = $payment['bank_name'] ?? null;
+        $values['payment.account_name'] = $payment['bank_account_name'] ?? null;
+        $values['payment.account_number'] = $payment['bank_account_number'] ?? null;
         $values['contract.contract_code'] = $values['contract.code'];
         $values['contract.deposit_amount'] = $values['contract.deposit'];
         $values['tenant.identity_issued_date'] = $values['tenant.identity_issue_date'];
         $values['tenant.identity_issued_place'] = $values['tenant.identity_issue_place'];
 
-        return array_map(fn ($value) => $value === null || $value === '' ? 'Chưa cập nhật' : (string) $value, $values);
+        foreach ($values as $key => $value) {
+            $values[$key] = $value === null || $value === ''
+                ? (str_starts_with($key, 'payment.') || str_starts_with($key, 'lessor.bank_') ? '……………………' : 'Chưa cập nhật')
+                : (string) $value;
+        }
+
+        return $values;
     }
 
     public function sample(): array

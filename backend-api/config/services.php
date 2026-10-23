@@ -9,6 +9,8 @@ return [
     ],
 
     'payos' => [
+        // Legacy credentials are available only to this one landlord during migration.
+        'global_fallback_landlord_id' => env('PAYOS_GLOBAL_FALLBACK_LANDLORD_ID'),
         'client_id' => env('PAYOS_CLIENT_ID'),
         'api_key' => env('PAYOS_API_KEY'),
         'checksum_key' => env('PAYOS_CHECKSUM_KEY'),

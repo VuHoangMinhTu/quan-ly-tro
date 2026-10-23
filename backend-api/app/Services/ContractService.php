@@ -272,6 +272,8 @@ class ContractService
 
     private function sourceSnapshot(Contract $contract, Room $room, BoardingHouse $house, ?array $representative, array $ids): array
     {
+        $profile = $house->landlord->paymentProfile;
+        $payment = $profile?->only(['bank_name', 'bank_account_name', 'bank_account_number']) ?? [];
         $tenant = Tenant::query()->where('landlord_id', $house->landlord_id)->findOrFail($contract->tenant_id);
         $core = $contract->only(['contract_code', 'contract_type', 'monthly_rent', 'deposit_amount', 'payment_due_day', 'note']);
         foreach (['start_date', 'end_date', 'signed_date'] as $key) {
@@ -280,7 +282,8 @@ class ContractService
 
         return [
             'schema_version' => 2, 'finalized_at' => $contract->finalized_at?->toIso8601String(),
-            'lessor' => $representative, 'tenant' => $this->person($tenant), 'contract' => $core,
+            'lessor' => $representative ? [...$representative, ...$payment] : $payment,
+            'payment' => $payment, 'tenant' => $this->person($tenant), 'contract' => $core,
             'room' => ['room_id' => $room->id, 'room_code' => $room->room_code, 'room_name' => $room->room_name, 'area' => $room->area, 'boarding_house_name' => $house->name, 'address' => $house->address, 'ward' => $house->ward, 'max_tenants' => $room->max_tenants],
             'bed' => $contract->bed_id ? Bed::query()->where('room_id', $room->id)->findOrFail($contract->bed_id)->only(['bed_code', 'floor_label']) : null,
             'services' => $contract->agreedServices()->get()->toArray(),

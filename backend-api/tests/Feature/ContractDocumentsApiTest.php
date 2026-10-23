@@ -286,6 +286,27 @@ class ContractDocumentsApiTest extends TestCase
         $this->assertDatabaseHas('contract_templates', ['template_key' => 'ROOM_RENTAL_STANDARD', 'version' => 2, 'is_active' => true]);
     }
 
+    public function test_contract_uses_live_bank_profile_only_until_document_is_finalized(): void
+    {
+        [$contract, $owner] = $this->fixture();
+        $id = $this->template('<p>{{payment.bank_name}} / {{payment.account_name}} / {{payment.account_number}}</p>');
+        $this->putJson('/api/landlord/payment-profile', [
+            'bank_name' => 'Vietcombank', 'bank_account_name' => 'MINH TU', 'bank_account_number' => '00111',
+        ])->assertOk();
+        $this->prepare($contract, $owner, $id);
+        $preview = $this->getJson("/api/contracts/{$contract->id}/document/preview")->assertOk()->json('data.rendered_html');
+        $this->assertStringContainsString('Vietcombank / MINH TU / 00111', $preview);
+
+        $this->postJson("/api/contracts/{$contract->id}/finalize")->assertOk();
+        $document = $contract->document()->sole();
+        $this->assertSame('00111', data_get($document->source_snapshot, 'payment.bank_account_number'));
+        $this->putJson('/api/landlord/payment-profile', [
+            'bank_name' => 'MB Bank', 'bank_account_name' => 'MINH TU', 'bank_account_number' => '00222',
+        ])->assertOk();
+        $this->getJson("/api/contracts/{$contract->id}/document")->assertOk()->assertJsonPath('data.rendered_html', $document->rendered_html);
+        $this->assertStringNotContainsString('MB Bank', $document->fresh()->rendered_html);
+    }
+
     public function test_template_selection_does_not_change_when_new_version_activates_and_disabled_choice_requires_explicit_reselection(): void
     {
         [$contract, $owner] = $this->fixture();

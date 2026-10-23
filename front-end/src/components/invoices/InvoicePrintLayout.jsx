@@ -132,6 +132,7 @@ function Totals({ invoice, remaining }) {
 
 function PaymentInfo({ invoice, paymentRequest, remaining }) {
   const hasQr = Boolean(paymentRequest?.qr_code)
+  const bank = invoice.payment_profile
   return <section className="invoice-payment-details invoice-keep-together">
     <SectionHeading>Thông tin thanh toán</SectionHeading>
     <div className="invoice-payment-rows">
@@ -140,6 +141,9 @@ function PaymentInfo({ invoice, paymentRequest, remaining }) {
       <p><span>Phương thức</span><strong>{hasQr ? 'Chuyển khoản qua payOS' : 'Tiền mặt / Chuyển khoản'}</strong></p>
       {hasQr && <p><span>Mã thanh toán</span><strong>{paymentRequest.order_code}</strong></p>}
       {hasQr && paymentRequest.description && <p><span>Nội dung chuyển khoản</span><strong>{paymentRequest.description}</strong></p>}
+      {!hasQr && bank?.bank_name && <p><span>Ngân hàng</span><strong>{bank.bank_name}</strong></p>}
+      {!hasQr && bank?.bank_account_name && <p><span>Chủ tài khoản</span><strong>{bank.bank_account_name}</strong></p>}
+      {!hasQr && bank?.bank_account_number && <p><span>Số tài khoản</span><strong>{bank.bank_account_number}</strong></p>}
     </div>
   </section>
 }
