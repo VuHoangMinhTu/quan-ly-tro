@@ -31,13 +31,9 @@ class ContractTemplateRenderer
         $content = $this->prepare($content);
         $values = $this->registry->values($snapshot);
         $isRoomRentalWord = str_contains($content, 'class="word-contract"') && ($snapshot['contract']['contract_type'] ?? null) === 'ROOM_RENTAL';
-        if ($isRoomRentalWord) {
-            // Legacy Word template has a 13-row blank table followed by the dynamic table placeholder.
-            // Replace both as one unit so the final appendix contains exactly one table.
-            $content = preg_replace('/<table>.*?<\/table>\s*<div>\{\{handover_checkin_table\}\}<\/div>/s', '{{handover_checkin_table}}', $content, 1);
-        }
+        $isWordContract = str_contains($content, 'class="word-contract"');
         $blocks = ['services_table' => $this->services($snapshot['services'] ?? []), 'room_rental_services' => $this->roomRentalServices($snapshot['services'] ?? []), 'occupants_table' => $this->occupants($snapshot['occupants'] ?? []),
-            'vehicles_table' => $this->vehicles($snapshot['vehicles'] ?? []), 'handover_checkin_table' => $isRoomRentalWord ? $this->roomRentalHandover($snapshot['handover_checkin'] ?? []) : $this->handover($snapshot['handover_checkin'] ?? [])];
+            'vehicles_table' => $this->vehicles($snapshot['vehicles'] ?? []), 'handover_checkin_table' => $isWordContract ? $this->wordHandover($snapshot['handover_checkin'] ?? []) : $this->handover($snapshot['handover_checkin'] ?? [])];
 
         $rendered = preg_replace_callback('/\{\{(.*?)\}\}/s', function ($match) use ($blocks, $values, $isRoomRentalWord) {
             $key = trim($match[1]);
@@ -71,9 +67,9 @@ class ContractTemplateRenderer
         return htmlspecialchars((string) ($value ?? 'Chưa cập nhật'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
-    private function table(array $headers, array $rows): string
+    private function table(array $headers, array $rows, ?string $class = null): string
     {
-        $html = '<table><thead><tr>';
+        $html = '<table'.($class === null ? '' : ' class="'.$class.'"').'><thead><tr>';
         foreach ($headers as $header) {
             $html .= '<th>'.$this->escape($header).'</th>';
         }
@@ -209,20 +205,20 @@ class ContractTemplateRenderer
         return $this->table(['Tài sản', 'Số lượng', 'Tình trạng'], $rows);
     }
 
-    private function roomRentalHandover(array $items): string
+    private function wordHandover(array $items): string
     {
-        // One Word-style appendix: confirmed snapshot rows replace the blank checklist, never append a second table.
-        $defaults = ['Phòng mới không có lỗ đinh, Tường trắng sạch sẽ', 'Ballet, nệm.', 'Thiết bị nhà vệ sinh', 'Tivi', 'Bàn ghế, sofa.', 'Tủ quần áo, giá treo đồ', 'Cục phát wifi', 'Khóa cửa / Số lượng chìa', 'Máy lạnh / Remote', 'Tủ lạnh', 'Máy nước nóng', 'Rèm cửa', 'Tủ, kệ bếp'];
         $conditions = ['GOOD' => 'Tốt', 'DAMAGED' => 'Hư hỏng', 'MISSING' => 'Thiếu', 'OTHER' => 'Khác'];
         $rows = [];
-        foreach ($items === [] ? $defaults : $items as $index => $item) {
-            $name = is_array($item) ? ($item['name'] ?? '') : $item;
-            $quantity = is_array($item) ? ($item['quantity'] ?? '') : '';
-            $condition = is_array($item) ? ($conditions[$item['condition'] ?? ''] ?? ($item['condition'] ?? '')) : '';
-            $note = is_array($item) ? ($item['note'] ?? '') : '';
-            $rows[] = [$this->escape($index + 1), $this->escape($name), $this->escape(trim(($quantity === '' ? '' : $quantity.' · ').$condition.($note === '' ? '' : ' · '.$note))), ''];
+        foreach ($items as $index => $item) {
+            $rows[] = [
+                $this->escape($index + 1),
+                $this->escape($item['name'] ?? ''),
+                $this->escape($item['quantity'] ?? ''),
+                $this->escape($conditions[$item['condition'] ?? ''] ?? ($item['condition'] ?? '')),
+                $this->escape($item['note'] ?? ''),
+            ];
         }
 
-        return $this->table(['STT', 'Thiết bị và dụng cụ', 'Ngày nhận / Tình trạng', 'Ngày trả'], $rows);
+        return $this->table(['STT', 'Thiết bị và dụng cụ', 'Số lượng', 'Tình trạng khi nhận', 'Ghi chú'], $rows === [] ? [['', '', '', '', '']] : $rows, 'contract-handover-table');
     }
 }

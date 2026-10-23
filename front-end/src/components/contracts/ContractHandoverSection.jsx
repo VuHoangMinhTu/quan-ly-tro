@@ -32,7 +32,7 @@ export default function ContractHandoverSection({ contract }) {
   const change = (index, key, value) => setItems(current => current.map((item, position) => position === index ? { ...item, [key]: value } : item))
 
   return <section id="contract-handover" className="scroll-mt-4 space-y-4 rounded-xl bg-white p-4 shadow-sm sm:p-6">
-    <div><h3 className="text-lg font-semibold">Biên bản bàn giao CHECK_IN</h3><p className="text-sm text-slate-500">Biên bản là hồ sơ riêng. Hợp đồng đã chốt hoặc đã ký không tự thay đổi.</p></div>
+    <div><h3 className="text-lg font-semibold">Biên bản bàn giao CHECK_IN</h3><p className="text-sm text-slate-500">Dữ liệu đã xác nhận sẽ được đưa vào phụ lục bàn giao của hợp đồng khi chốt. Hợp đồng đã chốt hoặc đã ký không tự thay đổi.</p></div>
     {query.isPending && <p>Đang tải biên bản...</p>}
     {query.isError && <p role="alert" className="text-sm text-red-700">{getApiErrorMessage(query.error)}</p>}
     {!query.isPending && !query.isError && !report && <div className="space-y-3"><p className="text-sm text-slate-500">Chưa có biên bản bàn giao.</p><button type="button" disabled={mutation.isPending} onClick={() => mutation.mutate('create')} className="min-h-11 rounded-lg bg-slate-900 px-4 text-sm text-white disabled:opacity-50">Tạo biên bản bàn giao</button></div>}

@@ -43,12 +43,13 @@ class ContractHandoverApiTest extends TestCase
         $items = [['name' => 'Tivi', 'quantity' => 2, 'condition' => 'DAMAGED', 'note' => 'Trầy nhẹ']];
         $this->putJson("/api/contracts/{$contract->id}/handover-check-in", ['items' => $items])->assertOk();
         $draft = $this->getJson("/api/contracts/{$contract->id}/document/preview")->assertOk()->json('data.rendered_html');
-        $this->assertStringContainsString('Chưa có biên bản bàn giao', $draft);
+        $this->assertSame(1, substr_count($draft, 'class="contract-handover-table"'));
+        $this->assertStringNotContainsString('<td>Tivi</td>', $draft);
 
         $this->postJson("/api/contracts/{$contract->id}/handover-check-in/confirm")->assertOk();
         $confirmed = $this->getJson("/api/contracts/{$contract->id}/document/preview")->assertOk()->json('data.rendered_html');
 
-        $this->assertStringContainsString('Tivi', $confirmed);
+        $this->assertStringContainsString('<td>Tivi</td>', $confirmed);
         $this->assertStringContainsString('Hư hỏng', $confirmed);
         $this->assertDatabaseHas('contract_handover_reports', ['contract_id' => $contract->id, 'type' => 'CHECK_IN', 'status' => 'CONFIRMED']);
         $this->putJson("/api/contracts/{$contract->id}/handover-check-in", ['items' => $items])->assertUnprocessable();
