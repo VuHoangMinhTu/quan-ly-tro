@@ -10,5 +10,5 @@ return [
         'PER_PERSON' => 'theo người', 'TIERED' => 'bậc thang',
     ],
     'missing_meter' => 'Dịch vụ :type đang tính :method nhưng phòng chưa có đồng hồ đang hoạt động cho dịch vụ này.',
-    'missing_reading' => 'Dịch vụ :type chưa có chỉ số công tơ trong hoặc trước kỳ hóa đơn này. Vui lòng ghi chỉ số.',
+    'missing_closing_reading' => ':type đã có chỉ số đầu kỳ nhưng chưa có chỉ số cuối kỳ đến ngày :date. Vui lòng ghi chỉ số.',
 ];

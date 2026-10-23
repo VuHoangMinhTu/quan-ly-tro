@@ -59,6 +59,20 @@ class BillingServiceApiTest extends TestCase
         $this->assertDatabaseCount('utility_meters', 0);
     }
 
+    public function test_assigned_fixed_service_without_price_fails_instead_of_being_silently_skipped(): void
+    {
+        [$user, $room] = $this->ownerAndRoom();
+        $service = $this->service($room, 'OTHER', 'FIXED', null);
+        $this->assign($room, $service);
+        $invoice = $this->invoice($room);
+
+        $this->generate($user, $invoice)->assertUnprocessable()
+            ->assertJsonPath('errors.service_id.0', 'Dịch vụ OTHER FIXED chưa có đơn giá. Vui lòng cập nhật trước khi tạo khoản thu.');
+
+        $this->assertDatabaseCount('invoice_items', 0);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'total_amount' => 0]);
+    }
+
     public function test_service_applied_to_another_room_in_the_same_house_is_not_charged(): void
     {
         [$user, $room] = $this->ownerAndRoom();
@@ -136,6 +150,70 @@ class BillingServiceApiTest extends TestCase
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'total_amount' => 130_000]);
     }
 
+    public function test_november_uses_october_opening_and_november_closing_but_not_december_reading(): void
+    {
+        [$user, $room] = $this->ownerAndRoom();
+        $electricity = $this->service($room, 'ELECTRICITY', 'PER_UNIT', 3_800);
+        $this->assign($room, $electricity);
+        $meter = $this->meter($room, $electricity, 0);
+        $this->reading($meter, '2026-10-25', 171);
+        $this->reading($meter, '2026-11-25', 173);
+        $this->reading($meter, '2026-12-05', 200);
+        $invoice = $this->invoice($room, '2026-11-01');
+
+        $this->generate($user, $invoice)->assertOk();
+
+        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY', 'quantity' => 2,
+            'unit' => 'kWh', 'unit_price' => 3_800, 'amount' => 7_600]);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'total_amount' => 7_600]);
+    }
+
+    public function test_missing_november_closing_fails_atomically_even_when_december_has_a_reading(): void
+    {
+        [$user, $room] = $this->ownerAndRoom();
+        $fixed = $this->service($room, 'OTHER', 'FIXED', 150_000);
+        $electricity = $this->service($room, 'ELECTRICITY', 'PER_UNIT', 3_800);
+        $this->assign($room, $fixed, $electricity);
+        $meter = $this->meter($room, $electricity, 0);
+        $this->reading($meter, '2026-10-25', 171);
+        $this->reading($meter, '2026-12-05', 200);
+        $invoice = $this->invoice($room, '2026-11-01');
+
+        $this->generate($user, $invoice)->assertUnprocessable()
+            ->assertJsonPath('errors.reading_date.0', 'ELECTRICITY PER_UNIT đã có chỉ số đầu kỳ nhưng chưa có chỉ số cuối kỳ đến ngày 30/11/2026. Vui lòng ghi chỉ số.');
+
+        $this->assertDatabaseCount('invoice_items', 0);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'total_amount' => 0]);
+    }
+
+    public function test_contract_rent_and_all_assigned_room_services_are_billed_together(): void
+    {
+        [$user, $room] = $this->ownerAndRoom();
+        $tenant = Tenant::create(['landlord_id' => $room->boardingHouse->landlord_id, 'full_name' => 'Người đứng tên']);
+        $contract = Contract::create(['room_id' => $room->id, 'tenant_id' => $tenant->id, 'contract_code' => 'HD-FULL',
+            'start_date' => '2026-10-01', 'end_date' => '2027-09-30', 'monthly_rent' => 3_000_000,
+            'deposit_amount' => 0, 'status' => 'ACTIVE', 'service_terms_version' => 1]);
+        $this->occupant($room, ['move_in_date' => '2026-10-01']);
+        $electricity = $this->service($room, 'ELECTRICITY', 'PER_UNIT', 3_800);
+        $water = $this->service($room, 'WATER', 'PER_PERSON', 150_000);
+        $fixed = $this->service($room, 'OTHER', 'FIXED', 150_000);
+        $this->assign($room, $electricity, $water, $fixed);
+        $meter = $this->meter($room, $electricity);
+        $this->reading($meter, '2026-10-25', 171);
+        $this->reading($meter, '2026-11-25', 173);
+        $invoice = $this->invoice($room, '2026-11-01');
+        $invoice->update(['contract_id' => $contract->id]);
+
+        $this->generate($user, $invoice)->assertOk();
+
+        $this->assertDatabaseCount('invoice_items', 4);
+        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'RENT', 'amount' => 3_000_000]);
+        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'WATER', 'unit' => 'người', 'quantity' => 1, 'amount' => 150_000]);
+        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'OTHER', 'unit' => 'tháng', 'amount' => 150_000]);
+        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY', 'unit' => 'kWh', 'quantity' => 2, 'amount' => 7_600]);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'total_amount' => 3_307_600]);
+    }
+
     public function test_meter_without_readings_returns_422_without_generating_items(): void
     {
         [$user, $room] = $this->ownerAndRoom();
@@ -147,7 +225,7 @@ class BillingServiceApiTest extends TestCase
         $this->generate($user, $invoice)
             ->assertUnprocessable()
             ->assertJsonValidationErrors('reading_date')
-            ->assertJsonPath('errors.reading_date.0', 'Dịch vụ Nước chưa có chỉ số công tơ trong hoặc trước kỳ hóa đơn này. Vui lòng ghi chỉ số.');
+            ->assertJsonPath('errors.reading_date.0', 'WATER PER_UNIT đã có chỉ số đầu kỳ nhưng chưa có chỉ số cuối kỳ đến ngày 31/10/2026. Vui lòng ghi chỉ số.');
 
         $this->assertDatabaseCount('invoice_items', 0);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'total_amount' => 0]);

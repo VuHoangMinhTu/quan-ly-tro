@@ -95,8 +95,7 @@ class ContractServiceTermsApiTest extends TestCase
         [$contract, $owner, $service] = $this->fixture();
         $this->activate($contract, $owner, $service);
         $this->adjust($contract, $contract->agreedServices()->sole()->id)->assertCreated();
-        $service->update(['base_price' => 9999, 'vat_rate' => 20, 'name' => 'Tên mới', 'is_active' => false]);
-        $contract->room->services()->detach();
+        $service->update(['base_price' => 9999, 'vat_rate' => 20, 'name' => 'Tên mới']);
         $may = $this->invoice($contract, '2027-05-01');
         $june = $this->invoice($contract, '2027-06-01');
 
@@ -272,7 +271,7 @@ class ContractServiceTermsApiTest extends TestCase
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY', 'amount' => 4000]);
     }
 
-    public function test_legacy_fallback_is_explicit_but_new_empty_agreement_never_charges_room_services(): void
+    public function test_room_assignment_still_bills_when_new_contract_has_no_service_terms(): void
     {
         [$legacy, $owner, $service] = $this->fixture('FIXED');
         $invoice = $this->invoice($legacy, '2027-05-01');
@@ -285,7 +284,7 @@ class ContractServiceTermsApiTest extends TestCase
 
         $this->postJson("/api/invoices/{$next->id}/generate")->assertOk();
 
-        $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $next->id, 'type' => 'ELECTRICITY']);
+        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $next->id, 'type' => 'ELECTRICITY', 'amount' => 4000]);
         $this->getJson("/api/contracts/{$legacy->id}/services")->assertJsonPath('data.legacy_fallback', false);
     }
 
@@ -303,19 +302,20 @@ class ContractServiceTermsApiTest extends TestCase
         $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $invoice->id, 'source' => 'AUTO']);
     }
 
-    public function test_soft_deleted_service_keeps_snapshot_and_exact_meter_but_missing_source_never_uses_another_meter(): void
+    public function test_soft_deleted_service_is_not_billed_and_missing_source_does_not_use_another_meter(): void
     {
         [$contract, $owner, $service] = $this->fixture();
         $this->activate($contract, $owner, $service);
         $service->delete();
         $invoice = $this->invoice($contract, '2027-05-01');
         $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
-        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY', 'amount' => 80000]);
+        $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY']);
+        $service->restore();
         $contract->agreedServices()->update(['service_id' => null]);
 
         $this->postJson("/api/invoices/{$invoice->id}/generate")->assertUnprocessable()->assertJsonValidationErrors('service_id');
 
-        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY', 'amount' => 80000]);
+        $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY']);
     }
 
     public function test_per_person_snapshot_counts_contract_occupants_in_the_period_even_if_they_later_moved_out(): void
