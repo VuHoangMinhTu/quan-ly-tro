@@ -114,6 +114,30 @@ class WordContractTemplatesTest extends TestCase
         $this->assertStringContainsString('Thời gian hợp đồng là: 12 tháng', $inclusiveYear);
     }
 
+    public function test_stored_room_template_with_legacy_static_table_renders_only_dynamic_handover(): void
+    {
+        $content = file_get_contents(resource_path('views/contracts-room-rental-word.html'));
+        $legacyRows = implode('', array_map(
+            fn (int $number) => '<tr><td>'.$number.'</td><td>LEGACY STATIC ROW '.$number.'</td><td>Mới, tốt ☐</td><td>Cũ, hư ☐</td></tr>',
+            range(1, 13)
+        ));
+        $legacyTable = '<table><thead><tr><th>STT</th><th>Thiết bị và dụng cụ</th><th>Ngày nhận</th><th>Ngày trả</th></tr></thead>'
+            .'<tbody>'.$legacyRows.'</tbody></table>';
+        $content = str_replace('{{handover_checkin_table}}', $legacyTable.'{{handover_checkin_table}}', $content);
+        $snapshot = app(ContractTemplateVariableRegistry::class)->sample();
+        $snapshot['contract']['contract_type'] = 'ROOM_RENTAL';
+        $snapshot['handover_checkin'] = [['name' => 'Máy lạnh', 'condition' => 'GOOD']];
+
+        $rendered = app(ContractTemplateRenderer::class)->render($content, $snapshot);
+
+        $this->assertSame(1, substr_count($rendered, 'BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG'));
+        $this->assertSame(1, substr_count($rendered, '<table'));
+        $this->assertSame(1, substr_count($rendered, 'class="contract-handover-table"'));
+        $this->assertStringNotContainsString('LEGACY STATIC ROW', $rendered);
+        $this->assertStringContainsString('<td>Máy lạnh<br>Remote:', $rendered);
+        $this->assertStringContainsString('Mới, tốt ☑', $rendered);
+    }
+
     public function test_word_appendix_uses_only_confirmed_check_in_items_for_both_contract_types(): void
     {
         $items = [

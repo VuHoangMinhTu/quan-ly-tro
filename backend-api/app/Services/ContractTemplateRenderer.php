@@ -31,6 +31,9 @@ class ContractTemplateRenderer
         $content = $this->prepare($content);
         $values = $this->registry->values($snapshot);
         $isRoomRentalWord = str_contains($content, 'class="word-contract"') && ($snapshot['contract']['contract_type'] ?? null) === 'ROOM_RENTAL';
+        if ($isRoomRentalWord) {
+            $content = $this->withoutLegacyRoomRentalHandoverTable($content);
+        }
         $isWordContract = str_contains($content, 'class="word-contract"');
         $blocks = ['services_table' => $this->services($snapshot['services'] ?? []), 'room_rental_services' => $this->roomRentalServices($snapshot['services'] ?? []), 'occupants_table' => $this->occupants($snapshot['occupants'] ?? []),
             'vehicles_table' => $this->vehicles($snapshot['vehicles'] ?? []), 'handover_checkin_table' => $isRoomRentalWord
@@ -262,6 +265,27 @@ class ContractTemplateRenderer
             'Ngày nhận: '.($receivedDate === 'Chưa cập nhật' ? '…………' : $receivedDate),
             'Ngày trả: '.($returnedDate === 'Chưa cập nhật' ? '…………' : $returnedDate),
         ], $rows, 'contract-handover-table');
+    }
+
+    private function withoutLegacyRoomRentalHandoverTable(string $content): string
+    {
+        $placeholderPosition = strpos($content, '{{handover_checkin_table}}');
+        if ($placeholderPosition === false) {
+            return $content;
+        }
+        $headingPosition = strrpos(substr($content, 0, $placeholderPosition), 'BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG');
+        if ($headingPosition === false) {
+            return $content;
+        }
+        $appendixStart = strrpos(substr($content, 0, $headingPosition), '<p');
+        if ($appendixStart === false) {
+            return $content;
+        }
+
+        // Older stored templates contain a fixed Word table before the dynamic placeholder.
+        // Remove only static tables in the final handover appendix; CHECK_IN/CHECK_OUT still render once below.
+        return substr($content, 0, $appendixStart)
+            .preg_replace('/<table\b[^>]*>.*?<\/table>/si', '', substr($content, $appendixStart));
     }
 
     private function handoverItemsByName(array $items): array
