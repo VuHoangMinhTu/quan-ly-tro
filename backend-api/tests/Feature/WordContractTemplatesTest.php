@@ -23,6 +23,7 @@ class WordContractTemplatesTest extends TestCase
         $this->assertStringNotContainsString('<table>', $content);
         $this->assertSame(1, substr_count($content, '{{handover_checkin_table}}'));
         $this->assertStringContainsString('<p class="handover-heading"><strong>BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG: {{room.room_code}}</strong></p>', $content);
+        $this->assertStringContainsString('<p class="text-right">{{boarding_house.ward}}, ngày', $content);
         $this->assertStringContainsString('Tiền thuê hàng tháng là: {{contract.monthly_rent_value}} VNĐ', $content);
         $this->assertStringContainsString('Khách hàng đặt cọc số tiền: {{contract.deposit_value}} VNĐ', $content);
         $this->assertStringContainsString('<div class="document-signatures"></div>', $content);
@@ -123,6 +124,9 @@ class WordContractTemplatesTest extends TestCase
         ));
         $legacyTable = '<table><thead><tr><th>STT</th><th>Thiết bị và dụng cụ</th><th>Ngày nhận</th><th>Ngày trả</th></tr></thead>'
             .'<tbody>'.$legacyRows.'</tbody></table>';
+        $content = str_replace('<p class="handover-heading"><strong>BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG: {{room.room_code}}</strong></p>',
+            '<p>BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG: {{room.room_code}}</p>', $content);
+        $content = str_replace('<p class="text-right">{{boarding_house.ward}}, ngày', '<p class="text-center">{{boarding_house.ward}}, ngày', $content);
         $content = str_replace('{{handover_checkin_table}}', $legacyTable.'{{handover_checkin_table}}', $content);
         $snapshot = app(ContractTemplateVariableRegistry::class)->sample();
         $snapshot['contract']['contract_type'] = 'ROOM_RENTAL';
@@ -131,6 +135,8 @@ class WordContractTemplatesTest extends TestCase
         $rendered = app(ContractTemplateRenderer::class)->render($content, $snapshot);
 
         $this->assertSame(1, substr_count($rendered, 'BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG'));
+        $this->assertStringContainsString('<p class="handover-heading"><strong>BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG:', $rendered);
+        $this->assertStringContainsString('<p class="text-right">', $rendered);
         $this->assertSame(1, substr_count($rendered, '<table'));
         $this->assertSame(1, substr_count($rendered, 'class="contract-handover-table"'));
         $this->assertStringNotContainsString('LEGACY STATIC ROW', $rendered);

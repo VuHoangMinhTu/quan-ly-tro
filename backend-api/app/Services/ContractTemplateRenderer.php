@@ -33,6 +33,7 @@ class ContractTemplateRenderer
         $isRoomRentalWord = str_contains($content, 'class="word-contract"') && ($snapshot['contract']['contract_type'] ?? null) === 'ROOM_RENTAL';
         if ($isRoomRentalWord) {
             $content = $this->withoutLegacyRoomRentalHandoverTable($content);
+            $content = preg_replace('/<p class="text-center">(?=\{\{boarding_house\.ward\}\}, ngày)/u', '<p class="text-right">', $content, 1);
         }
         $isWordContract = str_contains($content, 'class="word-contract"');
         $blocks = ['services_table' => $this->services($snapshot['services'] ?? []), 'room_rental_services' => $this->roomRentalServices($snapshot['services'] ?? []), 'occupants_table' => $this->occupants($snapshot['occupants'] ?? []),
@@ -281,11 +282,18 @@ class ContractTemplateRenderer
         if ($appendixStart === false) {
             return $content;
         }
+        $headingEnd = strpos($content, '</p>', $headingPosition);
+        if ($headingEnd === false) {
+            return $content;
+        }
+        $headingText = trim(strip_tags(substr($content, $appendixStart, $headingEnd + 4 - $appendixStart)));
+        $appendix = '<p class="handover-heading"><strong>'.$headingText.'</strong></p>'
+            .substr($content, $headingEnd + 4);
 
         // Older stored templates contain a fixed Word table before the dynamic placeholder.
         // Remove only static tables in the final handover appendix; CHECK_IN/CHECK_OUT still render once below.
         return substr($content, 0, $appendixStart)
-            .preg_replace('/<table\b[^>]*>.*?<\/table>/si', '', substr($content, $appendixStart));
+            .preg_replace('/<table\b[^>]*>.*?<\/table>/si', '', $appendix);
     }
 
     private function handoverItemsByName(array $items): array
