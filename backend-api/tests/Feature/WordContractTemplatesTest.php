@@ -21,6 +21,8 @@ class WordContractTemplatesTest extends TestCase
         $this->assertStringContainsString('BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG', $content);
         $this->assertStringContainsString('{{handover_checkin_table}}', $content);
         $this->assertStringNotContainsString('<table>', $content);
+        $this->assertSame(1, substr_count($content, '{{handover_checkin_table}}'));
+        $this->assertStringContainsString('<p class="handover-heading"><strong>BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG: {{room.room_code}}</strong></p>', $content);
         $this->assertStringContainsString('Tiền thuê hàng tháng là: {{contract.monthly_rent_value}} VNĐ', $content);
         $this->assertStringContainsString('Khách hàng đặt cọc số tiền: {{contract.deposit_value}} VNĐ', $content);
         $this->assertStringContainsString('<div class="document-signatures"></div>', $content);
@@ -96,6 +98,8 @@ class WordContractTemplatesTest extends TestCase
         $this->assertStringContainsString('ngày 22 tháng 10 năm 2026', $rendered);
         $this->assertStringContainsString('Thời gian hợp đồng là: 2 tháng', $rendered);
         $this->assertSame(1, substr_count($rendered, 'class="contract-handover-table"'));
+        $this->assertSame(1, substr_count($rendered, '<table'));
+        $this->assertStringContainsString('<p class="handover-heading"><strong>BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG:', $rendered);
         $this->assertSame(15, substr_count($rendered, '<tr>'));
         $this->assertSame(4, substr_count($rendered, '<th>'));
         $this->assertStringContainsString('<th>Ngày nhận: 22/10/2026</th>', $rendered);

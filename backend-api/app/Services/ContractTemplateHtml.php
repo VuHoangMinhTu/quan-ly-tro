@@ -11,7 +11,7 @@ class ContractTemplateHtml
 {
     private const TAGS = ['p', 'h1', 'h2', 'h3', 'h4', 'strong', 'em', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'br', 'div', 'span'];
 
-    private const CLASSES = ['text-center', 'text-right', 'text-justify', 'document-signatures', 'page-break', 'word-contract', 'contract-info-line', 'contract-info-label'];
+    private const CLASSES = ['text-center', 'text-right', 'text-justify', 'document-signatures', 'page-break', 'word-contract', 'contract-info-line', 'contract-info-label', 'handover-heading'];
 
     /** Rebuild a fragment with DOM nodes; never regex-strip executable HTML. */
     public function clean(string $html): string
