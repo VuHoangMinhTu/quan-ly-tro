@@ -274,6 +274,17 @@ class ContractService
                 $membership = $room->roomTenants()->where('tenant_id', $tenantId)
                     ->where('status', 'ACTIVE')->where('is_primary', false)
                     ->lockForUpdate()->first();
+                if ($membership) {
+                    $source = $membership->contract;
+                    $ambiguousLegacy = $membership->contract_id === null && $room->contracts()
+                        ->whereIn('status', ['TERMINATED', 'EXPIRED'])
+                        ->where(fn ($query) => $query->where('tenant_id', $tenantId)
+                            ->orWhereJsonContains('occupant_tenant_ids', (int) $tenantId)
+                            ->orWhereHas('occupants', fn ($occupants) => $occupants->where('tenant_id', $tenantId)))->exists();
+                    if ($ambiguousLegacy || ($membership->contract_id !== null && $source?->status !== 'ACTIVE')) {
+                        throw ValidationException::withMessages(['occupant_tenant_ids' => 'Lịch sử cư trú của người ở cùng chưa rõ hoặc thuộc hợp đồng đã kết thúc. Vui lòng kiểm tra và ghi nhận chuyển đi cho giai đoạn cũ trước khi kích hoạt hợp đồng mới.']);
+                    }
+                }
             }
             if (! $membership) {
                 $membership = new RoomTenant(['room_id' => $room->id, 'tenant_id' => $tenantId, 'move_in_date' => $contract->start_date->format('Y-m-d')]);
@@ -346,6 +357,7 @@ class ContractService
                 }
             }
             $contract->occupants()->where('status', 'ACTIVE')->update(['status' => 'MOVED_OUT', 'move_out_date' => $moveOutDate]);
+            $contract->room->update(['status' => $contract->room->roomTenants()->where('status', 'ACTIVE')->exists() ? 'RENTED' : 'AVAILABLE']);
         }
         $contract->status = $target;
     }
@@ -377,11 +389,13 @@ class ContractService
         DB::transaction(function () use ($user, $id, $occupantId, $date): void {
             $contract = $this->find($user, $id);
             $this->access->house($user, $contract->room->boarding_house_id, true);
+            Room::query()->lockForUpdate()->findOrFail($contract->room_id);
             $membership = $contract->occupants()->lockForUpdate()->findOrFail($occupantId);
             if ($membership->status !== 'ACTIVE' || $date < $membership->move_in_date->format('Y-m-d')) {
                 throw ValidationException::withMessages(['move_out_date' => 'Ngày chuyển đi không hợp lệ hoặc người ở đã chuyển đi.']);
             }
             $membership->update(['move_out_date' => $date, 'status' => 'MOVED_OUT']);
+            $contract->room->update(['status' => $contract->room->roomTenants()->where('status', 'ACTIVE')->exists() ? 'RENTED' : 'AVAILABLE']);
         });
     }
 

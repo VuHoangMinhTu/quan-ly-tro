@@ -151,6 +151,53 @@ class ContractLifecycleApiTest extends TestCase
         $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'status' => 'DRAFT']);
     }
 
+    #[TestWith([true])]
+    #[TestWith([false])]
+    public function test_termination_preserves_or_ends_every_occupant_and_room_status(bool $returnRoom): void
+    {
+        [$old, $owner, , $roommate] = $this->fixture();
+        $third = Tenant::create(['landlord_id' => $roommate->landlord_id, 'full_name' => 'Người ở cùng thứ hai']);
+        $old->room->update(['max_tenants' => 3]);
+        $this->login($owner)->putJson("/api/contracts/{$old->id}", $this->activate($old, $owner, ['occupant_tenant_ids' => [$roommate->id, $third->id]]))->assertOk();
+        $history = $old->occupants()->get();
+
+        $this->putJson("/api/contracts/{$old->id}/status", ['status' => 'TERMINATED', ...($returnRoom ? ['move_out_date' => '2026-10-23'] : [])])->assertOk();
+
+        foreach ($history as $membership) {
+            $this->assertDatabaseHas('room_tenants', ['id' => $membership->id, 'contract_id' => $old->id,
+                'status' => $returnRoom ? 'MOVED_OUT' : 'ACTIVE', 'move_out_date' => $returnRoom ? '2026-10-23' : null]);
+        }
+        $this->assertDatabaseHas('rooms', ['id' => $old->room_id, 'status' => $returnRoom ? 'AVAILABLE' : 'RENTED']);
+        if ($returnRoom) {
+            $new = Contract::factory()->create(['room_id' => $old->room_id, 'tenant_id' => $roommate->id, 'start_date' => null, 'monthly_rent' => null]);
+            $new->handoverReports()->create(['type' => 'CHECK_IN', 'status' => 'CONFIRMED', 'items' => [['name' => 'Giường', 'quantity' => 1, 'condition' => 'GOOD']]]);
+            $this->putJson("/api/contracts/{$new->id}", $this->activate($new, $owner, ['start_date' => '2026-10-24']))->assertOk();
+            $this->putJson("/api/contracts/{$new->id}/status", ['status' => 'ACTIVE'])->assertOk();
+            $this->assertDatabaseCount('room_tenants', 4);
+            $this->assertDatabaseHas('room_tenants', ['contract_id' => $new->id, 'tenant_id' => $roommate->id, 'status' => 'ACTIVE', 'is_primary' => true, 'move_in_date' => '2026-10-24']);
+            foreach ($history as $membership) {
+                $this->assertDatabaseHas('room_tenants', ['id' => $membership->id, 'contract_id' => $old->id, 'status' => 'MOVED_OUT', 'move_out_date' => '2026-10-23']);
+            }
+        }
+    }
+
+    #[TestWith([true])]
+    #[TestWith([false])]
+    public function test_stale_or_ambiguous_legacy_roommate_is_not_transferred_from_ended_contract(bool $linked): void
+    {
+        [$new, $owner] = $this->fixture();
+        $old = Contract::factory()->create(['room_id' => $new->room_id, 'status' => 'TERMINATED', 'occupant_tenant_ids' => [$new->tenant_id]]);
+        $membership = RoomTenant::create(['room_id' => $new->room_id, 'tenant_id' => $new->tenant_id,
+            'contract_id' => $linked ? $old->id : null, 'is_primary' => false, 'status' => 'ACTIVE', 'move_in_date' => '2026-09-01']);
+
+        $this->login($owner)->putJson("/api/contracts/{$new->id}", $this->activate($new, $owner))
+            ->assertUnprocessable()->assertJsonValidationErrors('occupant_tenant_ids');
+
+        $this->assertDatabaseHas('contracts', ['id' => $new->id, 'status' => 'DRAFT']);
+        $this->assertDatabaseHas('room_tenants', ['id' => $membership->id, 'contract_id' => $linked ? $old->id : null, 'is_primary' => false, 'status' => 'ACTIVE']);
+        $this->assertDatabaseCount('room_tenants', 1);
+    }
+
     public function test_activation_promotes_legacy_roommate_and_retry_preserves_the_same_stay(): void
     {
         [$contract, $owner] = $this->fixture();
