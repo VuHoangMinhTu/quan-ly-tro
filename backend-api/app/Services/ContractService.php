@@ -254,9 +254,6 @@ class ContractService
                 throw ValidationException::withMessages(['tenant_id' => "Phòng {$room->room_code} hiện vẫn ghi nhận {$name} là người đứng tên đang ở từ ngày {$date}. Hãy ghi nhận chuyển đi trước khi kích hoạt hợp đồng mới."]);
             }
         }
-        if ($otherActive($room->roomTenants()->where('status', 'ACTIVE')->whereIn('tenant_id', $ids))->exists()) {
-            throw ValidationException::withMessages(['occupant_tenant_ids' => 'Người ở vẫn được ghi nhận ACTIVE trong hợp đồng khác. Hãy ghi nhận chuyển đi trước khi kích hoạt hợp đồng mới.']);
-        }
         $unrelated = $otherActive($room->roomTenants()->where('status', 'ACTIVE')->whereNotIn('tenant_id', $ids))->count();
         if ($room->max_tenants !== null && count($ids) + $unrelated > $room->max_tenants) {
             throw ValidationException::withMessages(['occupant_tenant_ids' => 'Số người đăng ký vượt quá số người tối đa của phòng.']);
@@ -272,10 +269,18 @@ class ContractService
         foreach ($ids as $tenantId) {
             $membership = $room->roomTenants()->where('contract_id', $contract->id)->where('tenant_id', $tenantId)->where('status', 'ACTIVE')->first();
             if (! $membership) {
+                // Reuse the same stay rather than duplicating a legacy roommate
+                // when they become the contract holder. Preserve move_in_date.
+                $membership = $room->roomTenants()->where('tenant_id', $tenantId)
+                    ->where('status', 'ACTIVE')->where('is_primary', false)
+                    ->lockForUpdate()->first();
+            }
+            if (! $membership) {
                 $membership = new RoomTenant(['room_id' => $room->id, 'tenant_id' => $tenantId, 'move_in_date' => $contract->start_date->format('Y-m-d')]);
             }
             $membership->fill(['contract_id' => $contract->id, 'status' => 'ACTIVE', 'move_out_date' => null, 'is_primary' => $tenantId === (int) $contract->tenant_id])->save();
         }
+        $room->update(['status' => 'RENTED']);
         $contract->signing_snapshot = $this->sourceSnapshot($contract, $room, $house, $representative, $ids);
         $contract->save();
         $this->documents->capture($contract, $contract->signing_snapshot);

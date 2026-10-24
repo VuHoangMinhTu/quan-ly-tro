@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Contract;
+use App\Models\Room;
 use App\Models\RoomTenant;
 use App\Models\Service;
 use App\Models\Tenant;
@@ -148,6 +149,55 @@ class ContractLifecycleApiTest extends TestCase
         $this->assertDatabaseCount('room_tenants', 1);
         $this->assertDatabaseHas('room_tenants', ['id' => $membership->id, 'contract_id' => null, 'status' => 'ACTIVE']);
         $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'status' => 'DRAFT']);
+    }
+
+    public function test_activation_promotes_legacy_roommate_and_retry_preserves_the_same_stay(): void
+    {
+        [$contract, $owner] = $this->fixture();
+        $membership = RoomTenant::create(['room_id' => $contract->room_id, 'tenant_id' => $contract->tenant_id,
+            'move_in_date' => '2026-09-01', 'status' => 'ACTIVE', 'is_primary' => false]);
+
+        $this->login($owner)->putJson("/api/contracts/{$contract->id}", $this->activate($contract, $owner))->assertOk();
+        $this->putJson("/api/contracts/{$contract->id}/status", ['status' => 'ACTIVE'])->assertOk();
+
+        $this->assertDatabaseCount('room_tenants', 1);
+        $this->assertDatabaseHas('room_tenants', ['id' => $membership->id, 'contract_id' => $contract->id,
+            'is_primary' => true, 'status' => 'ACTIVE', 'move_in_date' => '2026-09-01']);
+        $this->assertDatabaseHas('rooms', ['id' => $contract->room_id, 'status' => 'RENTED']);
+    }
+
+    public function test_other_rooms_active_occupancies_do_not_block_activation(): void
+    {
+        [$contract, $owner] = $this->fixture();
+        foreach (range(1, 5) as $index) {
+            $room = Room::create(['boarding_house_id' => $contract->room->boarding_house_id,
+                'room_code' => 'OTHER-'.$index, 'monthly_rent' => null, 'status' => 'AVAILABLE']);
+            RoomTenant::create(['room_id' => $room->id, 'tenant_id' => $contract->tenant_id,
+                'move_in_date' => '2026-09-01', 'status' => 'ACTIVE', 'is_primary' => true]);
+        }
+
+        $this->login($owner)->putJson("/api/contracts/{$contract->id}", $this->activate($contract, $owner))->assertOk();
+
+        $this->assertDatabaseCount('room_tenants', 6);
+        $this->assertDatabaseHas('room_tenants', ['room_id' => $contract->room_id, 'tenant_id' => $contract->tenant_id,
+            'contract_id' => $contract->id, 'is_primary' => true, 'status' => 'ACTIVE']);
+    }
+
+    public function test_different_legacy_primary_blocks_roommate_promotion_atomically(): void
+    {
+        [$contract, $owner, , $other] = $this->fixture();
+        $other->update(['full_name' => 'Nguyễn Văn A']);
+        RoomTenant::create(['room_id' => $contract->room_id, 'tenant_id' => $other->id,
+            'move_in_date' => '2026-09-01', 'status' => 'ACTIVE', 'is_primary' => true]);
+        $membership = RoomTenant::create(['room_id' => $contract->room_id, 'tenant_id' => $contract->tenant_id,
+            'move_in_date' => '2026-09-15', 'status' => 'ACTIVE', 'is_primary' => false]);
+
+        $this->login($owner)->putJson("/api/contracts/{$contract->id}", $this->activate($contract, $owner))
+            ->assertUnprocessable()->assertJsonPath('errors.tenant_id.0', "Phòng {$contract->room->room_code} hiện vẫn ghi nhận Nguyễn Văn A là người đứng tên đang ở từ ngày 01/09/2026. Hãy ghi nhận chuyển đi trước khi kích hoạt hợp đồng mới.");
+
+        $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'status' => 'DRAFT']);
+        $this->assertDatabaseHas('room_tenants', ['id' => $membership->id, 'contract_id' => null, 'is_primary' => false]);
+        $this->assertDatabaseCount('room_tenants', 2);
     }
 
     public function test_terminated_contract_with_moved_out_primary_allows_new_contract_without_changing_history(): void
