@@ -268,7 +268,7 @@ class ContractApiTest extends TestCase
             'deposit_amount' => -1,
             'status' => 'INVALID',
         ])->assertStatus(422)
-            ->assertJsonValidationErrors(['tenant_id', 'contract_code', 'end_date', 'monthly_rent', 'deposit_amount', 'status']);
+            ->assertJsonValidationErrors(['tenant_id', 'end_date', 'monthly_rent', 'deposit_amount', 'status']);
     }
 
     public function test_tenant_id_is_required(): void

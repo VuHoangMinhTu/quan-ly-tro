@@ -65,7 +65,17 @@ test('wizard prefill uses latest meter reading and submitting is delayed until f
   nodes(page.render()).find(node => node.props.id === 'contract-representative').props.onChange({ target: { value: '9' } })
   page.button('Tiếp tục').props.onClick()
   await page.button('Kích hoạt hợp đồng').props.onClick()
-  assert.deepEqual(page.payloads[0], { ...coreValues, status: 'ACTIVE', lessor_representative_user_id: 9, occupant_tenant_ids: [2], services: [{ service_id: 3, base_price: 4000, vat_rate: 8, pricing_snapshot: null }], payment_due_day: 5, contract_template_id: 1, utility_openings: [{ utility_meter_id: 4, opening_reading: 1800, reading_date: '2026-10-01' }] })
+  assert.deepEqual(page.payloads[0], { ...coreValues, status: 'ACTIVE', contract_type: 'ROOM_RENTAL', bed_id: null, lessor_representative_user_id: 9, occupant_tenant_ids: [2], services: [{ service_id: 3, base_price: 4000, vat_rate: 8, pricing_snapshot: null }], payment_due_day: 5, contract_template_id: 1, utility_openings: [{ utility_meter_id: 4, opening_reading: 1800, reading_date: '2026-10-01' }] })
+})
+
+test('automatic code remains null through wizard and local mode is not sent to API', async () => {
+  const page = await wizard()
+  await page.core({ ...coreValues, contract_code: null, auto_code: true })
+  page.button('Tiếp tục').props.onClick()
+  page.button('Tiếp tục').props.onClick()
+  await page.button('Lưu nháp').props.onClick()
+  assert.equal(page.payloads[0].contract_code, null)
+  assert.equal('auto_code' in page.payloads[0], false)
 })
 
 test('template selector prefills create but preserves the exact saved edit version until explicitly changed', async () => {

@@ -50,6 +50,7 @@ async function harness(path, props = {}, extraBindings = {}) {
       }
     },
     useQuery: () => ({ data: { data: { data: [] } } }),
+    useWatch: ({ name }) => form.getValues(name),
     useMutation: (options) => { mutation = options; return {} },
     useNavigate: () => () => {},
     useForm: (options) => {
@@ -77,6 +78,27 @@ async function harness(path, props = {}, extraBindings = {}) {
 const apiError = (status, message, errors) => ({ response: { status, data: { success: false, message, errors } } })
 
 const validContract = { tenant_id: 2, contract_code: 'HD001', start_date: '2026-11-16', monthly_rent: 2000000, deposit_amount: 1000000 }
+
+for (const [path, field, initial] of [
+  ['./ContractForm.jsx', 'contract_code', { ...validContract, contract_code: '', status: 'DRAFT' }],
+  ['./InvoiceForm.jsx', 'invoice_code', { billing_period: '2026-10-01', invoice_code: '', status: 'DRAFT' }],
+]) {
+  test(`${field} defaults to auto and validates a manual code separately`, async () => {
+    const payloads = []
+    const page = await harness(path, { initialValues: initial, onSubmit: async payload => payloads.push(payload) })
+    assert.equal(page.form.getValues('auto_code'), true)
+    assert.equal(page.render().find(node => node.type === 'input' && node.props.name === field).props.readOnly, true)
+    await page.submit()
+    assert.equal(payloads[0][field], null)
+    page.form.setValue('auto_code', false)
+    await page.submit()
+    assert.equal(payloads.length, 1)
+    assert.ok(page.form.formState.errors[field])
+    page.form.setValue(field, '  CUSTOM-01  ')
+    await page.submit()
+    assert.equal(payloads[1][field], 'CUSTOM-01')
+  })
+}
 
 for (const status of ['DRAFT', 'ACTIVE']) {
   test(`${status} contract accepts API null note as an empty textarea and submits null`, async () => {

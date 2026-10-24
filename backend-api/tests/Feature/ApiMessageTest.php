@@ -31,8 +31,8 @@ class ApiMessageTest extends TestCase
             ->assertUnprocessable()
             ->assertExactJson([
                 'success' => false,
-                'message' => 'Mã hợp đồng này đã được sử dụng. Vui lòng chọn mã khác.',
-                'errors' => ['contract_code' => ['Mã hợp đồng này đã được sử dụng. Vui lòng chọn mã khác.']],
+                'message' => 'Mã hợp đồng HD-001 đã được sử dụng.',
+                'errors' => ['contract_code' => ['Mã hợp đồng HD-001 đã được sử dụng.']],
             ]);
     }
 

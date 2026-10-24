@@ -14,6 +14,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\PayOSService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Mockery;
 use PayOS\Exceptions\NotFoundException;
@@ -220,7 +221,8 @@ class PayOSApiTest extends TestCase
     {
         config(['services.payos.description_max_length' => 0]);
         [, $invoice] = $this->ownerAndInvoice();
-        $invoice->update(['invoice_code' => 'HD-P101-2026-10']);
+        // Historical fixtures bypass the new immutable business-code write path.
+        DB::table('invoices')->where('id', $invoice->id)->update(['invoice_code' => 'HD-P101-2026-10']);
 
         $this->assertSame('HDP101202610', app(PayOSService::class)->buildPaymentDescription($invoice->fresh()));
     }
@@ -297,7 +299,7 @@ class PayOSApiTest extends TestCase
     {
         config(['services.payos.description_max_length' => 64]);
         [, $invoice] = $this->ownerAndInvoice();
-        $invoice->update(['invoice_code' => 'HD-10-2026']);
+        DB::table('invoices')->where('id', $invoice->id)->update(['invoice_code' => 'HD-10-2026']);
 
         $this->assertSame('HD102026', app(PayOSService::class)->buildPaymentDescription($invoice->fresh()));
     }
@@ -306,7 +308,7 @@ class PayOSApiTest extends TestCase
     {
         config(['services.payos.description_max_length' => 64]);
         [, $invoice] = $this->ownerAndInvoice();
-        $invoice->update(['invoice_code' => '']);
+        DB::table('invoices')->where('id', $invoice->id)->update(['invoice_code' => '']);
 
         $this->assertSame('PAYOS9000000123', app(PayOSService::class)->buildPaymentDescription($invoice->fresh(), 9_000_000_123));
     }

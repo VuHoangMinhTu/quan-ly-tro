@@ -29,7 +29,7 @@ class StoreContractRequest extends FormRequest
 
         return [
             'tenant_id' => [$updating ? 'sometimes' : 'required', 'integer', 'min:1', 'exists:tenants,id'],
-            'contract_code' => [$updating ? 'sometimes' : 'required', 'string', 'max:100', Rule::unique('contracts', 'contract_code')->ignore($this->route('id'))],
+            'contract_code' => ['sometimes', 'nullable', 'string', 'max:100'],
             'start_date' => ['nullable', 'date_format:Y-m-d'],
             'end_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:start_date'],
             'signed_date' => ['nullable', 'date_format:Y-m-d'],

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasDocumentCode;
 use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -9,6 +10,7 @@ use Illuminate\Validation\ValidationException;
 
 class Invoice extends Model
 {
+    use HasDocumentCode;
     use SoftDeletes;
 
     protected $fillable = [
