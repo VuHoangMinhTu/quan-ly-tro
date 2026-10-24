@@ -124,6 +124,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/boarding-houses/{boardingHouseId}/floors', [FloorController::class, 'store']);
     Route::post('/boarding-houses/{boardingHouseId}/rooms', [RoomController::class, 'store']);
     Route::post('/boarding-houses/{boardingHouseId}/rooms/bulk', [RoomController::class, 'storeBulk']);
+    Route::put('/boarding-houses/{boardingHouseId}/rooms/order', [RoomController::class, 'reorder']);
 
     Route::get('/rooms/{id}', [RoomController::class, 'show']);
     Route::get('/rooms/{roomId}/beds', [BedController::class, 'index']);

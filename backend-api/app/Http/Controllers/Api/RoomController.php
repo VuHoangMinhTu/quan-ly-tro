@@ -9,6 +9,7 @@ use App\Http\Requests\Room\StoreRoomRequest;
 use App\Http\Requests\Room\UpdateRoomRequest;
 use App\Models\BoardingHouse;
 use App\Models\Room;
+use App\Services\RoomOrderingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +24,8 @@ class RoomController extends Controller
         $rooms = $boardingHouse->rooms()->with(['amenities', 'floor'])->withCount('beds')->withActiveOccupancy()
             ->withExists(['contracts as has_contracts', 'roomTenants as has_occupants', 'invoices as has_invoices',
                 'utilityMeters as has_meters', 'services as has_services', 'residenceDeclarations as has_residence'])
-            ->latest()->get();
+            ->get();
+        $rooms = app(RoomOrderingService::class)->ordered($rooms);
         $rooms->each(function (Room $room): void {
             $room->setAttribute('has_history', $room->has_contracts || $room->has_occupants || $room->has_invoices
                 || $room->has_meters || $room->has_services || $room->has_residence);
@@ -46,7 +48,7 @@ class RoomController extends Controller
         }
 
         $room = DB::transaction(function () use ($boardingHouse, $data, $amenityIds, $beds): Room {
-            $room = $boardingHouse->rooms()->create($data);
+            $room = app(RoomOrderingService::class)->create($boardingHouse, $data);
             $room->amenities()->sync($amenityIds);
             foreach ($beds as $bed) {
                 $room->beds()->create([
@@ -88,7 +90,7 @@ class RoomController extends Controller
             }
 
             foreach ($rooms as $room) {
-                $boardingHouse->rooms()->create([
+                app(RoomOrderingService::class)->create($boardingHouse, [
                     'room_code' => $room['room_code'],
                     'room_name' => $room['room_name'] ?? null,
                     'description' => $room['description'] ?? null,
@@ -114,6 +116,19 @@ class RoomController extends Controller
             $room,
             'Lấy thông tin phòng thành công.'
         );
+    }
+
+    public function reorder(Request $request, int $boardingHouseId, RoomOrderingService $ordering): JsonResponse
+    {
+        $house = $this->findOwnedBoardingHouse($request, $boardingHouseId);
+        $data = $request->validate([
+            'floor_id' => ['nullable', 'integer'],
+            'room_ids' => ['required', 'array', 'list', 'min:1', 'max:5000'],
+            'room_ids.*' => ['required', 'integer', 'distinct'],
+        ]);
+        $ordering->reorder($house, $data['floor_id'] ?? null, $data['room_ids']);
+
+        return ApiResponse::success(null, 'Đã lưu thứ tự phòng.');
     }
 
     public function update(
@@ -145,6 +160,11 @@ class RoomController extends Controller
             $hasAmenities,
             $amenityIds
         ) {
+            $ordering = app(RoomOrderingService::class);
+            $next = $ordering->nextFor($room->boardingHouse, array_key_exists('floor_id', $data) ? $data['floor_id'] : $room->floor_id);
+            if (array_key_exists('floor_id', $data) && (string) $data['floor_id'] !== (string) $room->floor_id && ! isset($data['sort_order'])) {
+                $data['sort_order'] = $next;
+            }
             $room->update($data);
 
             if ($hasAmenities) {

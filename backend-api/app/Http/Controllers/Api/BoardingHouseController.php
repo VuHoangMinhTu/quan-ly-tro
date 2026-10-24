@@ -10,6 +10,7 @@ use App\Http\Requests\BoardingHouse\UpdateBoardingHouseRequest;
 use App\Models\BoardingHouse;
 use App\Models\Landlord;
 use App\Models\User;
+use App\Services\RoomOrderingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -43,7 +44,7 @@ class BoardingHouseController extends Controller
             // Both ownership keys are assigned by relations, never by the client.
             $house = $this->landlordBoardingHouses($request)->create($data['boarding_house']);
             foreach ($data['rooms'] as $room) {
-                $house->rooms()->create([
+                app(RoomOrderingService::class)->create($house, [
                     'room_code' => $room['room_code'],
                     'area' => $room['area'] ?? null,
                     'monthly_rent' => $room['monthly_rent'] ?? null,

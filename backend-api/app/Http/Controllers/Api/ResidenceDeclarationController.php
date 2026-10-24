@@ -9,6 +9,7 @@ use App\Http\Requests\Residence\UpdateResidenceStatusRequest;
 use App\Models\ResidenceDeclaration;
 use App\Services\BoardingHouseAccessService;
 use App\Services\ResidenceDeclarationService;
+use App\Services\RoomOrderingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +31,7 @@ class ResidenceDeclarationController extends Controller
 
     public function rooms(Request $request, int $id): JsonResponse
     {
-        return ApiResponse::success($this->access->house($request->user(), $id)->rooms()->orderBy('room_code')->get(), 'Lấy danh sách phòng thành công.');
+        return ApiResponse::success(app(RoomOrderingService::class)->ordered($this->access->house($request->user(), $id)->rooms()->get()), 'Lấy danh sách phòng thành công.');
     }
 
     public function context(Request $request, int $id): JsonResponse

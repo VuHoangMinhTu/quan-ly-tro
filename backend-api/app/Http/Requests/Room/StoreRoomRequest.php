@@ -20,6 +20,7 @@ class StoreRoomRequest extends FormRequest
         return [
             'room_code' => ['required', 'string', 'max:50', Rule::unique('rooms', 'room_code')->where('boarding_house_id', $boardingHouseId ?? 0)],
             'room_name' => ['nullable', 'string', 'max:255'],
+            'sort_order' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:4294967295'],
             'floor_id' => ['nullable', 'integer', Rule::exists('floors', 'id')->where('boarding_house_id', $boardingHouseId ?? 0)],
             'room_type' => ['sometimes', Rule::in(['PRIVATE_ROOM', 'DORMITORY'])],
             'area' => ['nullable', 'numeric', 'min:0'],

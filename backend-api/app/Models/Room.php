@@ -16,6 +16,7 @@ class Room extends Model
         'floor_id',
         'room_type',
         'room_code',
+        'sort_order',
         'room_name',
         'area',
         'monthly_rent',
@@ -26,6 +27,7 @@ class Room extends Model
 
     protected $casts = [
         'area' => 'decimal:2',
+        'sort_order' => 'integer',
         'monthly_rent' => 'decimal:2',
         'max_tenants' => 'integer',
     ];

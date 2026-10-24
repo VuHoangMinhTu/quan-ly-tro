@@ -7,6 +7,7 @@ import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { roomKeys } from '../../api/roomKeys'
 import { getRoomsByBoardingHouse } from '../../api/roomApi'
 import RoomCard from '../../components/rooms/RoomCard'
+import RoomOrderButton from '../../components/rooms/RoomOrderButton'
 
 export default function RoomListPage() {
   const { boardingHouseId } = useParams()
@@ -29,9 +30,9 @@ export default function RoomListPage() {
           <h2 className="break-words text-xl font-bold sm:text-2xl">Phòng</h2>
           <p className="mt-1 break-words text-sm text-slate-600">{boardingHouse.name}</p>
         </div>
-        <Link to={`/boarding-houses/${boardingHouseId}/rooms/new`} className="inline-flex min-h-11 sm:min-h-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+        <div className="flex flex-wrap gap-3"><RoomOrderButton rooms={rooms} boardingHouseId={boardingHouseId} /><Link to={`/boarding-houses/${boardingHouseId}/rooms/new`} className="inline-flex min-h-11 sm:min-h-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
           <Plus size={17} /> Thêm phòng
-        </Link>
+        </Link></div>
       </div>
       {location.state?.message && <p className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{location.state.message}</p>}
       {rooms.length === 0 ? (
