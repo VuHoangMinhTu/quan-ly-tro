@@ -4,6 +4,8 @@ import { formatBillingPeriodForDisplay, formatDateForDisplay } from '../../utils
 import { formatCurrency, formatUtilityValue } from '../../utils/formatters'
 import { invoiceStatusLabels } from '../../utils/invoiceStatus'
 import { APP_TITLE } from '../../utils/brand'
+import PrivatePaymentQr from '../payments/PrivatePaymentQr'
+import { invoicePayosQr } from '../../utils/invoicePayment'
 
 const utilityUnits = { ELECTRICITY: 'kWh', WATER: 'm³' }
 
@@ -56,15 +58,18 @@ function InvoicePrintHeader({ invoice }) {
 
 function PaymentQrCard({ invoice, paymentRequest, remaining }) {
   const hasQr = Boolean(paymentRequest?.qr_code)
+  const bank = invoice.payment_profile
+  const hasStaticQr = !hasQr && Boolean(bank?.payment_qr_url)
+  const configured = Boolean(bank?.bank_name || bank?.bank_account_name || bank?.bank_account_number)
 
-  return <aside className={`invoice-top-payment-card ${hasQr ? 'has-qr' : 'without-qr'}`}>
+  return <aside className={`invoice-top-payment-card ${hasQr || hasStaticQr ? 'has-qr' : 'without-qr'}`}>
     <p className="invoice-eyebrow">Cần thanh toán</p>
     <strong className="invoice-top-payment-amount">{formatCurrency(remaining)}</strong>
     <span className="invoice-top-payment-status">{invoiceStatusLabels[invoice.status] || invoice.status}</span>
     {hasQr ? <>
       <div className="invoice-top-qr"><QRCodeSVG value={paymentRequest.qr_code} size={100} level="M" /></div>
       <span className="invoice-top-qr-label">Quét QR payOS để thanh toán</span>
-    </> : <div className="invoice-top-payment-fallback"><CreditCard size={25} /><span>Thanh toán tiền mặt hoặc chuyển khoản theo hướng dẫn của chủ trọ.</span></div>}
+    </> : hasStaticQr ? <><div className="invoice-top-qr"><PrivatePaymentQr profile={bank} /></div><span className="invoice-top-qr-label">Quét mã để chuyển khoản</span></> : <div className="invoice-top-payment-fallback"><CreditCard size={25} /><span>{configured ? 'Chuyển khoản theo thông tin thanh toán bên dưới hoặc thanh toán tiền mặt.' : 'Chưa thiết lập thông tin nhận thanh toán.'}</span>{!configured && invoice.can_manage && <a href="/payment-settings" className="no-print underline">Thiết lập ngay</a>}</div>}
   </aside>
 }
 
@@ -144,13 +149,14 @@ function PaymentInfo({ invoice, paymentRequest, remaining }) {
       {!hasQr && bank?.bank_name && <p><span>Ngân hàng</span><strong>{bank.bank_name}</strong></p>}
       {!hasQr && bank?.bank_account_name && <p><span>Chủ tài khoản</span><strong>{bank.bank_account_name}</strong></p>}
       {!hasQr && bank?.bank_account_number && <p><span>Số tài khoản</span><strong>{bank.bank_account_number}</strong></p>}
+      {!hasQr && !bank?.bank_name && !bank?.bank_account_name && !bank?.bank_account_number && !bank?.payment_qr_url && <p>Chưa thiết lập thông tin nhận thanh toán.</p>}
     </div>
   </section>
 }
 
 export default function InvoicePrintLayout({ invoice }) {
   const items = invoice.items || []
-  const paymentRequest = invoice.payos_payment_request
+  const paymentRequest = invoicePayosQr(invoice)
   const remaining = Math.max(0, Number(invoice.total_amount || 0) - Number(invoice.paid_amount || 0))
 
   return <article className="invoice-sheet">

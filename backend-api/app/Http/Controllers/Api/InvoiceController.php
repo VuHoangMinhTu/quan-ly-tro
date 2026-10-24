@@ -13,10 +13,12 @@ use App\Models\Room;
 use App\Services\BillingService;
 use App\Services\BoardingHouseAccessService;
 use App\Services\ContractService;
+use App\Services\InvoicePaymentInfoService;
 use App\Services\PayOSService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class InvoiceController extends Controller
 {
@@ -47,9 +49,16 @@ class InvoiceController extends Controller
             ->with(['room.boardingHouse', 'contract.tenant', 'items', 'payosPaymentRequest'])->findOrFail($id);
         $invoice->setAttribute('can_manage', $access->isOwner($r->user(), $invoice->room->boardingHouse));
         $invoice->setAttribute('payos_available', app(PayOSService::class)->availableFor($invoice->room->boardingHouse->landlord));
-        $invoice->setAttribute('payment_profile', $invoice->room->boardingHouse->landlord->paymentProfile?->only(['bank_name', 'bank_account_name', 'bank_account_number']));
+        $invoice->setAttribute('payment_profile', app(InvoicePaymentInfoService::class)->forInvoice($invoice));
 
         return ApiResponse::success($invoice, 'Lấy thông tin hóa đơn thành công.');
+    }
+
+    public function paymentQr(Request $r, int $id, BoardingHouseAccessService $access, InvoicePaymentInfoService $info): StreamedResponse
+    {
+        $invoice = Invoice::query()->whereHas('room', fn ($query) => $query->whereIn('boarding_house_id', $access->houses($r->user())->select('boarding_houses.id')))->findOrFail($id);
+
+        return $info->invoiceQr($invoice);
     }
 
     public function update(UpdateInvoiceRequest $r, int $id): JsonResponse

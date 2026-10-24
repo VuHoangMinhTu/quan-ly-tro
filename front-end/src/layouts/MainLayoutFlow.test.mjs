@@ -5,14 +5,14 @@ import React from 'react'
 import { transformWithOxc } from 'vite'
 import { clearContractDocumentCache } from '../api/contractDocumentCache.js'
 
-async function harness(pathname = '/dashboard') {
+async function harness(pathname = '/dashboard', owner = false) {
   const states = []
   let stateIndex = 0
   let mutationOptions
   const navigation = []
   const mutations = []
   const removedQueries = []
-  const icons = ['Building2', 'FileText', 'Gauge', 'KeyRound', 'LayoutDashboard', 'LogOut', 'Menu', 'Receipt', 'UserRound', 'Users', 'X']
+  const icons = ['Building2', 'CreditCard', 'FileText', 'Gauge', 'KeyRound', 'LayoutDashboard', 'LogOut', 'Menu', 'Receipt', 'UserRound', 'Users', 'X']
   const source = (await readFile(new URL('./MainLayout.jsx', import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
   const bindings = {
     clearContractDocumentCache,
@@ -25,7 +25,7 @@ async function harness(pathname = '/dashboard') {
     useEffect: () => {}, // Native focus/ESC/scroll locking is covered by browser QA.
     useLocation: () => ({ pathname }),
     useNavigate: () => (...args) => { navigation.push(args) },
-    useQueryClient: () => ({ getQueryData: () => ({ data: { data: { user: { name: 'Minh Tú' } } } }), removeQueries: (value) => removedQueries.push(value) }),
+    useQueryClient: () => ({ getQueryData: () => ({ data: { data: { user: { name: 'Minh Tú' }, landlord: owner ? { id: 5 } : null } } }), removeQueries: (value) => removedQueries.push(value) }),
     useMutation: (options) => { mutationOptions = options; return { mutate: () => mutations.push('logout'), isPending: false } },
     logout: () => {},
     getApiErrorMessage: () => 'Không thể đăng xuất.',
@@ -76,9 +76,20 @@ test('mobile logout retains token removal, me-cache clearing and login navigatio
     assert.equal(layout.button('Menu tài khoản').props['aria-expanded'], false)
     layout.settle(null, null)
     assert.deepEqual(removedTokens, ['access_token'])
-    assert.deepEqual(layout.removedQueries, ['me', 'dashboard', 'contract-document', 'contract-document-preview', 'contract-template', 'contract-templates', 'contract-signing'].map(prefix => ({ queryKey: [prefix] })))
+    assert.deepEqual(layout.removedQueries, ['me', 'dashboard', 'landlord', 'payment-qr', 'invoice', 'contract-document', 'contract-document-preview', 'contract-template', 'contract-templates', 'contract-signing'].map(prefix => ({ queryKey: [prefix] })))
     assert.deepEqual(layout.navigation, [['/login', { state: undefined }]])
   } finally {
     globalThis.localStorage = previousStorage
   }
+})
+
+test('one responsive account menu contains owner payment settings and neither sidebar does', async () => {
+  const layout = await harness('/payment-settings', true)
+  assert.equal(layout.render().filter(node => node.type === 'a' && node.props.href === '/payment-settings').length, 0)
+  assert.equal(layout.render().filter(node => node.type === 'button' && node.props['aria-label'] === 'Menu tài khoản').length, 1)
+  layout.button('Menu tài khoản').props.onClick()
+  const links = layout.render().filter(node => node.type === 'a' && node.props.role === 'menuitem')
+  assert.deepEqual(links.map(node => node.props.href), ['/payment-settings', '/change-password'])
+  links[0].props.onClick()
+  assert.equal(layout.button('Menu tài khoản').props['aria-expanded'], false)
 })

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasDocumentCode;
+use App\Services\InvoicePaymentInfoService;
 use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -12,6 +13,13 @@ class Invoice extends Model
 {
     use HasDocumentCode;
     use SoftDeletes;
+
+    protected $hidden = ['payment_snapshot'];
+
+    protected static function booted(): void
+    {
+        static::saving(fn (Invoice $invoice) => app(InvoicePaymentInfoService::class)->capture($invoice));
+    }
 
     protected $fillable = [
         'room_id',
@@ -31,6 +39,7 @@ class Invoice extends Model
 
     protected $casts = [
         'subtotal' => 'decimal:2',
+        'payment_snapshot' => 'array',
         'billing_period' => 'date:Y-m-d',
         'discount_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',

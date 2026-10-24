@@ -107,6 +107,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/me', [AuthController::class, 'me']);
     Route::get('/landlord/payment-profile', [LandlordPaymentSettingsController::class, 'profile']);
     Route::put('/landlord/payment-profile', [LandlordPaymentSettingsController::class, 'saveProfile']);
+    Route::get('/landlord/payment-profile/qr', [LandlordPaymentSettingsController::class, 'qr']);
     Route::get('/landlord/payos-config', [LandlordPaymentSettingsController::class, 'payos']);
     Route::put('/landlord/payos-config', [LandlordPaymentSettingsController::class, 'savePayos']);
     Route::delete('/landlord/payos-config', [LandlordPaymentSettingsController::class, 'deletePayos']);
@@ -138,6 +139,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/rooms/{roomId}/invoices', [InvoiceController::class, 'index']);
     Route::post('/rooms/{roomId}/invoices', [InvoiceController::class, 'store']);
     Route::get('/invoices/{id}', [InvoiceController::class, 'show']);
+    Route::get('/invoices/{id}/payment-qr', [InvoiceController::class, 'paymentQr']);
     Route::put('/invoices/{id}', [InvoiceController::class, 'update']);
     Route::delete('/invoices/{id}', [InvoiceController::class, 'destroy']);
     Route::post('/invoices/{id}/generate', [InvoiceController::class, 'generate']);

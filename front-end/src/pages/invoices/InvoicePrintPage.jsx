@@ -1,6 +1,6 @@
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useIsFetching, useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Printer } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import '@fontsource/be-vietnam-pro/400.css'
@@ -18,6 +18,7 @@ export default function InvoicePrintPage() {
   const { id } = useParams()
   const invoiceQuery = useQuery({ queryKey: invoiceKeys.detail(id), queryFn: () => getInvoice(id) })
   const invoice = invoiceQuery.data?.data?.data
+  const qrLoading = useIsFetching({ queryKey: ['payment-qr'] }) > 0
 
   useEffect(() => {
     if (!invoice?.invoice_code) return undefined
@@ -31,13 +32,14 @@ export default function InvoicePrintPage() {
 
   const printInvoice = async () => {
     await document.fonts?.ready
+    await Promise.all([...document.querySelectorAll('.invoice-sheet img')].map(image => image.decode().catch(() => {})))
     window.print()
   }
 
   return <main className="invoice-print-page">
     <nav className="invoice-print-actions no-print" aria-label="Thao tác in hóa đơn">
       <Link to={`/invoices/${id}`}><ArrowLeft size={17} /> Quay lại</Link>
-      <button type="button" onClick={printInvoice}><Printer size={17} /> In hóa đơn</button>
+      <button type="button" disabled={qrLoading} onClick={printInvoice}><Printer size={17} />{qrLoading ? 'Đang tải QR...' : 'In hóa đơn'}</button>
     </nav>
     <InvoicePrintLayout invoice={invoice} />
   </main>

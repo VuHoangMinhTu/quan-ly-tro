@@ -40,6 +40,7 @@
 .invoice-top-payment-status { margin-top: 1px; color: #60716c; font-size: 8pt; font-weight: 600; }
 .invoice-top-qr { display: grid; margin-top: 6px; place-items: center; border: 1px solid #e5d8b8; border-radius: 7px; padding: 5px; background: #fff; }
 .invoice-top-qr svg { width: 100px; height: 100px; }
+.invoice-top-qr img { display: block; width: 140px; height: 140px; max-width: 100%; object-fit: contain; }
 .invoice-top-qr-label { margin-top: 4px; color: #695326; font-size: 8pt; font-weight: 600; line-height: 1.25; }
 .invoice-top-payment-fallback { display: grid; max-width: 140px; margin-top: 10px; place-items: center; gap: 7px; color: #657570; font-size: 8pt; line-height: 1.4; }
 .invoice-top-payment-fallback svg { color: #a87f29; }

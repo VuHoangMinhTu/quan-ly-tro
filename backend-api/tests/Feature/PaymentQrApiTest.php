@@ -1,0 +1,140 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\BoardingHouse;
+use App\Models\Invoice;
+use App\Models\Landlord;
+use App\Models\Room;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Testing\TestResponse;
+use Tests\TestCase;
+
+class PaymentQrApiTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private function owner(): User
+    {
+        Storage::fake('local');
+        $user = User::factory()->create();
+        Landlord::create(['user_id' => $user->id, 'full_name' => $user->name, 'phone' => '0900000000']);
+
+        return $user;
+    }
+
+    private function upload(User $user, array $data = []): TestResponse
+    {
+        return $this->actingAs($user, 'sanctum')->post('/api/landlord/payment-profile', [
+            '_method' => 'PUT', 'bank_name' => 'Vietcombank', 'bank_account_name' => 'Chủ tài khoản',
+            'bank_account_number' => '001234567', 'payment_qr' => UploadedFile::fake()->image('user-file.png', 300, 300), ...$data,
+        ], ['Accept' => 'application/json']);
+    }
+
+    private function invoice(User $owner, string $status = 'DRAFT'): Invoice
+    {
+        $house = BoardingHouse::create(['landlord_id' => $owner->landlord->id, 'name' => 'Nhà', 'address' => 'Địa chỉ']);
+        $room = Room::create(['boarding_house_id' => $house->id, 'room_code' => '101', 'status' => 'AVAILABLE']);
+
+        return Invoice::create(['room_id' => $room->id, 'billing_period' => '2026-10-01', 'status' => $status]);
+    }
+
+    public function test_owner_uploads_real_image_and_api_hides_storage_paths(): void
+    {
+        $owner = $this->owner();
+        $response = $this->upload($owner)->assertOk()->assertJsonPath('data.has_payment_qr', true)
+            ->assertJsonPath('data.bank_account_number', '001234567')->assertJsonMissingPath('data.payment_qr_path');
+        $path = $owner->landlord->paymentProfile()->firstOrFail()->payment_qr_path;
+
+        Storage::disk('local')->assertExists($path);
+        $this->assertStringStartsWith('payment-qrs/'.$owner->landlord->id.'/', $path);
+        $this->assertStringNotContainsString('user-file', $path);
+        $this->assertStringNotContainsString($path, $response->getContent());
+        $this->get('/api/landlord/payment-profile/qr')->assertOk()->assertHeader('Content-Type', 'image/png');
+    }
+
+    public function test_invalid_content_and_oversized_images_are_rejected_without_profile_changes(): void
+    {
+        $owner = $this->owner();
+        $this->upload($owner, ['payment_qr' => UploadedFile::fake()->create('fake.png', 10, 'application/pdf')])
+            ->assertUnprocessable()->assertJsonValidationErrors('payment_qr');
+        $this->upload($owner, ['payment_qr' => UploadedFile::fake()->image('big.jpg')->size(5121)])
+            ->assertUnprocessable()->assertJsonValidationErrors('payment_qr');
+
+        $this->assertDatabaseCount('landlord_payment_profiles', 0);
+        $this->assertSame([], Storage::disk('local')->allFiles());
+    }
+
+    public function test_replace_uses_new_path_and_remove_preserves_assets_for_historical_bills(): void
+    {
+        $owner = $this->owner();
+        $this->upload($owner)->assertOk();
+        $old = $owner->landlord->paymentProfile()->firstOrFail()->payment_qr_path;
+        $this->upload($owner)->assertOk();
+        $new = $owner->landlord->paymentProfile()->firstOrFail()->payment_qr_path;
+        $this->actingAs($owner, 'sanctum')->putJson('/api/landlord/payment-profile', ['remove_payment_qr' => true])
+            ->assertOk()->assertJsonPath('data.has_payment_qr', false);
+
+        $this->assertNotSame($old, $new);
+        Storage::disk('local')->assertExists([$old, $new]);
+        $this->get('/api/landlord/payment-profile/qr')->assertNotFound();
+        $this->assertDatabaseHas('landlord_payment_profiles', ['landlord_id' => $owner->landlord->id, 'payment_qr_path' => null, 'bank_account_number' => '001234567']);
+    }
+
+    public function test_profiles_and_invoice_qrs_are_owner_scoped_and_manager_cannot_change_settings(): void
+    {
+        $a = $this->owner();
+        $b = $this->owner();
+        $this->upload($a, ['landlord_id' => $b->landlord->id])->assertOk();
+        $aInvoice = $this->invoice($a, 'UNPAID');
+        $this->upload($b, ['bank_name' => 'MB Bank'])->assertOk();
+        $bInvoice = $this->invoice($b, 'UNPAID');
+        $this->assertStringStartsWith('payment-qrs/'.$a->landlord->id.'/', $aInvoice->payment_snapshot['payment_qr_path']);
+        $this->assertStringStartsWith('payment-qrs/'.$b->landlord->id.'/', $bInvoice->payment_snapshot['payment_qr_path']);
+        $this->actingAs($a, 'sanctum')->getJson("/api/invoices/{$aInvoice->id}")->assertOk()->assertJsonPath('data.payment_profile.bank_name', 'Vietcombank');
+        $this->get("/api/invoices/{$bInvoice->id}/payment-qr")->assertNotFound();
+        $this->actingAs($b, 'sanctum')->getJson("/api/invoices/{$bInvoice->id}")->assertOk()->assertJsonPath('data.payment_profile.bank_name', 'MB Bank');
+        $this->get("/api/invoices/{$aInvoice->id}/payment-qr")->assertNotFound();
+        $manager = User::factory()->create();
+        $aInvoice->room->boardingHouse->managers()->attach($manager);
+        $this->actingAs($manager, 'sanctum')->putJson('/api/landlord/payment-profile', ['remove_payment_qr' => true])->assertForbidden();
+        $this->get('/api/landlord/payment-profile/qr')->assertForbidden();
+        $this->get("/api/invoices/{$aInvoice->id}/payment-qr")->assertOk();
+    }
+
+    public function test_draft_reads_live_profile_and_issued_invoice_keeps_immutable_bank_and_qr(): void
+    {
+        $owner = $this->owner();
+        $this->upload($owner)->assertOk();
+        $invoice = $this->invoice($owner);
+        $this->assertNull($invoice->payment_snapshot);
+        $this->upload($owner, ['bank_name' => 'MB Bank'])->assertOk();
+        $this->getJson("/api/invoices/{$invoice->id}")->assertOk()->assertJsonPath('data.payment_profile.bank_name', 'MB Bank');
+
+        $invoice->update(['status' => 'UNPAID', 'issued_at' => '2026-10-24']);
+        $snapshot = $invoice->fresh()->payment_snapshot;
+        $this->upload($owner, ['bank_name' => 'ACB'])->assertOk();
+        $this->putJson('/api/landlord/payment-profile', ['remove_payment_qr' => true])->assertOk();
+        $this->getJson("/api/invoices/{$invoice->id}")->assertOk()->assertJsonPath('data.payment_profile.bank_name', 'MB Bank')
+            ->assertJsonMissingPath('data.payment_snapshot');
+        $this->get("/api/invoices/{$invoice->id}/payment-qr")->assertOk()
+            ->assertStreamedContent(Storage::disk('local')->get($snapshot['payment_qr_path']));
+        $invoice->update(['note' => 'Ghi chú mới']);
+
+        $this->assertSame($snapshot, $invoice->fresh()->payment_snapshot);
+    }
+
+    public function test_issued_without_payment_profile_does_not_adopt_bank_details_added_later(): void
+    {
+        $owner = $this->owner();
+        $invoice = $this->invoice($owner, 'UNPAID');
+        $this->upload($owner)->assertOk();
+
+        $this->getJson("/api/invoices/{$invoice->id}")->assertOk()->assertJsonPath('data.payment_profile.bank_name', null)
+            ->assertJsonPath('data.payment_profile.has_payment_qr', false);
+        $this->get("/api/invoices/{$invoice->id}/payment-qr")->assertNotFound();
+    }
+}

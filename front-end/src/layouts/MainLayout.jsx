@@ -19,7 +19,6 @@ const menus = [
   ['Điện nước', '/utilities', Gauge, (p) => p === '/utilities' || /^\/utility-meters\//.test(p)],
   ['Hóa đơn', '/invoices', Receipt, (p) => p === '/invoices' || /^\/invoices\//.test(p) || /^\/rooms\/[^/]+\/invoices/.test(p)],
   ['Khai báo cư trú', '/residence-declarations', FileText, (p) => p.startsWith('/residence-declarations')],
-  ['Cài đặt thanh toán', '/payment-settings', CreditCard, (p) => p === '/payment-settings'],
 ]
 
 function Brand() {
@@ -31,7 +30,7 @@ function Brand() {
 
 function Navigation({ pathname, onNavigate, canManageTemplates = false }) {
   return <nav aria-label="Điều hướng chính" className="mt-8">
-    {menus.filter(([, to]) => !['/contract-templates', '/payment-settings'].includes(to) || canManageTemplates).map(([name, to, Icon, matches]) => <Link
+    {menus.filter(([, to]) => to !== '/contract-templates' || canManageTemplates).map(([name, to, Icon, matches]) => <Link
       key={name}
       to={to}
       onClick={onNavigate}
@@ -58,6 +57,9 @@ export default function MainLayout() {
       localStorage.removeItem('access_token')
       client.removeQueries({ queryKey: ['me'] })
       client.removeQueries({ queryKey: ['dashboard'] })
+      client.removeQueries({ queryKey: ['landlord'] })
+      client.removeQueries({ queryKey: ['payment-qr'] })
+      client.removeQueries({ queryKey: ['invoice'] })
       clearContractDocumentCache(client)
       navigate('/login', { state: error ? { error: getApiErrorMessage(error) } : undefined })
     },
@@ -132,14 +134,11 @@ export default function MainLayout() {
           <Link to="/dashboard" onClick={closeMenus} className="flex min-h-11 min-w-0 items-center gap-2"><img src={beeHouseLogo} alt="" className="h-8 w-8 shrink-0 object-contain" /><span className="truncate text-lg font-bold text-slate-900">{APP_NAME}</span></Link>
         </div>
         <span className="hidden min-w-0 break-words lg:block">Xin chào, {userName}</span>
-        <div className="hidden shrink-0 items-center gap-4 lg:flex">
-          <Link to="/change-password" className="flex items-center gap-2 text-sm"><KeyRound size={17} />Đổi mật khẩu</Link>
-          <button type="button" onClick={() => mutation.mutate()} disabled={mutation.isPending} className="flex items-center gap-2 text-sm disabled:opacity-60"><LogOut size={17} />Đăng xuất</button>
-        </div>
-        <div ref={userMenuRef} className="relative shrink-0 lg:hidden">
-          <button ref={userButtonRef} type="button" aria-label="Menu tài khoản" aria-haspopup="menu" aria-expanded={userMenuOpen} aria-controls="mobile-user-menu" onClick={() => setUserMenuOpen((open) => !open)} className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-700 focus-visible:ring-2 focus-visible:ring-slate-900"><UserRound size={21} /></button>
+        <div ref={userMenuRef} className="relative shrink-0">
+          <button ref={userButtonRef} type="button" aria-label="Menu tài khoản" aria-haspopup="menu" aria-expanded={userMenuOpen} aria-controls="mobile-user-menu" onClick={() => setUserMenuOpen((open) => !open)} className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-700 focus-visible:ring-2 focus-visible:ring-slate-900 lg:w-auto lg:gap-2 lg:rounded-lg lg:px-3"><UserRound size={21} /><span className="hidden max-w-48 truncate text-sm lg:block">{userName}</span><span aria-hidden="true" className="hidden lg:block">▾</span></button>
           {userMenuOpen && <div id="mobile-user-menu" role="menu" onKeyDown={menuKeys} className="absolute right-0 top-full mt-2 w-[min(256px,calc(100vw-32px))] rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
             <p className="border-b border-slate-100 px-3 py-3 text-sm font-semibold [overflow-wrap:anywhere]">{userName}</p>
+            {me?.landlord && <Link role="menuitem" to="/payment-settings" onClick={closeMenus} className="mt-1 flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-slate-100"><CreditCard size={18} />Cài đặt thanh toán</Link>}
             <Link role="menuitem" to="/change-password" onClick={closeMenus} className="mt-1 flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-slate-100"><KeyRound size={18} />Đổi mật khẩu</Link>
             <button role="menuitem" type="button" onClick={logoutFromMenu} disabled={mutation.isPending} className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-60"><LogOut size={18} />{mutation.isPending ? 'Đang đăng xuất...' : 'Đăng xuất'}</button>
           </div>}

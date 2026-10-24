@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { invoicePayosQr } from '../../utils/invoicePayment.js'
 import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
 import React from 'react'
@@ -192,7 +193,7 @@ test('stay consent fills exact whole months without timezone conversion or round
 
 test('invoice print renders the stored AUTO tax item and total without reading a live service rate', async () => {
   const Icon = () => React.createElement('svg')
-  const Layout = await load('../invoices/InvoicePrintLayout.jsx', 'InvoicePrintLayout', { Building2: Icon, CreditCard: Icon, Home: Icon, UserRound: Icon, QRCodeSVG: Icon, formatBillingPeriodForDisplay, formatDateForDisplay, formatCurrency, formatUtilityValue, invoiceStatusLabels, APP_TITLE: 'BeeHouse - Quản lý trọ' })
+  const Layout = await load('../invoices/InvoicePrintLayout.jsx', 'InvoicePrintLayout', { Building2: Icon, CreditCard: Icon, Home: Icon, UserRound: Icon, QRCodeSVG: Icon, invoicePayosQr, formatBillingPeriodForDisplay, formatDateForDisplay, formatCurrency, formatUtilityValue, invoiceStatusLabels, APP_TITLE: 'BeeHouse - Quản lý trọ' })
   const invoice = { invoice_code: 'INV-VAT', billing_period: '2026-10-01', status: 'UNPAID', subtotal: 306720, total_amount: 306720, paid_amount: 0, items: [{ id: 1, type: 'ELECTRICITY', description: 'Tiền điện', quantity: 71, unit_price: 4000, amount: 284000, source: 'AUTO' }, { id: 2, type: 'SERVICE_TAX', tax_rate: '8.00', description: 'VAT tiền điện (8%)', quantity: 1, unit_price: 22720, amount: 22720, source: 'AUTO' }] }
   const markup = renderToStaticMarkup(React.createElement(Layout, { invoice }))
   assert.match(markup, /VAT tiền điện \(8%\)/)

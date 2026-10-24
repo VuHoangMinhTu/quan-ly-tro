@@ -6,5 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class LandlordPaymentProfile extends Model
 {
-    protected $fillable = ['landlord_id', 'bank_name', 'bank_account_name', 'bank_account_number'];
+    protected $fillable = ['landlord_id', 'bank_name', 'bank_account_name', 'bank_account_number', 'payment_qr_path'];
+
+    protected $hidden = ['payment_qr_path'];
 }
