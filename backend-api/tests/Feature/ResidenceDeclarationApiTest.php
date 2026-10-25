@@ -224,16 +224,32 @@ class ResidenceDeclarationApiTest extends TestCase
         $this->actingAs($owner, 'sanctum')->putJson("/api/boarding-houses/{$room->boarding_house_id}/residence-profile", [
             'household_head_name' => 'Chủ hộ', 'household_head_identity_number' => '079000000099',
             'residence_authority_name' => 'Công an phường đã cấu hình', 'document_place' => 'Vườn Lài', 'legal_owner_name' => 'Chủ sở hữu',
-            'legal_owner_birth_year' => 1970, 'legal_owner_permanent_address' => 'Địa chỉ chủ sở hữu',
+            'legal_owner_birth_date' => '1970-09-28', 'legal_owner_permanent_address' => 'Địa chỉ chủ sở hữu',
             'legal_owner_identity_number' => '079111111111', 'legal_owner_phone' => '0902222222',
         ])->assertOk()->assertJsonPath('data', null);
 
         $this->getJson("/api/boarding-houses/{$room->boarding_house_id}/residence-profile")->assertOk()
             ->assertJsonPath('data.legal_owner_name', 'Chủ sở hữu')
+            ->assertJsonPath('data.legal_owner_birth_date', '1970-09-28')
             ->assertJsonPath('data.document_place', 'Vườn Lài')
             ->assertJsonPath('data.residence_authority_name', 'Công an phường đã cấu hình');
         $this->assertDatabaseHas('boarding_house_residence_profiles', ['boarding_house_id' => $room->boarding_house_id, 'legal_owner_identity_number' => '079111111111']);
         $this->assertNotSame($owner->name, $room->boardingHouse->residenceProfile->fresh()->legal_owner_name);
+    }
+
+    public function test_residence_profile_rejects_invalid_identification_numbers_and_phone(): void
+    {
+        [$owner, $room] = $this->fixture();
+
+        $response = $this->actingAs($owner, 'sanctum')->putJson("/api/boarding-houses/{$room->boarding_house_id}/residence-profile", [
+            'household_head_identity_number' => '07900000001',
+            'legal_owner_identity_number' => '07911111111A',
+            'legal_owner_phone' => '0123456789',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['household_head_identity_number', 'legal_owner_identity_number', 'legal_owner_phone']);
+
+        $this->assertSame('Số định danh cá nhân của chủ hộ phải gồm đúng 12 chữ số.', $response->json('errors.household_head_identity_number.0'));
+        $this->assertSame('Số định danh cá nhân phải gồm đúng 12 chữ số.', $response->json('errors.legal_owner_identity_number.0'));
+        $this->assertSame('Số điện thoại phải là số di động Việt Nam hợp lệ.', $response->json('errors.legal_owner_phone.0'));
     }
 
     public function test_stay_consent_prefills_profile_tenant_contract_and_selected_active_members_then_freezes(): void
@@ -244,7 +260,7 @@ class ResidenceDeclarationApiTest extends TestCase
         $tenant->update(['phone' => '0901111111', 'permanent_address' => 'Địa chỉ Bên B', 'email' => 'old@example.com']);
         $room->boardingHouse->residenceProfile->update([
             'document_place' => 'Vườn Lài',
-            'legal_owner_name' => 'Chủ sở hữu pháp lý', 'legal_owner_birth_year' => 1970,
+            'legal_owner_name' => 'Chủ sở hữu pháp lý', 'legal_owner_birth_date' => '1970-09-28',
             'legal_owner_permanent_address' => 'Địa chỉ Bên A', 'legal_owner_identity_number' => '079111111111', 'legal_owner_phone' => '0902222222',
         ]);
         $contract = Contract::factory()->create(['room_id' => $room->id, 'tenant_id' => $tenant->id, 'start_date' => '2026-11-01', 'end_date' => '2027-10-31']);
@@ -254,6 +270,7 @@ class ResidenceDeclarationApiTest extends TestCase
         $this->getJson("/api/residence-declarations/{$id}")->assertOk()
             ->assertJsonPath('data.stay_consent.type', 'RESIDENCE_STAY_CONSENT')
             ->assertJsonPath('data.stay_consent.host.full_name', 'Chủ sở hữu pháp lý')
+            ->assertJsonPath('data.stay_consent.host.birth_date', '1970-09-28')
             ->assertJsonPath('data.stay_consent.guest.full_name', 'Nguyễn Văn A')
             ->assertJsonPath('data.stay_consent.guest.permanent_address', 'Địa chỉ Bên B')
             ->assertJsonPath('data.stay_consent.document_place', 'Vườn Lài')
@@ -367,7 +384,7 @@ class ResidenceDeclarationApiTest extends TestCase
 
         $this->getJson("/api/residence-declarations/{$id}")->assertOk()->assertJsonPath('data.stay_consent.host.full_name', null);
         $this->getJson("/api/residence-declarations/{$id}/documents/residence-stay-consent")
-            ->assertUnprocessable()->assertJsonValidationErrors(['document_place', 'host.full_name', 'host.birth_year', 'guest.permanent_address', 'guest.phone', 'start_date']);
+            ->assertUnprocessable()->assertJsonValidationErrors(['document_place', 'host.full_name', 'host.birth_date', 'guest.permanent_address', 'guest.phone', 'start_date']);
         $preview = $this->getJson("/api/residence-declarations/{$id}")->assertOk()
             ->assertJsonPath('data.stay_consent.guest.permanent_address', null);
         $this->assertSame('Chưa cập nhật Phường/Xã của nhà trọ.', $preview->json('data.stay_consent_missing_fields')['document_place']);
@@ -394,7 +411,7 @@ class ResidenceDeclarationApiTest extends TestCase
         $tenant->update(['phone' => '0901111111', 'permanent_address' => 'Địa chỉ Bên B']);
         $room->boardingHouse->residenceProfile->update([
             'document_place' => 'Vườn Lài',
-            'legal_owner_name' => 'Bên A', 'legal_owner_birth_year' => 1970, 'legal_owner_permanent_address' => 'Địa chỉ Bên A',
+            'legal_owner_name' => 'Bên A', 'legal_owner_birth_date' => '1970-09-28', 'legal_owner_permanent_address' => 'Địa chỉ Bên A',
             'legal_owner_identity_number' => '079111111111', 'legal_owner_phone' => '0902222222',
         ]);
         $payload = [...$this->payload($room, $tenant, $member), 'stay_start_date' => '2026-11-15', 'stay_end_date' => '2027-11-14'];

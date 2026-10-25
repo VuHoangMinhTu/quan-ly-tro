@@ -21,7 +21,7 @@ export default function StayConsentDocument({ data }) {
       <p className="stay-consent-writing-space">&nbsp;</p>
       <p>Chúng tôi gồm:</p>
       <p><strong>Bên cho ở nhờ:</strong> <em>(sau đây gọi tắt là Bên cho ở nhờ - Bên A):</em></p>
-      <p className="stay-consent-indented">Ông/bà: <Blank value={host.full_name} className="stay-consent-grow" /> – Năm sinh: <Blank value={host.birth_year} /></p>
+      <p className="stay-consent-indented">Ông/bà: <Blank value={host.full_name} className="stay-consent-grow" /> – Ngày sinh: <Blank value={formatDateForDisplay(host.birth_date) || host.birth_year} /></p>
       <p className="stay-consent-indented">Địa chỉ thường trú : <Blank value={host.permanent_address} className="stay-consent-grow" /></p>
       <p className="stay-consent-writing-space">&nbsp;</p>
       <p className="stay-consent-indented">CCCD: <Blank value={host.identity_number} className="stay-consent-grow" /> – Số ĐT: <Blank value={host.phone} className="stay-consent-grow" /></p>

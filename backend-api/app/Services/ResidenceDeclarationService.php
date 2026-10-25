@@ -169,7 +169,7 @@ class ResidenceDeclarationService
             'location' => $record->boardingHouse->address,
             'host' => [
                 'full_name' => $profile?->legal_owner_name,
-                'birth_year' => $profile?->legal_owner_birth_year,
+                'birth_date' => $profile?->legal_owner_birth_date?->format('Y-m-d'),
                 'permanent_address' => $profile?->legal_owner_permanent_address,
                 'identity_number' => $profile?->legal_owner_identity_number,
                 'phone' => $profile?->legal_owner_phone,
@@ -204,7 +204,7 @@ class ResidenceDeclarationService
         if (blank($consent['document_place'] ?? null)) {
             $missing['document_place'] = 'Chưa cập nhật Phường/Xã của nhà trọ.';
         }
-        foreach (['host.full_name', 'host.birth_year', 'host.permanent_address', 'host.identity_number', 'host.phone',
+        foreach (['host.full_name', 'host.birth_date', 'host.permanent_address', 'host.identity_number', 'host.phone',
             'guest.full_name', 'guest.birth_year', 'guest.permanent_address', 'guest.identity_number', 'guest.phone',
             'stay_address', 'start_date', 'end_date'] as $field) {
             if (blank(Arr::get($consent, $field))) {

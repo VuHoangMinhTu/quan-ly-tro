@@ -1,29 +1,50 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
-import { getApiErrorMessage } from '../../api/getApiErrorMessage'
+import { Controller, useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { getBoardingHouseManagers, getResidenceProfile, residenceKeys, updateBoardingHouseManagers, updateResidenceProfile } from '../../api/residenceApi'
+import DateInput from '../ui/DateInput'
+import { formatDateForApi, formatDateForDisplay, isNotFutureDisplayDate, isValidDisplayDate } from '../../utils/date'
 
 const inputClass = 'mt-1 min-h-11 w-full min-w-0 rounded-lg border border-slate-300 p-2'
 const buttonClass = 'min-h-11 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50'
+const identityNumber = z.string().trim().refine(value => !value || /^\d{12}$/.test(value), 'Số định danh phải gồm đúng 12 chữ số.')
+const vietnameseMobilePhone = z.string().trim().refine(value => !value || /^(?:\+84|0)[35789]\d{8}$/.test(value), 'Số điện thoại phải là số di động Việt Nam hợp lệ.')
+const birthDate = z.string().trim().refine(value => !value || (isValidDisplayDate(value) && isNotFutureDisplayDate(value)), 'Ngày sinh phải theo dd/mm/yyyy và không được ở tương lai.')
+const profileSchema = z.object({
+  household_head_name: z.string(), household_head_identity_number: identityNumber,
+  residence_authority_name: z.string(), legal_owner_name: z.string(), legal_owner_birth_date: birthDate,
+  legal_owner_permanent_address: z.string(), legal_owner_identity_number: identityNumber, legal_owner_phone: vietnameseMobilePhone,
+})
 
 function ProfileForm({ houseId, initial }) {
   const client = useQueryClient()
-  const form = useForm({ defaultValues: Object.fromEntries(['household_head_name', 'household_head_identity_number', 'residence_authority_name', 'legal_owner_name', 'legal_owner_birth_year', 'legal_owner_permanent_address', 'legal_owner_identity_number', 'legal_owner_phone'].map(field => [field, initial?.[field] ?? ''])) })
+  const form = useForm({ resolver: zodResolver(profileSchema), defaultValues: Object.fromEntries(['household_head_name', 'household_head_identity_number', 'residence_authority_name', 'legal_owner_name', 'legal_owner_birth_date', 'legal_owner_permanent_address', 'legal_owner_identity_number', 'legal_owner_phone'].map(field => [field, field === 'legal_owner_birth_date' ? formatDateForDisplay(initial?.[field]) : initial?.[field] ?? ''])) })
   const [message, setMessage] = useState('')
   const save = useMutation({ mutationFn: data => updateResidenceProfile(houseId, data), onSuccess: async () => {
     setMessage('Đã lưu thông tin chủ hộ.')
     await Promise.all([client.invalidateQueries({ queryKey: residenceKeys.profile(houseId) }), client.invalidateQueries({ queryKey: ['residence-context'] }), client.invalidateQueries({ queryKey: ['residence-declaration'] })])
   } })
-  return <form onSubmit={form.handleSubmit(data => { setMessage(''); save.mutate(Object.fromEntries(Object.entries(data).map(([field, value]) => [field, field === 'legal_owner_birth_year' ? (value === '' ? null : Number(value)) : String(value).trim() || null]))) })} className="space-y-3">
+  const submit = async (data) => {
+    setMessage('')
+    try {
+      await save.mutateAsync(Object.fromEntries(Object.entries(data).map(([field, value]) => [field, field === 'legal_owner_birth_date' ? formatDateForApi(value) : String(value).trim() || null])))
+    } catch (error) {
+      applyApiFieldErrors(error, form.setError)
+    }
+  }
+  const { errors } = form.formState
+  return <form noValidate onSubmit={form.handleSubmit(submit)} className="space-y-3">
     <h3 className="font-semibold">Thông tin cư trú & chủ sở hữu</h3><p className="text-sm text-slate-500">Chỉ nhập thông tin đã được xác nhận. BeeHouse không mặc định OWNER/MANAGER là chủ hộ hoặc chủ sở hữu.</p>
     <div><label htmlFor="residence-authority" className="text-sm">Cơ quan tiếp nhận CT01 mặc định</label><input id="residence-authority" maxLength={255} className={inputClass} {...form.register('residence_authority_name')} /></div>
     <div><label htmlFor="residence-head" className="text-sm">Họ tên chủ hộ</label><input id="residence-head" maxLength={255} className={inputClass} {...form.register('household_head_name')} /></div>
-    <div><label htmlFor="residence-head-id" className="text-sm">Số định danh cá nhân của chủ hộ</label><input id="residence-head-id" maxLength={30} className={inputClass} {...form.register('household_head_identity_number')} /></div>
+    <div><label htmlFor="residence-head-id" className="text-sm">Số định danh cá nhân của chủ hộ</label><input id="residence-head-id" inputMode="numeric" maxLength={12} className={inputClass} {...form.register('household_head_identity_number')} />{errors.household_head_identity_number && <p className="mt-1 text-sm text-red-700">{errors.household_head_identity_number.message}</p>}</div>
     <p className="pt-2 text-sm font-semibold">Bên cho ở nhờ (chủ sở hữu hợp pháp nếu đã xác nhận)</p>
-    <div className="grid gap-3 sm:grid-cols-2"><div><label htmlFor="legal-owner-name" className="text-sm">Họ tên</label><input id="legal-owner-name" maxLength={255} className={inputClass} {...form.register('legal_owner_name')} /></div><div><label htmlFor="legal-owner-year" className="text-sm">Năm sinh</label><input id="legal-owner-year" type="number" min="1900" max="2100" className={inputClass} {...form.register('legal_owner_birth_year')} /></div></div>
+    <div className="grid gap-3 sm:grid-cols-2"><div><label htmlFor="legal-owner-name" className="text-sm">Họ tên</label><input id="legal-owner-name" maxLength={255} className={inputClass} {...form.register('legal_owner_name')} /></div><div><label className="text-sm">Ngày/tháng/năm sinh</label><Controller name="legal_owner_birth_date" control={form.control} render={({ field }) => <DateInput {...field} placeholder="dd/mm/yyyy" invalid={Boolean(errors.legal_owner_birth_date)} />} />{errors.legal_owner_birth_date && <p className="mt-1 text-sm text-red-700">{errors.legal_owner_birth_date.message}</p>}</div></div>
     <div><label htmlFor="legal-owner-address" className="text-sm">Địa chỉ thường trú</label><input id="legal-owner-address" maxLength={500} className={inputClass} {...form.register('legal_owner_permanent_address')} /></div>
-    <div className="grid gap-3 sm:grid-cols-2"><div><label htmlFor="legal-owner-id" className="text-sm">Số định danh cá nhân</label><input id="legal-owner-id" maxLength={30} className={inputClass} {...form.register('legal_owner_identity_number')} /></div><div><label htmlFor="legal-owner-phone" className="text-sm">Số điện thoại</label><input id="legal-owner-phone" maxLength={20} className={inputClass} {...form.register('legal_owner_phone')} /></div></div>
+    <div className="grid gap-3 sm:grid-cols-2"><div><label htmlFor="legal-owner-id" className="text-sm">Số định danh cá nhân</label><input id="legal-owner-id" inputMode="numeric" maxLength={12} className={inputClass} {...form.register('legal_owner_identity_number')} />{errors.legal_owner_identity_number && <p className="mt-1 text-sm text-red-700">{errors.legal_owner_identity_number.message}</p>}</div><div><label htmlFor="legal-owner-phone" className="text-sm">Số điện thoại</label><input id="legal-owner-phone" type="tel" inputMode="tel" maxLength={12} className={inputClass} {...form.register('legal_owner_phone')} />{errors.legal_owner_phone && <p className="mt-1 text-sm text-red-700">{errors.legal_owner_phone.message}</p>}</div></div>
     {save.isError && <p role="alert" className="text-sm text-red-700">{getApiErrorMessage(save.error)}</p>}{message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
     <button disabled={save.isPending} className={buttonClass}>{save.isPending ? 'Đang lưu...' : 'Lưu thông tin chủ hộ'}</button>
   </form>

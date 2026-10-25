@@ -161,7 +161,7 @@ test('no other active occupants has no member checkbox and independent confirmat
 test('stay consent preview uses frozen data and escapes untrusted person fields', async () => {
   const Document = await load('./StayConsentDocument.jsx', 'StayConsentDocument', { formatDateForDisplay, wholeMonthsBetweenDates })
   const markup = renderToStaticMarkup(React.createElement(Document, { data: {
-    document_place: 'Vườn Lài', location: '15/3 đường Lê Quý Đôn, Phường Vườn Lài, TP.HCM', captured_at: '2026-11-01', host: { full_name: 'Bên A', birth_year: 1970, permanent_address: 'Địa chỉ A', identity_number: '111', phone: '0900' },
+    document_place: 'Vườn Lài', location: '15/3 đường Lê Quý Đôn, Phường Vườn Lài, TP.HCM', captured_at: '2026-11-01', host: { full_name: 'Bên A', birth_date: '1970-09-28', permanent_address: 'Địa chỉ A', identity_number: '111', phone: '0900' },
     guest: { full_name: '<script>alert(1)</script>', birth_year: 2000, permanent_address: 'Địa chỉ B', identity_number: '222', phone: '0901' },
     stay_address: '15/3 đường Lê Quý Đôn, Phường Vườn Lài, TP.HCM', room_code: '107', purpose: 'để ở', occupant_count: 2, companions: [{ full_name: 'Người đi cùng' }], start_date: '2026-11-15', end_date: '2027-11-14',
   } }))
@@ -171,6 +171,7 @@ test('stay consent preview uses frozen data and escapes untrusted person fields'
   assert.match(markup, /Vườn Lài.*ngày/)
   assert.match(markup, /15\/3 đường Lê Quý Đôn, Phường Vườn Lài, TP.HCM.*Phòng 107/)
   assert.match(markup, /Địa chỉ B/)
+  assert.match(markup, /Ngày sinh:.*28\/09\/1970/)
   assert.match(markup, /&lt;script&gt;/)
   assert.doesNotMatch(markup, /<script>/)
   assert.match(markup, /2\. Hợp đồng được lập thành 02 bản và có giá trị như nhau/)
