@@ -1,12 +1,13 @@
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
-import { clearContractDocumentCache } from '../../api/contractDocumentCache'
+import { completeLogin } from '../../api/authSession'
+import { getSession, isCurrentSession } from '../../api/session'
 import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { getMe, login } from '../../api/authApi'
+import { login } from '../../api/authApi'
 import GoogleButton from '../../components/ui/GoogleButton'
 
 const schema = z.object({
@@ -17,28 +18,16 @@ const schema = z.object({
 export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const client = useQueryClient()
   const form = useForm({ resolver: zodResolver(schema) })
   const [isGoogleRedirecting, setIsGoogleRedirecting] = useState(false)
 
   const mutation = useMutation({
     mutationFn: async (data) => {
+      const previousSession = getSession()
       const response = await login(data)
-      await client.cancelQueries({ queryKey: ['dashboard'] })
-      client.removeQueries({ queryKey: ['dashboard'] })
-      clearContractDocumentCache(client)
-      localStorage.setItem('access_token', response.data.data.token)
-
-      try {
-        const me = await getMe()
-        client.setQueryData(['me'], me)
-        return me
-      } catch (error) {
-        localStorage.removeItem('access_token')
-        throw error
-      }
+      return completeLogin(response.data.data.token, previousSession)
     },
-    onSuccess: () => navigate('/dashboard'),
+    onSuccess: session => { if (isCurrentSession(session)) navigate('/dashboard') },
     onError: (error) => applyApiFieldErrors(error, form.setError),
   })
 

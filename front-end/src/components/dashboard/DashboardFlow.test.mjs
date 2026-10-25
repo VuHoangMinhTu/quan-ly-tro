@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { transformWithOxc } from 'vite'
 import { formatDateForDisplay } from '../../utils/date.js'
 import { invoiceStatusLabels } from '../../utils/invoiceStatus.js'
+import { dashboardRefetchInterval } from '../../api/dashboardPolicy.js'
 
 const Icon = () => React.createElement('svg', { 'aria-hidden': true })
 const Link = ({ to, children, ...props }) => React.createElement('a', { href: to, ...props }, children)
@@ -66,12 +67,13 @@ test('dashboard loading does not flash zero and API failure is friendly with ret
   let state = { isPending: true }
   let queryOptions
   let retried = false
-  const Page = await load('../../pages/dashboard/DashboardPage.jsx', 'DashboardPage', { DashboardContent: Content, dashboardKey: ['dashboard'], getDashboard: () => {}, useQuery: options => { queryOptions = options; return state } })
+  const Page = await load('../../pages/dashboard/DashboardPage.jsx', 'DashboardPage', { DashboardContent: Content, dashboardRefetchInterval, dashboardKey: ['dashboard'], getDashboard: () => {}, useQuery: options => { queryOptions = options; return state } })
   const loading = renderToStaticMarkup(React.createElement(Page))
   assert.match(loading, /role="status"/)
   assert.doesNotMatch(loading, />0</)
   assert.deepEqual(queryOptions.queryKey, ['dashboard'])
   assert.equal(queryOptions.refetchOnWindowFocus, true)
+  assert.equal(queryOptions.refetchInterval, dashboardRefetchInterval)
   state = { isError: true, error: new Error('AxiosError SQL secret'), refetch: () => { retried = true } }
   const error = renderToStaticMarkup(React.createElement(Page))
   assert.match(error, /Không thể tải dữ liệu tổng quan/)

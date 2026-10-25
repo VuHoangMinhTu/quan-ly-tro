@@ -276,7 +276,10 @@ test('expired-token redirect retains 401 feedback when Axios already removed the
   const page = await harness('../../routes/ProtectedRoute.jsx', {}, {
     useQuery: () => ({ isError: true, error: apiError(401, 'Unauthenticated.') }),
     getMe: () => {},
-    localStorage: { getItem: () => null },
+    getSession: () => ({ id: 1, token: null }),
+    subscribeSession: () => () => {},
+    useSyncExternalStore: (_subscribe, snapshot) => snapshot(),
+    endSession: () => {},
     Navigate: props => React.createElement('navigation', props),
     Outlet: () => React.createElement('outlet'),
   })

@@ -1,0 +1,4 @@
+fixtures.local.json
+results/
+*.har
+*.log

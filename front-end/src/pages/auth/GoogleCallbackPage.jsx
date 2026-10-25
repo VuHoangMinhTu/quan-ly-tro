@@ -1,9 +1,9 @@
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useEffect, useRef, useState } from 'react'
-import { clearContractDocumentCache } from '../../api/contractDocumentCache'
-import { useQueryClient } from '@tanstack/react-query'
+import { completeLogin } from '../../api/authSession'
+import { getSession, isCurrentSession } from '../../api/session'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { exchangeGoogleCode, getMe } from '../../api/authApi'
+import { exchangeGoogleCode } from '../../api/authApi'
 
 const debug = (message) => {
   if (import.meta.env.DEV) {
@@ -14,7 +14,6 @@ const debug = (message) => {
 export default function GoogleCallbackPage() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const code = params.get('code')
   const [error, setError] = useState('')
   const loginPromise = useRef(null)
@@ -28,35 +27,26 @@ export default function GoogleCallbackPage() {
 
     if (!loginPromise.current) {
       loginPromise.current = (async () => {
+        const previousSession = getSession()
         const response = await exchangeGoogleCode(code)
         const token = response.data.data.token
 
         debug('Google exchange success')
-        await queryClient.cancelQueries({ queryKey: ['dashboard'] })
-        queryClient.removeQueries({ queryKey: ['dashboard'] })
-        clearContractDocumentCache(queryClient)
-        localStorage.setItem('access_token', token)
-        debug('Token saved')
-
-        await queryClient.fetchQuery({
-          queryKey: ['me'],
-          queryFn: getMe,
-        })
+        const session = await completeLogin(token, previousSession)
         debug('/me verified')
+        return session
       })()
     }
 
     const finishGoogleLogin = async () => {
       try {
-        await loginPromise.current
+        const session = await loginPromise.current
 
-        if (active) {
+        if (active && isCurrentSession(session)) {
           debug('Navigating to dashboard')
           navigate('/dashboard', { replace: true })
         }
       } catch (requestError) {
-        localStorage.removeItem('access_token')
-
         if (active) {
           setError(getApiErrorMessage(requestError))
         }
@@ -68,7 +58,7 @@ export default function GoogleCallbackPage() {
     return () => {
       active = false
     }
-  }, [code, navigate, queryClient])
+  }, [code, navigate])
 
   if (!code || error) {
     return (

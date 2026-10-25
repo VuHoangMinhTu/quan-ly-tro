@@ -1,0 +1,37 @@
+{
+  "dataset": "synthetic-test-only",
+  "tenants": [
+    {
+      "label": "synthetic-a",
+      "tokenEnv": "PERF_TOKEN_A",
+      "userId": 100001,
+      "landlordId": 100001,
+      "houseIds": [100001],
+      "roomIds": [100001],
+      "tenantIds": [100001],
+      "contractIds": [100001],
+      "serviceIds": [100001],
+      "meterIds": [100001],
+      "readingIds": [100001],
+      "invoiceIds": [100001],
+      "paymentIds": [100001],
+      "dashboard": { "total_boarding_houses": 1, "total_rooms": 1, "active_tenants": 1 }
+    },
+    {
+      "label": "synthetic-b",
+      "tokenEnv": "PERF_TOKEN_B",
+      "userId": 200001,
+      "landlordId": 200001,
+      "houseIds": [200001],
+      "roomIds": [200001],
+      "tenantIds": [200001],
+      "contractIds": [200001],
+      "serviceIds": [200001],
+      "meterIds": [200001],
+      "readingIds": [200001],
+      "invoiceIds": [200001],
+      "paymentIds": [200001],
+      "dashboard": { "total_boarding_houses": 1, "total_rooms": 1, "active_tenants": 1 }
+    }
+  ]
+}

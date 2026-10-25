@@ -51,6 +51,7 @@ class DashboardService
         $start = $today->startOfMonth();
         $end = $start->addMonth();
         $houses = $this->access->houses($user)->with('landlord')->orderBy('name')->orderBy('id')->get(['id', 'landlord_id', 'name']);
+        $houseNames = $houses->pluck('name', 'id');
         $roomRows = $this->rooms($user)->select(['rooms.id', 'boarding_house_id', 'status'])->withActiveOccupancy();
         $roomStats = DB::query()->fromSub($roomRows->toBase(), 'scoped_rooms')
             ->select('boarding_house_id')->selectRaw('COUNT(*) AS total_rooms')
@@ -94,7 +95,7 @@ class DashboardService
         $recent = (clone $unpaid)->select(['invoices.id', 'room_id', 'contract_id', 'invoice_code', 'total_amount', 'paid_amount', 'due_date', 'status'])
             ->orderByRaw('CASE WHEN due_date < ? THEN 0 ELSE 1 END', [$today->toDateString()])
             ->orderByRaw('CASE WHEN due_date IS NULL THEN 1 ELSE 0 END')->orderBy('due_date')->orderByDesc('id')
-            ->limit(self::RECENT_INVOICES)->with(['room:id,boarding_house_id,room_code', 'room.boardingHouse:id,name', 'contract:id,tenant_id,signing_snapshot', 'contract.tenant:id,full_name'])->get();
+            ->limit(self::RECENT_INVOICES)->with(['room:id,boarding_house_id,room_code', 'contract:id,tenant_id,signing_snapshot', 'contract.tenant:id,full_name'])->get();
         $expiring = (clone $contracts)->where('end_date', '<=', $today->addDays(self::EXPIRING_DAYS)->toDateString())
             ->select(['id', 'room_id', 'tenant_id', 'contract_code', 'end_date', 'signing_snapshot'])
             ->orderBy('end_date')->orderBy('id')->limit(self::RECENT_CONTRACTS)->with(['room:id,room_code', 'tenant:id,full_name'])->get();
@@ -118,7 +119,7 @@ class DashboardService
             'revenue_chart' => $this->payments($user, $start), 'boarding_houses' => $houseData,
             'recent_unpaid_invoices' => $recent->map(fn (Invoice $invoice) => [
                 'id' => $invoice->id, 'invoice_code' => $invoice->invoice_code, 'room_code' => $invoice->room->room_code,
-                'boarding_house_name' => $invoice->room->boardingHouse->name,
+                'boarding_house_name' => $houseNames->get($invoice->room->boarding_house_id) ?? $invoice->room->boardingHouse->name,
                 'tenant_name' => $invoice->contract?->signing_snapshot['tenant']['full_name'] ?? $invoice->contract?->tenant?->full_name,
                 'remaining_amount' => (string) BigDecimal::of($invoice->total_amount)->minus($invoice->paid_amount),
                 'due_date' => $invoice->due_date?->format('Y-m-d'), 'status' => $invoice->status,

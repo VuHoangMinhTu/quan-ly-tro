@@ -3,7 +3,6 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import React from 'react'
 import { transformWithOxc } from 'vite'
-import { clearContractDocumentCache } from '../api/contractDocumentCache.js'
 
 async function harness(pathname = '/dashboard', owner = false) {
   const states = []
@@ -12,10 +11,14 @@ async function harness(pathname = '/dashboard', owner = false) {
   const navigation = []
   const mutations = []
   const removedQueries = []
+  const session = {}
+  const endedSessions = []
   const icons = ['Building2', 'CreditCard', 'FileText', 'Gauge', 'KeyRound', 'LayoutDashboard', 'LogOut', 'Menu', 'Receipt', 'UserRound', 'Users', 'X']
   const source = (await readFile(new URL('./MainLayout.jsx', import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
   const bindings = {
-    clearContractDocumentCache,
+    getSession: () => session,
+    isCurrentSession: value => value === session,
+    endSession: value => { endedSessions.push(value); globalThis.localStorage.removeItem('access_token') },
     useState: (initial) => {
       const index = stateIndex++
       if (!(index in states)) states[index] = initial
@@ -39,7 +42,7 @@ async function harness(pathname = '/dashboard', owner = false) {
   const elements = (node) => Array.isArray(node) ? node.flatMap(elements) : !React.isValidElement(node) ? [] : typeof node.type === 'function' ? elements(node.type(node.props)) : [node, ...elements(node.props.children)]
   const render = () => { stateIndex = 0; return elements(Component()) }
   const button = (label) => render().find((node) => node.type === 'button' && node.props['aria-label'] === label)
-  return { render, button, mutations, navigation, removedQueries, settle: (...args) => mutationOptions.onSettled(...args) }
+  return { render, button, mutations, navigation, removedQueries, endedSessions, settle: (...args) => mutationOptions.onSettled(...args) }
 }
 
 test('drawer selection closes navigation and keeps the existing active room route', async () => {
@@ -64,7 +67,7 @@ test('account menu opens, preserves the password route and closes after selectin
   assert.equal(layout.button('Menu tài khoản').props['aria-expanded'], false)
 })
 
-test('mobile logout retains token removal, me-cache clearing and login navigation', async () => {
+test('mobile logout ends the entire session and retains login navigation', async () => {
   const layout = await harness()
   const previousStorage = globalThis.localStorage
   const removedTokens = []
@@ -76,7 +79,8 @@ test('mobile logout retains token removal, me-cache clearing and login navigatio
     assert.equal(layout.button('Menu tài khoản').props['aria-expanded'], false)
     layout.settle(null, null)
     assert.deepEqual(removedTokens, ['access_token'])
-    assert.deepEqual(layout.removedQueries, ['me', 'dashboard', 'landlord', 'payment-qr', 'invoice', 'contract-document', 'contract-document-preview', 'contract-template', 'contract-templates', 'contract-signing'].map(prefix => ({ queryKey: [prefix] })))
+    assert.equal(layout.endedSessions.length, 1)
+    assert.deepEqual(layout.removedQueries, [])
     assert.deepEqual(layout.navigation, [['/login', { state: undefined }]])
   } finally {
     globalThis.localStorage = previousStorage

@@ -1,0 +1,229 @@
+{
+  "captured": "2026-10-25",
+  "browser": {
+    "kind": "dashboard-browser-synthetic-api",
+    "phase": "after",
+    "browser": "140.0.7339.16",
+    "simulatedApiDelayMs": 75,
+    "visibilityEvents": "synthetic",
+    "samples": [
+      {
+        "run": 1,
+        "coldReadyMs": 890.706,
+        "warmReadyMs": [
+          51.693,
+          64.324,
+          66.762
+        ],
+        "coldDashboardRequests": 1,
+        "coldMeRequests": 2,
+        "revisitDashboardRequests": 0,
+        "focusDashboardRequests": 0,
+        "totalDashboardRequests": 1,
+        "dashboardTimings": [
+          {
+            "durationMs": 92.2,
+            "ttfbMs": 88.2
+          }
+        ]
+      },
+      {
+        "run": 2,
+        "coldReadyMs": 869.098,
+        "warmReadyMs": [
+          65.782,
+          73.889,
+          65.525
+        ],
+        "coldDashboardRequests": 1,
+        "coldMeRequests": 2,
+        "revisitDashboardRequests": 0,
+        "focusDashboardRequests": 0,
+        "totalDashboardRequests": 1,
+        "dashboardTimings": [
+          {
+            "durationMs": 87.3,
+            "ttfbMs": 83.9
+          }
+        ]
+      },
+      {
+        "run": 3,
+        "coldReadyMs": 883.897,
+        "warmReadyMs": [
+          69.25,
+          55.868,
+          64.411
+        ],
+        "coldDashboardRequests": 1,
+        "coldMeRequests": 2,
+        "revisitDashboardRequests": 0,
+        "focusDashboardRequests": 0,
+        "totalDashboardRequests": 1,
+        "dashboardTimings": [
+          {
+            "durationMs": 90.3,
+            "ttfbMs": 86.8
+          }
+        ]
+      }
+    ]
+  },
+  "backend": {
+    "kind": "dashboard-kernel-sqlite",
+    "phase": "after-final",
+    "dataset": {
+      "houses": 10,
+      "rooms": 100,
+      "invoices": 100,
+      "payments": 100
+    },
+    "warmup": 1,
+    "samples": [
+      {
+        "requestMs": 25.675,
+        "queryCount": 17,
+        "sqlTimeMs": 5.51,
+        "houseNameReloads": 0
+      },
+      {
+        "requestMs": 30.202,
+        "queryCount": 17,
+        "sqlTimeMs": 9.17,
+        "houseNameReloads": 0
+      },
+      {
+        "requestMs": 32.346,
+        "queryCount": 17,
+        "sqlTimeMs": 6.72,
+        "houseNameReloads": 0
+      },
+      {
+        "requestMs": 25.269,
+        "queryCount": 17,
+        "sqlTimeMs": 4.77,
+        "houseNameReloads": 0
+      },
+      {
+        "requestMs": 30.416,
+        "queryCount": 17,
+        "sqlTimeMs": 5.33,
+        "houseNameReloads": 0
+      },
+      {
+        "requestMs": 26.005,
+        "queryCount": 17,
+        "sqlTimeMs": 3.9,
+        "houseNameReloads": 0
+      },
+      {
+        "requestMs": 25.964,
+        "queryCount": 17,
+        "sqlTimeMs": 5.51,
+        "houseNameReloads": 0
+      }
+    ]
+  },
+  "backendPaired": {
+    "kind": "dashboard-kernel-sqlite",
+    "phase": "paired",
+    "paired": true,
+    "dataset": {
+      "houses": 10,
+      "rooms": 100,
+      "invoices": 100,
+      "payments": 100
+    },
+    "warmup": 1,
+    "samples": {
+      "after": [
+        {
+          "requestMs": 68.807,
+          "queryCount": 17,
+          "sqlTimeMs": 8.8,
+          "houseNameReloads": 0
+        },
+        {
+          "requestMs": 69.044,
+          "queryCount": 17,
+          "sqlTimeMs": 11.89,
+          "houseNameReloads": 0
+        },
+        {
+          "requestMs": 66.683,
+          "queryCount": 17,
+          "sqlTimeMs": 11.51,
+          "houseNameReloads": 0
+        },
+        {
+          "requestMs": 57.409,
+          "queryCount": 17,
+          "sqlTimeMs": 8.36,
+          "houseNameReloads": 0
+        },
+        {
+          "requestMs": 56.442,
+          "queryCount": 17,
+          "sqlTimeMs": 10.36,
+          "houseNameReloads": 0
+        },
+        {
+          "requestMs": 20.716,
+          "queryCount": 17,
+          "sqlTimeMs": 3.76,
+          "houseNameReloads": 0
+        },
+        {
+          "requestMs": 25.61,
+          "queryCount": 17,
+          "sqlTimeMs": 5.18,
+          "houseNameReloads": 0
+        }
+      ],
+      "before": [
+        {
+          "requestMs": 55.148,
+          "queryCount": 18,
+          "sqlTimeMs": 9.18,
+          "houseNameReloads": 1
+        },
+        {
+          "requestMs": 68.714,
+          "queryCount": 18,
+          "sqlTimeMs": 11.82,
+          "houseNameReloads": 1
+        },
+        {
+          "requestMs": 58.404,
+          "queryCount": 18,
+          "sqlTimeMs": 8.32,
+          "houseNameReloads": 1
+        },
+        {
+          "requestMs": 53.746,
+          "queryCount": 18,
+          "sqlTimeMs": 8.59,
+          "houseNameReloads": 1
+        },
+        {
+          "requestMs": 44.158,
+          "queryCount": 18,
+          "sqlTimeMs": 7.18,
+          "houseNameReloads": 1
+        },
+        {
+          "requestMs": 23.969,
+          "queryCount": 18,
+          "sqlTimeMs": 4.51,
+          "houseNameReloads": 1
+        },
+        {
+          "requestMs": 30.162,
+          "queryCount": 18,
+          "sqlTimeMs": 6.4,
+          "houseNameReloads": 1
+        }
+      ]
+    }
+  }
+}

@@ -5,7 +5,7 @@ import { Building2, CreditCard, FileText, Gauge, KeyRound, LayoutDashboard, LogO
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { logout } from '../api/authApi'
 import { APP_NAME } from '../utils/brand'
-import { clearContractDocumentCache } from '../api/contractDocumentCache'
+import { endSession, getSession, isCurrentSession } from '../api/session'
 import beeHouseLogo from '../assets/logo_bee_mau.png'
 
 const menus = [
@@ -51,16 +51,12 @@ export default function MainLayout() {
   const userButtonRef = useRef(null)
   const me = client.getQueryData(['me'])?.data?.data
   const userName = me?.user?.name || 'bạn'
+  const session = getSession()
   const mutation = useMutation({
     mutationFn: logout,
     onSettled: (_, error) => {
-      localStorage.removeItem('access_token')
-      client.removeQueries({ queryKey: ['me'] })
-      client.removeQueries({ queryKey: ['dashboard'] })
-      client.removeQueries({ queryKey: ['landlord'] })
-      client.removeQueries({ queryKey: ['payment-qr'] })
-      client.removeQueries({ queryKey: ['invoice'] })
-      clearContractDocumentCache(client)
+      if (!isCurrentSession(session)) return
+      endSession(session)
       navigate('/login', { state: error ? { error: getApiErrorMessage(error) } : undefined })
     },
   })
