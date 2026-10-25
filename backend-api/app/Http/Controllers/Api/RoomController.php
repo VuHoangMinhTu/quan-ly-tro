@@ -89,12 +89,14 @@ class RoomController extends Controller
                 }
             }
 
+            $nextSortOrder = (int) $boardingHouse->rooms()->where('floor_id', $floorId)->max('sort_order') + 1;
             foreach ($rooms as $room) {
-                app(RoomOrderingService::class)->create($boardingHouse, [
+                $boardingHouse->rooms()->create([
                     'room_code' => $room['room_code'],
                     'room_name' => $room['room_name'] ?? null,
                     'description' => $room['description'] ?? null,
                     'floor_id' => $floorId,
+                    'sort_order' => $nextSortOrder++,
                     'room_type' => $room['room_type'] ?? 'PRIVATE_ROOM',
                     'private_room_type' => $room['private_room_type'] ?? null,
                     'area' => $room['area'] ?? null,
