@@ -207,6 +207,10 @@ class ResidenceDeclarationService
         foreach (['host.full_name', 'host.birth_date', 'host.permanent_address', 'host.identity_number', 'host.phone',
             'guest.full_name', 'guest.birth_year', 'guest.permanent_address', 'guest.identity_number', 'guest.phone',
             'stay_address', 'start_date', 'end_date'] as $field) {
+            // Frozen legacy documents only recorded a birth year; do not invent a date.
+            if ($field === 'host.birth_date' && ! array_key_exists('birth_date', $consent['host'] ?? []) && filled(Arr::get($consent, 'host.birth_year'))) {
+                continue;
+            }
             if (blank(Arr::get($consent, $field))) {
                 $missing[$field] = $field === 'guest.permanent_address'
                     ? 'Bên B chưa có địa chỉ thường trú. Vui lòng cập nhật hồ sơ người thuê trước khi in văn bản.'

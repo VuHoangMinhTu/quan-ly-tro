@@ -33,7 +33,7 @@ class SaveResidenceProfileRequest extends FormRequest
             'residence_authority_name' => ['nullable', 'string', 'max:255'],
             'document_place' => ['nullable', 'string', 'max:255'],
             'legal_owner_name' => ['nullable', 'string', 'max:255'],
-            'legal_owner_birth_date' => ['nullable', 'date', 'before_or_equal:today'],
+            'legal_owner_birth_date' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
             'legal_owner_permanent_address' => ['nullable', 'string', 'max:500'],
             'legal_owner_identity_number' => ['nullable', 'string', 'regex:/^\d{12}$/'],
             'legal_owner_phone' => ['nullable', 'string', 'regex:/^(?:\+84|0)[35789]\d{8}$/'],

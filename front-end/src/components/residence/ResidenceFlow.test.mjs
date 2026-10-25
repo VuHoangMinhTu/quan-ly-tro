@@ -9,7 +9,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { transformWithOxc } from 'vite'
 import { residenceFormValues, residencePayload, wholeMonthsBetweenDates } from '../../utils/residence.js'
-import { formatBillingPeriodForDisplay, formatDateForDisplay, isValidDisplayDate } from '../../utils/date.js'
+import { formatBillingPeriodForDisplay, formatDateForApi, formatDateForDisplay, isNotFutureDisplayDate, isValidDisplayDate } from '../../utils/date.js'
 import { invoiceStatusLabels } from '../../utils/invoiceStatus.js'
 import { BILLING_METHOD_LABELS, BILLING_METHODS, getBasePriceLabel, getSuggestedServiceUnit, SERVICE_TYPE_LABELS, SERVICE_TYPES } from '../../utils/service.js'
 
@@ -30,6 +30,61 @@ function elements(node) {
 const Link = ({ to, children, ...props }) => React.createElement('a', { href: to, ...props }, children)
 const tenant = { id: 1, full_name: 'Nguyễn Văn A', date_of_birth: '2000-09-28', gender: 'MALE', identity_number: '079000000001', phone: null, email: null }
 const context = { room: { id: 11 }, operational_role: 'OWNER', occupants: [{ tenant }, { tenant: { ...tenant, id: 2, full_name: 'Trần Thị B' } }], contracts: [] }
+
+async function ownerProfileHarness(initial) {
+  let form
+  const submitted = []
+  const Component = await load('./ResidenceHouseSettings.jsx', 'ProfileForm', {
+    useState: value => [value, () => {}], useQueryClient: () => ({ invalidateQueries: async () => {} }),
+    useForm: options => {
+      if (!form) {
+        form = createFormControl(options)
+        form.subscribe({ formState: { values: true, errors: true }, callback: () => {} })
+        Object.defineProperty(form, 'formState', { get: () => form.control._formState })
+      }
+      return form
+    },
+    Controller: ({ name, render }) => render({ field: { value: form.getValues(name), onChange: value => form.setValue(name, value), onBlur: () => {} } }),
+    DateInput: props => React.createElement('input', props), useMutation: () => ({ mutateAsync: async payload => submitted.push(payload) }),
+    z, zodResolver, formatDateForApi, formatDateForDisplay, isValidDisplayDate, isNotFutureDisplayDate,
+    updateResidenceProfile: () => {}, applyApiFieldErrors: () => {}, getApiErrorMessage: () => '',
+  })
+  const render = () => elements(Component({ houseId: 11, initial }))
+  render()
+  return { form, render, submitted, submit: () => render().find(node => node.type === 'form').props.onSubmit() }
+}
+
+test('owner profile displays full birth date, submits ISO date and allows clearing without inventing a legacy date', async () => {
+  const ui = await ownerProfileHarness({ legal_owner_birth_date: '1970-09-28' })
+  assert.equal(ui.form.getValues('legal_owner_birth_date'), '28/09/1970')
+  assert.ok(ui.render().some(node => node.type === 'label' && node.props.htmlFor === 'legal-owner-birth-date'))
+  ui.form.setValue('legal_owner_birth_date', '29/02/1972')
+  await ui.submit()
+  assert.equal(ui.submitted[0].legal_owner_birth_date, '1972-02-29')
+  assert.equal('legal_owner_birth_year' in ui.submitted[0], false)
+  ui.form.setValue('legal_owner_birth_date', '')
+  await ui.submit()
+  assert.equal(ui.submitted[1].legal_owner_birth_date, null)
+  const legacy = await ownerProfileHarness({ legal_owner_birth_year: 1970 })
+  assert.equal(legacy.form.getValues('legal_owner_birth_date'), '')
+})
+
+test('owner profile rejects incomplete, impossible and future birth dates before saving', async () => {
+  const ui = await ownerProfileHarness({})
+  for (const date of ['1970', '31/02/1970', '01/01/2999']) {
+    ui.form.setValue('legal_owner_birth_date', date)
+    await ui.submit()
+    assert.ok(ui.form.formState.errors.legal_owner_birth_date)
+  }
+  assert.deepEqual(ui.submitted, [])
+})
+
+test('legacy frozen owner birth year is displayed as a year rather than a fabricated full date', async () => {
+  const Document = await load('./StayConsentDocument.jsx', 'StayConsentDocument', { formatDateForDisplay, wholeMonthsBetweenDates })
+  const markup = renderToStaticMarkup(React.createElement(Document, { data: { host: { full_name: 'Legacy owner', birth_year: 1970 } } }))
+  assert.match(markup, /Năm sinh:.*1970/)
+  assert.doesNotMatch(markup, /01\/01\/1970/)
+})
 
 async function formHarness(initial, formContext = context) {
   let form

@@ -12,6 +12,7 @@ use App\Models\RoomTenant;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
 class ResidenceDeclarationApiTest extends TestCase
@@ -237,6 +238,30 @@ class ResidenceDeclarationApiTest extends TestCase
         $this->assertNotSame($owner->name, $room->boardingHouse->residenceProfile->fresh()->legal_owner_name);
     }
 
+    #[TestWith(['1970'])]
+    #[TestWith(['28/09/1970'])]
+    #[TestWith(['1970-02-31'])]
+    #[TestWith(['2099-01-01'])]
+    public function test_residence_profile_rejects_invalid_or_future_birth_date(string $date): void
+    {
+        [$owner, $room] = $this->fixture();
+        $this->actingAs($owner, 'sanctum')->putJson("/api/boarding-houses/{$room->boarding_house_id}/residence-profile", [
+            'legal_owner_birth_date' => $date,
+        ])->assertUnprocessable()->assertJsonValidationErrors('legal_owner_birth_date');
+        $this->assertDatabaseHas('boarding_house_residence_profiles', ['boarding_house_id' => $room->boarding_house_id, 'legal_owner_birth_date' => null]);
+    }
+
+    public function test_existing_birth_year_is_preserved_without_fabricating_a_date(): void
+    {
+        [$owner, $room] = $this->fixture();
+        $room->boardingHouse->residenceProfile->forceFill(['legal_owner_birth_year' => 1970])->save();
+        $this->actingAs($owner, 'sanctum')->getJson("/api/boarding-houses/{$room->boarding_house_id}/residence-profile")
+            ->assertOk()->assertJsonPath('data.legal_owner_birth_year', 1970)->assertJsonPath('data.legal_owner_birth_date', null);
+        $this->putJson("/api/boarding-houses/{$room->boarding_house_id}/residence-profile", ['legal_owner_birth_date' => '1970-09-28'])->assertOk();
+        $this->putJson("/api/boarding-houses/{$room->boarding_house_id}/residence-profile", ['legal_owner_birth_date' => null])->assertOk();
+        $this->assertDatabaseHas('boarding_house_residence_profiles', ['boarding_house_id' => $room->boarding_house_id, 'legal_owner_birth_year' => 1970, 'legal_owner_birth_date' => null]);
+    }
+
     public function test_residence_profile_rejects_invalid_identification_numbers_and_phone(): void
     {
         [$owner, $room] = $this->fixture();
@@ -295,6 +320,15 @@ class ResidenceDeclarationApiTest extends TestCase
             ->assertJsonPath('data.is_frozen', true);
         $this->assertSame($snapshot, ResidenceDeclaration::findOrFail($id)->snapshot);
         $this->assertNotSame('Tên tài khoản vận hành', $snapshot['stay_consent']['host']['full_name']);
+
+        $legacySnapshot = $snapshot;
+        unset($legacySnapshot['stay_consent']['host']['birth_date']);
+        $legacySnapshot['stay_consent']['host']['birth_year'] = 1970;
+        ResidenceDeclaration::findOrFail($id)->update(['snapshot' => $legacySnapshot]);
+        $this->getJson("/api/residence-declarations/{$id}/documents/residence-stay-consent")->assertOk()
+            ->assertJsonPath('data.document.host.birth_year', 1970)->assertJsonMissingPath('data.document.host.birth_date')
+            ->assertJsonPath('data.is_frozen', true);
+        $this->assertSame($legacySnapshot, ResidenceDeclaration::findOrFail($id)->snapshot);
     }
 
     public function test_stay_consent_uses_structured_ward_before_legacy_document_place(): void
