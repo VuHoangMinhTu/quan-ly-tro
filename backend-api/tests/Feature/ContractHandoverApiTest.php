@@ -6,6 +6,7 @@ use App\Models\Amenity;
 use App\Models\Contract;
 use App\Models\ContractDocument;
 use App\Models\ContractHandoverReport;
+use App\Services\ContractHandoverService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -37,6 +38,18 @@ class ContractHandoverApiTest extends TestCase
         $this->assertCount(1, array_filter($items, fn (array $item) => $item['name'] === 'Máy lạnh'));
         $this->assertContains('Tivi', array_column($items, 'name'));
         $this->postJson("/api/contracts/{$contract->id}/handover-check-in")->assertUnprocessable();
+    }
+
+    public function test_dorm_creation_prefills_the_six_word_items_in_order(): void
+    {
+        $contract = $this->contract();
+        $contract->update(['contract_type' => 'DORM_BED']);
+
+        $this->postJson("/api/contracts/{$contract->id}/handover-check-in")->assertCreated();
+        $items = $this->getJson("/api/contracts/{$contract->id}/handover-check-in")->assertOk()->json('data.items');
+
+        $this->assertSame(ContractHandoverService::DORM_BED_ITEMS, array_column($items, 'name'));
+        $this->assertSame(array_fill(0, 6, null), array_column($items, 'condition'));
     }
 
     public function test_edit_confirm_and_preview_only_include_confirmed_check_in(): void

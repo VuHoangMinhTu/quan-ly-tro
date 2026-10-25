@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use DOMDocument;
+use DOMElement;
 use Illuminate\Validation\ValidationException;
 
 class ContractTemplateRenderer
@@ -31,14 +33,20 @@ class ContractTemplateRenderer
         $content = $this->prepare($content);
         $values = $this->registry->values($snapshot);
         $isRoomRentalWord = str_contains($content, 'class="word-contract"') && ($snapshot['contract']['contract_type'] ?? null) === 'ROOM_RENTAL';
+        $isDormWord = ($snapshot['contract']['contract_type'] ?? null) === 'DORM_BED'
+            && str_contains($content, 'BIÊN BẢN BÀN GIAO HIỆN TRẠNG TRANG THIẾT BỊ');
         if ($isRoomRentalWord) {
-            $content = $this->withoutLegacyRoomRentalHandoverTable($content);
             $content = preg_replace('/<p class="text-center">(?=\{\{boarding_house\.ward\}\}, ngày)/u', '<p class="text-right">', $content, 1);
+        }
+        if ($isDormWord) {
+            $content = $this->withoutLegacyHandoverTables($content, 'PHỤ LỤC: BIÊN BẢN BÀN GIAO HIỆN TRẠNG TRANG THIẾT BỊ', true);
+        } elseif ($isRoomRentalWord) {
+            $content = $this->withoutLegacyHandoverTables($content, 'BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG', false);
         }
         $isWordContract = str_contains($content, 'class="word-contract"');
         $blocks = ['services_table' => $this->services($snapshot['services'] ?? []), 'room_rental_services' => $this->roomRentalServices($snapshot['services'] ?? []), 'occupants_table' => $this->occupants($snapshot['occupants'] ?? []),
             'vehicles_table' => $this->vehicles($snapshot['vehicles'] ?? []), 'handover_checkin_table' => $isRoomRentalWord
-                ? $this->roomRentalHandover($snapshot) : ($isWordContract ? $this->wordHandover($snapshot['handover_checkin'] ?? []) : $this->handover($snapshot['handover_checkin'] ?? []))];
+                ? $this->roomRentalHandover($snapshot) : ($isDormWord ? $this->dormHandover($snapshot) : ($isWordContract ? $this->wordHandover($snapshot['handover_checkin'] ?? []) : $this->handover($snapshot['handover_checkin'] ?? [])))];
 
         $rendered = preg_replace_callback('/\{\{(.*?)\}\}/s', function ($match) use ($blocks, $values, $isRoomRentalWord) {
             $key = trim($match[1]);
@@ -268,32 +276,78 @@ class ContractTemplateRenderer
         ], $rows, 'contract-handover-table');
     }
 
-    private function withoutLegacyRoomRentalHandoverTable(string $content): string
+    private function withoutLegacyHandoverTables(string $content, string $heading, bool $dorm): string
     {
-        $placeholderPosition = strpos($content, '{{handover_checkin_table}}');
-        if ($placeholderPosition === false) {
+        if (! str_contains($content, '{{handover_checkin_table}}')) {
             return $content;
         }
-        $headingPosition = strrpos(substr($content, 0, $placeholderPosition), 'BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG');
-        if ($headingPosition === false) {
-            return $content;
+        $dom = new DOMDocument('1.0', 'UTF-8');
+        $dom->loadHTML('<html><head><meta charset="UTF-8"></head><body>'.$content.'</body></html>', LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+        foreach ($dom->getElementsByTagName('p') as $paragraph) {
+            if (! str_contains($paragraph->textContent, $heading)) {
+                continue;
+            }
+            $previous = $paragraph->previousSibling;
+            while ($previous && trim($previous->textContent) === '' && ! $previous instanceof DOMElement) {
+                $previous = $previous->previousSibling;
+            }
+            if ($previous instanceof DOMElement && $previous->getAttribute('class') === 'page-break') {
+                $previous->parentNode->removeChild($previous);
+            }
+            $section = $dom->createElement('div');
+            $section->setAttribute('class', 'contract-handover-section'.($dorm ? ' dorm-handover' : ''));
+            $paragraph->parentNode->insertBefore($section, $paragraph);
+            $node = $paragraph;
+            while ($node) {
+                $next = $node->nextSibling;
+                $section->appendChild($node);
+                $node = $next;
+            }
+            $title = trim($paragraph->textContent);
+            $paragraph->textContent = '';
+            $paragraph->setAttribute('class', 'handover-heading');
+            $strong = $dom->createElement('strong');
+            $strong->appendChild($dom->createTextNode($title));
+            $paragraph->appendChild($strong);
+            $tables = iterator_to_array($section->getElementsByTagName('table'));
+            if ($tables !== []) {
+                // Replace the legacy reference table at its original position;
+                // the snapshot-driven placeholder remains the only table source.
+                $xpath = new \DOMXPath($dom);
+                foreach ($xpath->query('//body//text()') as $text) {
+                    $text->nodeValue = str_replace('{{handover_checkin_table}}', '', $text->nodeValue);
+                }
+                $tables[0]->parentNode->insertBefore($dom->createTextNode('{{handover_checkin_table}}'), $tables[0]);
+                foreach ($tables as $table) {
+                    $table->parentNode->removeChild($table);
+                }
+            }
+            break;
         }
-        $appendixStart = strrpos(substr($content, 0, $headingPosition), '<p');
-        if ($appendixStart === false) {
-            return $content;
-        }
-        $headingEnd = strpos($content, '</p>', $headingPosition);
-        if ($headingEnd === false) {
-            return $content;
-        }
-        $headingText = trim(strip_tags(substr($content, $appendixStart, $headingEnd + 4 - $appendixStart)));
-        $appendix = '<p class="handover-heading"><strong>'.$headingText.'</strong></p>'
-            .substr($content, $headingEnd + 4);
 
-        // Older stored templates contain a fixed Word table before the dynamic placeholder.
-        // Remove only static tables in the final handover appendix; CHECK_IN/CHECK_OUT still render once below.
-        return substr($content, 0, $appendixStart)
-            .preg_replace('/<table\b[^>]*>.*?<\/table>/si', '', $appendix);
+        return implode('', array_map(fn ($node) => $dom->saveHTML($node), iterator_to_array($dom->getElementsByTagName('body')->item(0)->childNodes)));
+    }
+
+    private function dormHandover(array $snapshot): string
+    {
+        $items = [];
+        foreach ($snapshot['handover_checkin'] ?? [] as $item) {
+            $items[trim($item['name'])] = $item;
+        }
+        $names = array_values(array_unique([...ContractHandoverService::DORM_BED_ITEMS, ...array_keys($items)]));
+        $units = ['bộ', 'bộ', 'tủ', 'bộ', 'cái', 'Bộ'];
+        $rows = [];
+        foreach ($names as $index => $name) {
+            $item = $items[$name] ?? [];
+            $quantity = isset($item['quantity']) ? str_pad((string) $item['quantity'], 2, '0', STR_PAD_LEFT) : '……';
+            $condition = $item['condition'] ?? null;
+            $detail = ($condition === 'OTHER' ? 'Khác: ' : '').trim((string) ($item['note'] ?? ''));
+            $rows[] = [$this->escape($index + 1), $this->escape($name), $this->escape($quantity.' '.($units[$index] ?? '')),
+                ($condition === 'GOOD' ? '☑' : '☐').' Tốt &nbsp; '.($condition === 'DAMAGED' ? '☑' : '☐').' Hư hỏng &nbsp; '.($condition === 'MISSING' ? '☑' : '☐').' Thiếu'
+                    .($detail !== '' ? '<br>'.$this->escape($detail) : '')];
+        }
+
+        return $this->table(['STT', 'Hạng mục / Trang thiết bị', 'SL', 'Tình trạng khi nhận'], $rows, 'contract-handover-table');
     }
 
     private function handoverItemsByName(array $items): array

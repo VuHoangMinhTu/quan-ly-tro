@@ -1,14 +1,10 @@
 import { z } from 'zod'
+import { numberInput } from './formValidation.js'
 
 export const MAX_BULK_ROOMS = 200
 export const emptyBulkRoom = (roomCode = '') => ({ room_code: roomCode, area: '', monthly_rent: '', max_tenants: '' })
 
-const optionalNumber = (label, maximum, integer = false) => z.preprocess(
-  (value) => value == null || value === '' ? null : Number(value),
-  (integer ? z.number({ error: label + ' phải là số hợp lệ.' }).int(label + ' phải là số nguyên.') : z.number({ error: label + ' phải là số hợp lệ.' }))
-    .min(integer ? 1 : 0, label + (integer ? ' phải ít nhất là 1.' : ' phải từ 0 trở lên.'))
-    .max(maximum, label + ' vượt giới hạn cho phép.').nullable(),
-)
+const optionalNumber = (label, maximum, integer = false) => numberInput(label, { optional: true, min: integer ? 1 : 0, max: maximum, integer })
 
 export const bulkRoomsSchema = z.object({
   rooms: z.array(z.object({

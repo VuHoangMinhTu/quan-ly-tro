@@ -26,7 +26,7 @@ class ContractHandoverService
         'Tủ, kệ bếp',
     ];
 
-    private const DORM_BED_ITEMS = [
+    public const DORM_BED_ITEMS = [
         'Khung giường, vạt giường, rèm che riêng tư',
         'Nệm nằm, drap/ga bọc nệm (nếu có)',
         'Tủ quần áo/tủ đồ cá nhân + chìa khóa',

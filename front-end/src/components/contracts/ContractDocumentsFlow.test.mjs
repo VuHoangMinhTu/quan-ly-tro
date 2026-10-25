@@ -5,6 +5,7 @@ import React from 'react'
 import { transformWithOxc } from 'vite'
 import { contractDocumentKeys } from '../../api/contractTemplateKeys.js'
 import * as helpers from '../../utils/contractDocuments.js'
+import { normalizeHandoverPrint } from '../../utils/contractHandoverPrint.js'
 import { getApiErrorMessage, getApiFieldErrors } from '../../api/getApiErrorMessage.js'
 
 function nodes(node) {
@@ -74,7 +75,7 @@ test('document page reads the finalized HTML endpoint; only drafts use preview a
   let preview = false; let printed = 0; const calls = []
   const data = { rendered_html: '<p>Văn bản đã chốt</p>', template_name: 'Mẫu riêng', template_version: 1, finalized_at: '2026-11-01T03:00:00Z', is_preview: false }
   const Page = await load('../../pages/contracts/ContractDocumentPage.jsx', 'ContractDocumentPage', {
-    ...helpers, Link, contractDocumentKeys, getApiErrorMessage,
+    ...helpers, Link, contractDocumentKeys, getApiErrorMessage, normalizeHandoverPrint,
     useParams: () => ({ id: '7' }), useSearchParams: () => [new URLSearchParams(preview ? 'preview=1' : '')],
     useQuery: options => { options.queryFn(); return { data: { data: { data: { ...data, is_preview: preview } } } } },
     getContractDocument: id => calls.push(['final', id]), previewContractDocument: id => calls.push(['preview', id]),

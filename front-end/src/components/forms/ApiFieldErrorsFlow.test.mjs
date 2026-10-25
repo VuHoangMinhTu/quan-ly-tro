@@ -13,6 +13,7 @@ import { invoiceStatusLabels } from '../../utils/invoiceStatus.js'
 import * as dates from '../../utils/date.js'
 import { toFormString } from '../../utils/form.js'
 import * as serviceHelpers from '../../utils/service.js'
+import * as validation from '../../utils/formValidation.js'
 
 function elements(node) {
   if (Array.isArray(node)) return node.flatMap(elements)
@@ -36,7 +37,7 @@ async function harness(path, props = {}, extraBindings = {}) {
   let previousDependencies
   const input = (inputProps) => React.createElement('input', inputProps)
   const bindings = {
-    ...dates, ...serviceHelpers, toFormString, applyApiFieldErrors, getApiErrorMessage, z, zodResolver, contractKeys, tenantKeys, invoiceStatusLabels,
+    ...dates, ...serviceHelpers, ...validation, toFormString, applyApiFieldErrors, getApiErrorMessage, z, zodResolver, contractKeys, tenantKeys, invoiceStatusLabels,
     useRef: (initial) => ({ current: initial }),
     useState: (initial) => {
       const index = stateCursor++
@@ -62,12 +63,12 @@ async function harness(path, props = {}, extraBindings = {}) {
       return form
     },
     Controller: ({ name, render }) => render({ field: { name, value: form.getValues(name), ref: () => {}, onChange: (value) => form.setValue(name, value), onBlur: () => {} } }),
-    DateInput: input, MoneyInput: input, Link: ({ children }) => React.createElement('a', null, children),
+    DateInput: input, MoneyInput: input, formatCurrency: String, Link: ({ children }) => React.createElement('a', null, children),
     getContractsByRoom: () => {}, getTenants: () => {}, register: () => {},
     ...extraBindings,
   }
   const source = (await readFile(new URL(path, import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
-  const name = source.match(/function (RegisterPage|ContractForm|InvoiceForm|TenantForm|ServiceForm|ProtectedRoute)\(/)[1]
+  const name = source.match(/function (RegisterPage|ContractForm|InvoiceForm|TenantForm|ServiceForm|PaymentForm|ProtectedRoute)\(/)[1]
   const { code } = await transformWithOxc(source, `${name}.jsx`, { jsx: { runtime: 'classic' } })
   const Component = new Function('React', ...Object.keys(bindings), `${code}\nreturn ${name}`)(React, ...Object.values(bindings))
   const render = () => { stateCursor = 0; return elements(Component(props)) }
@@ -78,6 +79,54 @@ async function harness(path, props = {}, extraBindings = {}) {
 const apiError = (status, message, errors) => ({ response: { status, data: { success: false, message, errors } } })
 
 const validContract = { tenant_id: 2, contract_code: 'HD001', start_date: '2026-11-16', monthly_rent: 2000000, deposit_amount: 1000000 }
+
+test('invalid invoice blocks the API call and renders separate field errors, then accepts corrected input', async () => {
+  const payloads = []
+  const page = await harness('./InvoiceForm.jsx', { roomId: 1, initialValues: { billing_period: '2026-10-01', discount_amount: -1, due_date: '2026-02-31' }, onSubmit: async payload => payloads.push(payload) })
+  await page.submit()
+  assert.equal(payloads.length, 0)
+  assert.ok(page.form.formState.errors.discount_amount)
+  assert.ok(page.form.formState.errors.due_date)
+  assert.equal(page.form.formState.errors.contract_id, undefined)
+  page.form.setValue('discount_amount', 0)
+  page.form.setValue('due_date', '28/02/2026')
+  await page.submit()
+  assert.equal(payloads.length, 1)
+  assert.equal(payloads[0].due_date, '2026-02-28')
+})
+
+test('missing tenant and backwards dates block contract submission under the right inputs', async () => {
+  const calls = []
+  const page = await harness('./ContractForm.jsx', { initialValues: { ...validContract, tenant_id: '', end_date: '2026-11-01' }, onSubmit: async value => calls.push(value) })
+  await page.submit()
+  assert.equal(calls.length, 0)
+  assert.ok(page.form.formState.errors.tenant_id)
+  assert.ok(page.form.formState.errors.end_date)
+  assert.equal(page.form.formState.errors.note, undefined)
+})
+
+test('service rejects nonnumeric base price instead of sending NaN to the API', async () => {
+  const calls = []
+  const page = await harness('./ServiceForm.jsx', { initialValues: { name: 'Internet', type: 'INTERNET', billing_method: 'FIXED', base_price: 'abc' }, onSubmit: async value => calls.push(value) })
+  await page.submit()
+  assert.equal(calls.length, 0)
+  assert.ok(page.form.formState.errors.base_price)
+})
+
+test('payment displays overpayment at the amount field, rejects NaN and submits a corrected numeric amount', async () => {
+  const calls = []
+  const page = await harness('./PaymentForm.jsx', { remaining: 100, initialValues: { amount: 101, paid_at: '2026-10-25T09:30' }, onSubmit: async value => calls.push(value) })
+  for (const amount of [101, 'abc', 0]) {
+    page.form.setValue('amount', amount)
+    await page.submit()
+    assert.equal(calls.length, 0)
+    assert.ok(page.form.formState.errors.amount)
+    assert.equal(page.form.formState.errors.paid_at, undefined)
+  }
+  page.form.setValue('amount', '100')
+  await page.submit()
+  assert.equal(calls[0].amount, 100)
+})
 
 for (const [path, field, initial] of [
   ['./ContractForm.jsx', 'contract_code', { ...validContract, contract_code: '', status: 'DRAFT' }],

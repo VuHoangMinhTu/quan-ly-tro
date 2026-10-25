@@ -116,7 +116,7 @@ class ContractDocumentsApiTest extends TestCase
         $this->assertStringContainsString('……………………', $html);
         $this->assertStringContainsString('BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG', $html);
         $this->assertSame(1, substr_count($html, 'class="contract-handover-table"'));
-        $this->assertStringContainsString('class="page-break"', $html);
+        $this->assertStringContainsString('class="contract-handover-section"', $html);
         $this->assertSame(1, substr_count($html, 'class="document-signatures"'));
         $this->assertSame(2, substr_count($html, 'class="signature-handwritten-space"'));
         $this->assertStringNotContainsString('Chưa ký', $html);

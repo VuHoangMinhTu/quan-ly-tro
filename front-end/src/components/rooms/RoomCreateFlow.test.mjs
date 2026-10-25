@@ -8,8 +8,7 @@ import { z } from 'zod'
 import { transformWithOxc } from 'vite'
 import { roomKeys } from '../../api/roomKeys.js'
 import { boardingHouseKeys } from '../../api/boardingHouseKeys.js'
-import { contractKeys } from '../../api/contractKeys.js'
-import { invoiceKeys } from '../../api/invoiceKeys.js'
+import { numberInput } from '../../utils/formValidation.js'
 
 // Exercise the real component handlers and RHF/Zod resolver without a browser
 // dependency. Query/router hooks are isolated; no API or production DB is used.
@@ -58,6 +57,7 @@ async function roomFormHarness(query = { data: { data: { data: catalog } } }, in
       onChange: (value) => form.setValue(name, value),
     } }),
     zodResolver,
+    numberInput,
     z,
     getAmenities: () => {},
     getApiErrorMessage: () => 'API error',
@@ -137,60 +137,32 @@ test('edit values normalize string IDs and changing rooms resets amenity selecti
   assert.deepEqual(harness.form.getValues('amenity_ids'), [])
 })
 
-test('create caches the returned room with amenities, invalidates its list and opens RoomDetail', async () => {
-  const payload = { room_code: 'P001', monthly_rent: 2000000, status: 'AVAILABLE', amenity_ids: [1, 2] }
-  const response = { data: { success: true, data: { id: 42, boarding_house_id: 7, amenities: catalog } } }
-  const cache = new Map()
+test('bulk create invalidates the current room list and returns to that list', async () => {
+  const rooms = [{ room_code: 'P001', area: null, monthly_rent: null, max_tenants: null }]
   const invalidated = []
   let navigation
   const RoomCreatePage = await loadComponent('../../pages/rooms/RoomCreatePage.jsx', {
+    useState: initial => [initial, () => {}],
     useParams: () => ({ boardingHouseId: '7' }),
     useNavigate: () => (...args) => { navigation = args },
-    useQueryClient: () => ({
-      setQueryData: (key, value) => cache.set(JSON.stringify(key), value),
-      invalidateQueries: async ({ queryKey }) => { invalidated.push(queryKey) },
-    }),
-    useQuery: () => ({ data: { data: { data: { name: 'Nhà trọ' } } } }),
+    useQueryClient: () => ({ invalidateQueries: async ({ queryKey }) => invalidated.push(queryKey) }),
+    useQuery: ({ queryKey }) => ({ data: { data: { data: queryKey[0] === 'floors' ? [] : { name: 'Nhà trọ' } } } }),
     useMutation: ({ mutationFn }) => ({ mutateAsync: mutationFn }),
-    createRoom: async (boardingHouseId, values) => {
-      assert.equal(boardingHouseId, '7')
-      assert.deepEqual(values, payload)
-      return response
+    createRoomsBulk: async (id, payload, floorId) => {
+      assert.equal(id, '7')
+      assert.deepEqual(payload, rooms)
+      assert.equal(floorId, null)
+      return { data: { message: 'Đã tạo phòng.' } }
     },
-    getBoardingHouse: () => {},
-    boardingHouseKeys,
-    roomKeys,
-    getApiErrorMessage: () => '',
-    RoomForm: (props) => React.createElement('form', props),
+    getBoardingHouse: () => {}, getFloors: () => {},
+    boardingHouseKeys, roomKeys, getApiErrorMessage: () => '',
+    BulkRoomForm: props => React.createElement('form', props),
+    DormRoomCreateForm: () => null,
     Link: ({ children }) => React.createElement('a', {}, children),
   })
-  await elements(RoomCreatePage()).find((node) => node.type === 'form').props.onSubmit(payload)
+  await elements(RoomCreatePage()).find(node => node.type === 'form').props.onSubmit(rooms)
   assert.deepEqual(invalidated, [roomKeys.byBoardingHouse('7')])
-  assert.equal(cache.get(JSON.stringify(roomKeys.detail('42'))), response)
-  assert.deepEqual(cache.get(JSON.stringify(roomKeys.detail('42'))).data.data.amenities, catalog)
-  assert.deepEqual(navigation, ['/rooms/42', { replace: true, state: { message: 'Tạo phòng thành công.' } }])
-
-  const RoomDetailPage = await loadComponent('../../pages/rooms/RoomDetailPage.jsx', {
-    useState: () => [false, () => {}],
-    useParams: () => ({ id: '42' }),
-    useNavigate: () => () => {},
-    useLocation: () => ({ state: {} }),
-    useQueryClient: () => ({}),
-    useQuery: ({ queryKey }) => ({ data: cache.get(JSON.stringify(queryKey)) || { data: { data: [] } } }),
-    useMutation: () => ({}),
-    roomKeys, contractKeys, invoiceKeys,
-    getRoom: () => {}, deleteRoom: () => {}, getContractsByRoom: () => {}, getInvoicesByRoom: () => {},
-    getApiErrorMessage: () => '',
-    formatCurrency: String, formatArea: String, formatDate: String,
-    Pencil: () => null, Trash2: () => null, AmenityIcon: () => null,
-    ContractStatusBadge: () => null, RoomOccupantsSection: () => null,
-    RoomUtilitiesSection: () => null, RoomServicesSection: () => null, RoomAmenitiesModal: () => null, InvoiceStatusBadge: () => null,
-    Link: ({ children }) => React.createElement('a', {}, children),
-  })
-  const displayedAmenities = elements(RoomDetailPage())
-    .filter((node) => node.type === 'span' && catalog.some((amenity) => node.props.children === amenity.name))
-    .map((node) => node.props.children)
-  assert.deepEqual(displayedAmenities, ['Bàn ghế', 'Máy lạnh'])
+  assert.deepEqual(navigation, ['/boarding-houses/7/rooms', { replace: true, state: { message: 'Đã tạo phòng.' } }])
 })
 
 test('blank room numeric fields submit null, while a zero rent stays zero', async () => {
@@ -208,8 +180,8 @@ test('blank room numeric fields submit null, while a zero rent stays zero', asyn
 test('edit clears existing area, rent and occupancy limit with explicit nulls', async () => {
   const harness = await roomFormHarness(undefined, { room_code: '101', monthly_rent: 3800000, area: 20, max_tenants: 2 })
   harness.form.setValue('monthly_rent', '')
-  harness.form.setValue('area', Number.NaN)
-  harness.form.setValue('max_tenants', Number.NaN)
+  harness.form.setValue('area', '')
+  harness.form.setValue('max_tenants', '')
   await harness.submit()
   assert.equal(harness.submitted.length, 1)
   assert.equal(harness.submitted[0].monthly_rent, null)

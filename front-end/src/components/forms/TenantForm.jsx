@@ -11,21 +11,21 @@ const optionalDate = z.string()
   .refine((value) => !value || isValidDisplayDate(value), 'Vui lòng nhập ngày theo định dạng dd/mm/yyyy')
   .refine((value) => !value || isNotFutureDisplayDate(value), 'Ngày không được ở tương lai')
 const schema = z.object({
-  full_name: z.string().trim().min(1, 'Vui lòng nhập họ tên').max(255),
-  phone: z.string({ error: 'Số điện thoại phải là nội dung văn bản.' }).max(20).optional(),
-  email: z.string({ error: 'Email phải là nội dung văn bản.' }).email('Email không hợp lệ').max(255).or(z.literal('')),
+  full_name: z.string().trim().min(1, 'Vui lòng nhập họ tên').max(255, 'Họ tên tối đa 255 ký tự.'),
+  phone: z.string({ error: 'Số điện thoại phải là nội dung văn bản.' }).max(20, 'Số điện thoại tối đa 20 ký tự.').optional(),
+  email: z.string({ error: 'Email phải là nội dung văn bản.' }).email('Email không hợp lệ').max(255, 'Email tối đa 255 ký tự.').or(z.literal('')),
   date_of_birth: optionalDate,
-  gender: z.enum(['MALE', 'FEMALE', 'OTHER', '']),
-  identity_number: z.string({ error: 'Số định danh phải là nội dung văn bản.' }).max(30).optional(),
-  identity_issue_place: z.string({ error: 'Nơi cấp phải là nội dung văn bản.' }).max(255).optional(),
+  gender: z.enum(['MALE', 'FEMALE', 'OTHER', ''], { error: 'Vui lòng chọn giới tính hợp lệ.' }),
+  identity_number: z.string({ error: 'Số định danh phải là nội dung văn bản.' }).max(30, 'Số định danh tối đa 30 ký tự.').optional(),
+  identity_issue_place: z.string({ error: 'Nơi cấp phải là nội dung văn bản.' }).max(255, 'Nơi cấp tối đa 255 ký tự.').optional(),
   identity_issue_date: optionalDate,
-  permanent_address: z.string({ error: 'Địa chỉ thường trú phải là nội dung văn bản.' }).max(500).optional(),
+  permanent_address: z.string({ error: 'Địa chỉ thường trú phải là nội dung văn bản.' }).max(500, 'Địa chỉ thường trú tối đa 500 ký tự.').optional(),
 })
 const emptyValues = { full_name: '', phone: '', email: '', date_of_birth: '', gender: '', identity_number: '', identity_issue_place: '', identity_issue_date: '', permanent_address: '' }
 
 export default function TenantForm({ initialValues = emptyValues, onSubmit, submitLabel }) {
   const [submitError, setSubmitError] = useState('')
-  const form = useForm({ resolver: zodResolver(schema), defaultValues: emptyValues })
+  const form = useForm({ resolver: zodResolver(schema), defaultValues: emptyValues, mode: 'onTouched' })
   useEffect(() => {
     form.reset({
       ...emptyValues,
@@ -48,13 +48,12 @@ export default function TenantForm({ initialValues = emptyValues, onSubmit, subm
       identity_issue_date: formatDateForApi(values.identity_issue_date),
     }
     try { await onSubmit(payload) } catch (error) {
-      applyApiFieldErrors(error, form.setError)
-      setSubmitError(getApiErrorMessage(error))
+      if (!applyApiFieldErrors(error, form.setError)) setSubmitError(getApiErrorMessage(error))
     }
   }
   const { errors, isSubmitting } = form.formState
   const fields = [
     ['full_name', 'Họ tên', 'text'], ['phone', 'Số điện thoại', 'tel'], ['email', 'Email', 'email'], ['date_of_birth', 'Ngày sinh', 'text'], ['identity_number', 'CCCD / Số định danh', 'text'], ['identity_issue_place', 'Nơi cấp', 'text'], ['identity_issue_date', 'Ngày cấp', 'text'],
   ]
-  return <form onSubmit={form.handleSubmit(submit)} className="min-w-0 break-words space-y-4 sm:space-y-6 rounded-xl bg-white p-4 sm:p-6 shadow-sm"><div className="grid gap-4 sm:gap-5 md:grid-cols-2">{fields.map(([field, label, type]) => <div key={field}><label htmlFor={field} className="block text-sm font-medium text-slate-700">{label}{field === 'full_name' && ' *'}</label>{field.includes('date') ? <Controller name={field} control={form.control} render={({ field: dateField }) => <DateInput {...dateField} placeholder="dd/mm/yyyy" invalid={Boolean(errors[field])} />} /> : <input id={field} type={type} className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register(field)} />}{errors[field] && <p className="mt-1 text-sm text-red-600">{errors[field].message}</p>}</div>)}<div><label htmlFor="gender" className="block text-sm font-medium text-slate-700">Giới tính</label><select id="gender" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('gender')}><option value="">Chưa cập nhật</option><option value="MALE">Nam</option><option value="FEMALE">Nữ</option><option value="OTHER">Khác</option></select>{errors.gender && <p className="mt-1 text-sm text-red-600">{errors.gender.message}</p>}</div></div><div><label htmlFor="permanent_address" className="block text-sm font-medium text-slate-700">Địa chỉ thường trú</label><textarea id="permanent_address" rows="3" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('permanent_address')} />{errors.permanent_address && <p className="mt-1 text-sm text-red-600">{errors.permanent_address.message}</p>}</div>{submitError && <p className="text-sm text-red-600">{submitError}</p>}<button disabled={isSubmitting} className="w-full sm:w-auto min-h-11 sm:min-h-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60">{isSubmitting ? 'Đang lưu...' : submitLabel}</button></form>
+  return <form noValidate onSubmit={form.handleSubmit(submit)} className="min-w-0 break-words space-y-4 sm:space-y-6 rounded-xl bg-white p-4 sm:p-6 shadow-sm"><div className="grid gap-4 sm:gap-5 md:grid-cols-2">{fields.map(([field, label, type]) => <div key={field}><label htmlFor={field} className="block text-sm font-medium text-slate-700">{label}{field === 'full_name' && ' *'}</label>{field.includes('date') ? <Controller name={field} control={form.control} render={({ field: dateField }) => <DateInput {...dateField} placeholder="dd/mm/yyyy" invalid={Boolean(errors[field])} />} /> : <input id={field} type={type} className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register(field)} />}{errors[field] && <p className="mt-1 text-sm text-red-600">{errors[field].message}</p>}</div>)}<div><label htmlFor="gender" className="block text-sm font-medium text-slate-700">Giới tính</label><select id="gender" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('gender')}><option value="">Chưa cập nhật</option><option value="MALE">Nam</option><option value="FEMALE">Nữ</option><option value="OTHER">Khác</option></select>{errors.gender && <p className="mt-1 text-sm text-red-600">{errors.gender.message}</p>}</div></div><div><label htmlFor="permanent_address" className="block text-sm font-medium text-slate-700">Địa chỉ thường trú</label><textarea id="permanent_address" rows="3" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('permanent_address')} />{errors.permanent_address && <p className="mt-1 text-sm text-red-600">{errors.permanent_address.message}</p>}</div>{submitError && <p className="text-sm text-red-600">{submitError}</p>}<button disabled={isSubmitting} className="w-full sm:w-auto min-h-11 sm:min-h-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60">{isSubmitting ? 'Đang lưu...' : submitLabel}</button></form>
 }

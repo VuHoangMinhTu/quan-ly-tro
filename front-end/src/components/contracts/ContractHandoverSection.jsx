@@ -4,6 +4,7 @@ import { confirmHandoverCheckIn, createHandoverCheckIn, getHandoverCheckIn, upda
 import { contractKeys } from '../../api/contractKeys'
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { contractDocumentKeys } from '../../api/contractTemplateApi'
+import { dormHandoverItems } from '../../utils/contractHandoverPrint'
 
 const conditions = { GOOD: 'Tốt', DAMAGED: 'Hư hỏng', MISSING: 'Thiếu', OTHER: 'Khác' }
 const roomRentalItems = [
@@ -66,7 +67,7 @@ export default function ContractHandoverSection({ contract }) {
         {index >= roomRentalItems.length && report.status === 'DRAFT' && <button type="button" onClick={() => setItems(current => current.filter((_, position) => position !== index))} className="min-h-11 text-red-700">Xóa</button>}
       </div> : <div key={index} className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[2fr_100px_150px_2fr_auto]">
         <label className="text-sm">Hạng mục<input disabled={report.status !== 'DRAFT'} value={item.name} onChange={event => change(index, 'name', event.target.value)} className="mt-1 w-full rounded border p-2" /></label>
-        <label className="text-sm">Số lượng<input disabled={report.status !== 'DRAFT'} type="number" min="0" value={item.quantity ?? 1} onChange={event => change(index, 'quantity', event.target.value)} className="mt-1 w-full rounded border p-2" /></label>
+        <label className="text-sm">Số lượng{contract.contract_type === 'DORM_BED' && dormHandoverItems.find(([name]) => name === item.name)?.[1] ? ` (${dormHandoverItems.find(([name]) => name === item.name)[1]})` : ''}<input disabled={report.status !== 'DRAFT'} type="number" min="0" value={item.quantity ?? 1} onChange={event => change(index, 'quantity', event.target.value)} className="mt-1 w-full rounded border p-2" /></label>
         <label className="text-sm">Tình trạng<select disabled={report.status !== 'DRAFT'} value={item.condition ?? ''} onChange={event => change(index, 'condition', event.target.value)} className="mt-1 w-full rounded border p-2"><option value="">Chưa chọn</option>{Object.entries(conditions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label className="text-sm">Ghi chú<input disabled={report.status !== 'DRAFT'} value={item.note ?? ''} onChange={event => change(index, 'note', event.target.value)} className="mt-1 w-full rounded border p-2" /></label>
         {report.status === 'DRAFT' && <button type="button" onClick={() => setItems(current => current.filter((_, position) => position !== index))} className="min-h-11 text-sm text-red-700">Xóa</button>}

@@ -6,11 +6,12 @@ import '@fontsource/be-vietnam-pro/700.css'
 import { contractDocumentKeys, getContractDocument, previewContractDocument } from '../../api/contractTemplateApi'
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { formatDocumentFinalizedAt } from '../../utils/contractDocuments'
+import { normalizeHandoverPrint } from '../../utils/contractHandoverPrint'
 import './ContractDocumentPage.css'
 
 // Legacy finalized documents contain this status text inside the signature boxes.
 // Only the unsigned document view replaces it with physical signing space; the frozen HTML stays unchanged.
-const withHandwrittenSignatureSpace = html => html.replaceAll('<p>Chưa ký</p>', '<div class="signature-handwritten-space"></div>')
+const withHandwrittenSignatureSpace = html => normalizeHandoverPrint(html).replaceAll('<p>Chưa ký</p>', '<div class="signature-handwritten-space"></div>')
 
 export default function ContractDocumentPage() {
   const { id } = useParams()

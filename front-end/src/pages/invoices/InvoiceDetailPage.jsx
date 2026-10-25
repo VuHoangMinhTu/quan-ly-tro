@@ -15,11 +15,13 @@ import InvoiceStatusBadge from '../../components/invoices/InvoiceStatusBadge'
 import { formatCurrency, formatDate } from '../../utils/formatters'
 import MoneyInput from '../../components/ui/MoneyInput'
 import { canEditInvoiceFinancials } from '../../utils/invoiceFinancials'
+import { numberFieldError } from '../../utils/formValidation'
 
 const paymentMethodLabels = { CASH: 'Tiền mặt', BANK_TRANSFER: 'Chuyển khoản', CARD: 'Thẻ', OTHER: 'Khác', PAYOS: 'payOS' }
 
 function InvoiceItemForm({ initialValues, onSubmit }) {
   const form = useForm({
+    mode: 'onTouched',
     defaultValues: {
       type: initialValues.type || 'OTHER',
       description: initialValues.description || '',
@@ -34,17 +36,16 @@ function InvoiceItemForm({ initialValues, onSubmit }) {
     try {
       await onSubmit({ ...values, quantity: Number(values.quantity), unit_price: Number(values.unit_price) })
     } catch (requestError) {
-      applyApiFieldErrors(requestError, form.setError)
-      setError(getApiErrorMessage(requestError))
+      if (!applyApiFieldErrors(requestError, form.setError)) setError(getApiErrorMessage(requestError))
     }
   }
 
   return (
-    <form onSubmit={form.handleSubmit(submit)} className="space-y-3">
-      <input {...form.register('type')} aria-label="Loại khoản thu" className="min-h-11 w-full min-w-0 rounded border p-2" />{form.formState.errors.type && <p className="mt-1 text-sm text-red-600">{form.formState.errors.type.message}</p>}
-      <input {...form.register('description')} aria-label="Diễn giải khoản thu" className="min-h-11 w-full min-w-0 rounded border p-2" />{form.formState.errors.description && <p className="mt-1 text-sm text-red-600">{form.formState.errors.description.message}</p>}
-      <input {...form.register('quantity')} aria-label="Số lượng" type="number" min="0" step="0.01" className="min-h-11 w-full min-w-0 rounded border p-2" />{form.formState.errors.quantity && <p className="mt-1 text-sm text-red-600">{form.formState.errors.quantity.message}</p>}
-      <Controller name="unit_price" control={form.control} render={({ field }) => <MoneyInput {...field} placeholder="Đơn giá" aria-label="Đơn giá" className="min-h-11 w-full min-w-0 rounded border p-2" />} />{form.formState.errors.unit_price && <p className="mt-1 text-sm text-red-600">{form.formState.errors.unit_price.message}</p>}
+    <form noValidate onSubmit={form.handleSubmit(submit)} className="space-y-3">
+      <input {...form.register('type', { validate: value => Boolean(value?.trim()) || 'Vui lòng nhập loại khoản thu.', maxLength: { value: 50, message: 'Loại khoản thu tối đa 50 ký tự.' } })} aria-label="Loại khoản thu" className="min-h-11 w-full min-w-0 rounded border p-2" />{form.formState.errors.type && <p className="mt-1 text-sm text-red-600">{form.formState.errors.type.message}</p>}
+      <input {...form.register('description', { validate: value => Boolean(value?.trim()) || 'Vui lòng nhập diễn giải khoản thu.', maxLength: { value: 255, message: 'Diễn giải tối đa 255 ký tự.' } })} aria-label="Diễn giải khoản thu" className="min-h-11 w-full min-w-0 rounded border p-2" />{form.formState.errors.description && <p className="mt-1 text-sm text-red-600">{form.formState.errors.description.message}</p>}
+      <input {...form.register('quantity', { validate: value => numberFieldError(value, 'Số lượng') })} aria-label="Số lượng" type="number" min="0" step="0.01" className="min-h-11 w-full min-w-0 rounded border p-2" />{form.formState.errors.quantity && <p className="mt-1 text-sm text-red-600">{form.formState.errors.quantity.message}</p>}
+      <Controller name="unit_price" control={form.control} rules={{ validate: value => numberFieldError(value, 'Đơn giá') }} render={({ field }) => <MoneyInput {...field} placeholder="Đơn giá" aria-label="Đơn giá" className="min-h-11 w-full min-w-0 rounded border p-2" />} />{form.formState.errors.unit_price && <p className="mt-1 text-sm text-red-600">{form.formState.errors.unit_price.message}</p>}
       {error && <p role="alert" className="break-words text-sm text-red-600">{error}</p>}
       <button disabled={form.formState.isSubmitting} className="min-h-11 w-full rounded bg-slate-900 px-4 py-2 text-white sm:w-auto">Lưu</button>
     </form>

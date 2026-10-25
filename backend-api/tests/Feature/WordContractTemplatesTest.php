@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ContractTemplate;
+use App\Services\ContractHandoverService;
 use App\Services\ContractTemplateRenderer;
 use App\Services\ContractTemplateVariableRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -163,12 +164,37 @@ class WordContractTemplatesTest extends TestCase
             $rendered = app(ContractTemplateRenderer::class)->render(file_get_contents(resource_path('views/'.$filename)), $snapshot);
 
             $this->assertSame(1, substr_count($rendered, 'class="contract-handover-table"'));
-            $this->assertSame($type === 'ROOM_RENTAL' ? 16 : 7, substr_count($rendered, '<tr>'));
+            $this->assertSame($type === 'ROOM_RENTAL' ? 16 : 13, substr_count($rendered, '<tr>'));
             $this->assertStringContainsString('<td>Tủ lạnh</td>', $rendered);
-            $this->assertStringContainsString($type === 'ROOM_RENTAL' ? 'Cũ, hư ☑<br>Trầy cửa' : '<td>Hư hỏng</td><td>Trầy cửa</td>', $rendered);
+            $this->assertStringContainsString($type === 'ROOM_RENTAL' ? 'Cũ, hư ☑<br>Trầy cửa' : '☑ Hư hỏng &nbsp; ☐ Thiếu<br>Trầy cửa', $rendered);
             $this->assertStringNotContainsString('<td>Giường</td>', $rendered);
             $this->assertStringNotContainsString('Chưa ký', $rendered);
         }
+    }
+
+    public function test_dorm_legacy_table_is_replaced_by_one_word_checklist_with_snapshot_data(): void
+    {
+        $content = file_get_contents(resource_path('views/contracts-dorm-bed-word.html'));
+        $content = str_replace('{{handover_checkin_table}}', '<table><tr><td>LEGACY STATIC</td></tr></table>{{handover_checkin_table}}', $content);
+        $snapshot = app(ContractTemplateVariableRegistry::class)->sample();
+        $snapshot['contract']['contract_type'] = 'DORM_BED';
+        $snapshot['handover_checkin'] = array_map(fn ($name) => ['name' => $name, 'quantity' => 1, 'condition' => 'GOOD'], ContractHandoverService::DORM_BED_ITEMS);
+        $snapshot['handover_checkin'][2]['condition'] = 'DAMAGED';
+        $snapshot['handover_checkin'][2]['note'] = 'Trầy cửa';
+        $snapshot['handover_checkin'][4]['condition'] = 'MISSING';
+
+        $rendered = app(ContractTemplateRenderer::class)->render($content, $snapshot);
+
+        $this->assertSame(1, substr_count($rendered, '<table'));
+        $this->assertSame(7, substr_count($rendered, '<tr>'));
+        $this->assertSame(1, substr_count($rendered, 'PHỤ LỤC: BIÊN BẢN BÀN GIAO HIỆN TRẠNG TRANG THIẾT BỊ'));
+        $this->assertStringContainsString('contract-handover-section dorm-handover', $rendered);
+        $this->assertStringContainsString('<th>SL</th>', $rendered);
+        $this->assertStringContainsString('<td>01 tủ</td>', $rendered);
+        $this->assertStringContainsString('☑ Hư hỏng &nbsp; ☐ Thiếu<br>Trầy cửa', $rendered);
+        $this->assertStringContainsString('☑ Thiếu', $rendered);
+        $this->assertStringContainsString('Biên bản này là một phần không thể tách rời', $rendered);
+        $this->assertStringNotContainsString('LEGACY STATIC', $rendered);
     }
 
     public function test_word_appendix_without_check_in_is_one_empty_table(): void

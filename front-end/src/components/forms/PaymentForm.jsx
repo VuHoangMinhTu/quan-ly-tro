@@ -1,11 +1,15 @@
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useEffect, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { paymentFormSchema } from '../../utils/formValidation'
 import { formatCurrency } from '../../utils/formatters'
 import MoneyInput from '../ui/MoneyInput'
 
 export default function PaymentForm({ remaining, initialValues = {}, onSubmit, label }) {
   const form = useForm({
+    resolver: zodResolver(paymentFormSchema(remaining)),
+    mode: 'onTouched',
     defaultValues: {
       amount: remaining,
       payment_method: 'CASH',
@@ -29,9 +33,6 @@ export default function PaymentForm({ remaining, initialValues = {}, onSubmit, l
   const submit = async (values) => {
     setError('')
 
-    if (Number(values.amount) <= 0) return setError('Số tiền phải lớn hơn 0.')
-    if (Number(values.amount) > remaining) return setError('Số tiền thanh toán không được vượt quá số tiền còn lại.')
-
     try {
       await onSubmit({
         ...values,
@@ -40,13 +41,12 @@ export default function PaymentForm({ remaining, initialValues = {}, onSubmit, l
         note: values.note || null,
       })
     } catch (requestError) {
-      applyApiFieldErrors(requestError, form.setError)
-      setError(getApiErrorMessage(requestError))
+      if (!applyApiFieldErrors(requestError, form.setError)) setError(getApiErrorMessage(requestError))
     }
   }
 
   return (
-    <form onSubmit={form.handleSubmit(submit)} className="min-w-0 break-words space-y-3">
+    <form noValidate onSubmit={form.handleSubmit(submit)} className="min-w-0 break-words space-y-3">
       <p className="text-sm">Còn phải thanh toán: {formatCurrency(remaining)}</p>
       <div>
         <label className="block text-sm font-medium" htmlFor="payment-amount">Số tiền thanh toán</label>
@@ -57,7 +57,7 @@ export default function PaymentForm({ remaining, initialValues = {}, onSubmit, l
       <input placeholder="Mã tham chiếu" className="min-h-11 sm:min-h-0 w-full min-w-0 rounded border p-2" {...form.register('reference_code')} />{form.formState.errors.reference_code && <p className="mt-1 text-sm text-red-600">{form.formState.errors.reference_code.message}</p>}
       <textarea placeholder="Ghi chú" className="min-h-11 sm:min-h-0 w-full min-w-0 rounded border p-2" {...form.register('note')} />{form.formState.errors.note && <p className="mt-1 text-sm text-red-600">{form.formState.errors.note.message}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <button className="w-full sm:w-auto min-h-11 sm:min-h-0 rounded bg-slate-900 px-4 py-2 text-sm text-white">{label}</button>
+      <button disabled={form.formState.isSubmitting} className="w-full sm:w-auto min-h-11 sm:min-h-0 rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">{form.formState.isSubmitting ? 'Đang lưu...' : label}</button>
     </form>
   )
 }

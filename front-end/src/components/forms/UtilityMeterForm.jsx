@@ -6,6 +6,7 @@ import { getRoomServices } from '../../api/roomServiceApi'
 import { roomKeys } from '../../api/roomKeys'
 import { getMeterServices } from '../../utils/roomServices'
 import { SERVICE_TYPE_LABELS } from '../../utils/service'
+import { numberFieldError } from '../../utils/formValidation'
 
 const emptyValues = {}
 
@@ -14,7 +15,7 @@ export default function UtilityMeterForm({ roomId, initialValues = emptyValues, 
     queryKey: roomKeys.services(roomId),
     queryFn: () => getRoomServices(roomId),
   })
-  const form = useForm({ defaultValues: { service_id: '', meter_code: '', initial_reading: '', is_active: true } })
+  const form = useForm({ defaultValues: { service_id: '', meter_code: '', initial_reading: '', is_active: true }, mode: 'onTouched' })
   const [error, setError] = useState('')
   useEffect(() => form.reset({
     service_id: initialValues.service_id != null ? String(initialValues.service_id) : '',
@@ -44,13 +45,12 @@ export default function UtilityMeterForm({ roomId, initialValues = emptyValues, 
         meter_code: values.meter_code || null,
       })
     } catch (requestError) {
-      applyApiFieldErrors(requestError, form.setError)
-      setError(getApiErrorMessage(requestError))
+      if (!applyApiFieldErrors(requestError, form.setError)) setError(getApiErrorMessage(requestError))
     }
   }
 
   return (
-    <form onSubmit={form.handleSubmit(submit)} className="min-w-0 break-words space-y-4">
+    <form noValidate onSubmit={form.handleSubmit(submit)} className="min-w-0 break-words space-y-4">
       <div>
         <label htmlFor="meter-service" className="block text-sm font-medium">Dịch vụ *</label>
         <select id="meter-service" disabled={servicesQuery.isPending || servicesQuery.isError || form.formState.isSubmitting} className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded border p-2 disabled:bg-slate-50" {...form.register('service_id', { required: 'Vui lòng chọn dịch vụ.' })}>
@@ -64,8 +64,8 @@ export default function UtilityMeterForm({ roomId, initialValues = emptyValues, 
             : services.length === 0 && <p className="mt-2 text-sm text-slate-600">Chưa có dịch vụ phù hợp. Hãy chọn dịch vụ Theo đơn vị hoặc Bậc thang ở phần Dịch vụ áp dụng trước.</p>}
         {hasHistoricalService && <p className="mt-2 text-xs text-slate-500">Có thể chỉnh thông tin hoặc ngừng đồng hồ cũ. Để bật lại, cần áp dụng lại dịch vụ phù hợp cho phòng.</p>}
       </div>
-      <div><label htmlFor="meter-code" className="block text-sm font-medium">Mã đồng hồ</label><input id="meter-code" placeholder="Không bắt buộc" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded border p-2" {...form.register('meter_code')} />{form.formState.errors.meter_code && <p className="mt-1 text-sm text-red-600">{form.formState.errors.meter_code.message}</p>}</div>
-      <div><label htmlFor="meter-initial" className="block text-sm font-medium">Chỉ số ban đầu *</label><input id="meter-initial" type="number" min="0" step="0.01" placeholder="0" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded border p-2" {...form.register('initial_reading', { required: 'Vui lòng nhập chỉ số ban đầu.', min: { value: 0, message: 'Chỉ số ban đầu không được âm.' } })} />{form.formState.errors.initial_reading && <p className="mt-1 text-sm text-red-600">{form.formState.errors.initial_reading.message}</p>}</div>
+      <div><label htmlFor="meter-code" className="block text-sm font-medium">Mã đồng hồ</label><input id="meter-code" placeholder="Không bắt buộc" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded border p-2" {...form.register('meter_code', { maxLength: { value: 100, message: 'Mã đồng hồ tối đa 100 ký tự.' } })} />{form.formState.errors.meter_code && <p className="mt-1 text-sm text-red-600">{form.formState.errors.meter_code.message}</p>}</div>
+      <div><label htmlFor="meter-initial" className="block text-sm font-medium">Chỉ số ban đầu *</label><input id="meter-initial" type="number" min="0" step="0.01" placeholder="0" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded border p-2" {...form.register('initial_reading', { required: 'Vui lòng nhập chỉ số ban đầu.', validate: value => numberFieldError(value, 'Chỉ số ban đầu') })} />{form.formState.errors.initial_reading && <p className="mt-1 text-sm text-red-600">{form.formState.errors.initial_reading.message}</p>}</div>
       <label className="flex min-h-11 items-center gap-2 text-sm sm:min-h-0"><input className="h-4 w-4 shrink-0" type="checkbox" {...form.register('is_active')} /> Đang hoạt động</label>{form.formState.errors.is_active && <p className="mt-1 text-sm text-red-600">{form.formState.errors.is_active.message}</p>}
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       <button type="submit" disabled={!canSubmit} className="w-full sm:w-auto min-h-11 sm:min-h-0 rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60">{form.formState.isSubmitting ? 'Đang lưu...' : label}</button>

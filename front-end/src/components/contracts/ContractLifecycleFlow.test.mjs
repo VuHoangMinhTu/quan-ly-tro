@@ -135,10 +135,9 @@ test('monthly payment day rejects out of range or fractional input and allows cl
   for (const invalid of ['0', '32', '1.5']) {
     setDay(invalid)
     page.button('Tiếp tục').props.onClick()
-    await page.button('Lưu nháp').props.onClick()
+    assert.equal(page.button('Lưu nháp'), undefined)
     assert.equal(page.payloads.length, 0)
     assert.match(text(page.render()), /số nguyên từ 1 đến 31/)
-    page.button('← Quay lại').props.onClick()
   }
   setDay('')
   page.button('Tiếp tục').props.onClick()
@@ -181,10 +180,10 @@ test('invalid schedule or opening date cannot submit a malformed payload', async
   await page.core(coreValues)
   const dateField = nodes(page.render()).find(node => node.type === Input)
   dateField.props.onChange('31/02/2026')
-  page.button('Tiếp tục').props.onClick(); page.button('Tiếp tục').props.onClick()
-  await page.button('Lưu nháp').props.onClick()
+  page.button('Tiếp tục').props.onClick()
+  assert.equal(page.button('Lưu nháp'), undefined)
   assert.equal(page.payloads.length, 0)
-  assert.match(text(page.render()), /kiểm tra chỉ số đầu/)
+  assert.match(text(page.render()), /Ngày ghi phải theo dd\/mm\/yyyy và hợp lệ/)
 })
 
 test('contract detail renders signing snapshots rather than changed live parties and prices', async () => {

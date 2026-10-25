@@ -8,25 +8,16 @@ import { getApiErrorMessage, applyApiFieldErrors } from '../../api/getApiErrorMe
 import { roomKeys } from '../../api/roomKeys'
 import { getFloors } from '../../api/roomApi'
 import MoneyInput from '../ui/MoneyInput'
-
-const optionalNumber = z.preprocess(
-  (value) => (value === '' || value == null || Number.isNaN(value) ? null : Number(value)),
-  z.number({ error: 'Vui lòng nhập số hợp lệ' }).min(0, 'Giá trị phải từ 0 trở lên').nullable(),
-)
-
-const optionalInteger = z.preprocess(
-  (value) => (value === '' || value == null || Number.isNaN(value) ? null : Number(value)),
-  z.number().int('Số người phải là số nguyên').min(1, 'Tối đa ít nhất 1 người').nullable(),
-)
+import { numberInput } from '../../utils/formValidation'
 
 const schema = z.object({
-  room_code: z.string().trim().min(1, 'Vui lòng nhập mã phòng').max(50),
-  room_name: z.string().max(255).optional(),
+  room_code: z.string().trim().min(1, 'Vui lòng nhập mã phòng').max(50, 'Mã phòng tối đa 50 ký tự.'),
+  room_name: z.string().max(255, 'Tên phòng tối đa 255 ký tự.').optional(),
   floor_id: z.string().optional(),
-  area: optionalNumber,
-  monthly_rent: optionalNumber,
-  max_tenants: optionalInteger,
-  status: z.enum(['AVAILABLE', 'RENTED', 'RESERVED', 'MAINTENANCE', 'INACTIVE']),
+  area: numberInput('Diện tích', { optional: true, max: 99999999.99 }),
+  monthly_rent: numberInput('Giá thuê', { optional: true, max: 9999999999999.99 }),
+  max_tenants: numberInput('Số người tối đa', { optional: true, integer: true, min: 1, max: 4294967295 }),
+  status: z.enum(['AVAILABLE', 'RENTED', 'RESERVED', 'MAINTENANCE', 'INACTIVE'], { error: 'Vui lòng chọn trạng thái phòng hợp lệ.' }),
   description: z.string().optional(),
   amenity_ids: z.array(z.number().int()).default([]),
 })
@@ -39,7 +30,7 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
   const [submitError, setSubmitError] = useState('')
   const amenitiesQuery = useQuery({ queryKey: roomKeys.amenities, queryFn: getAmenities })
   const floorsQuery = useQuery({ queryKey: ['floors', initialValues.boarding_house_id], queryFn: () => getFloors(initialValues.boarding_house_id), enabled: Boolean(initialValues.boarding_house_id) })
-  const form = useForm({ resolver: zodResolver(schema), defaultValues: emptyValues })
+  const form = useForm({ resolver: zodResolver(schema), defaultValues: emptyValues, mode: 'onTouched' })
 
   useEffect(() => {
     form.reset({
@@ -75,7 +66,7 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
   const amenities = amenitiesQuery.data?.data?.data || []
 
   return (
-    <form onSubmit={form.handleSubmit(handleSubmit)} className="min-w-0 break-words space-y-4 sm:space-y-6 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
+    <form noValidate onSubmit={form.handleSubmit(handleSubmit)} className="min-w-0 break-words space-y-4 sm:space-y-6 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
       <div className="grid gap-4 sm:gap-5 md:grid-cols-2">
         <div>
           <label htmlFor="room-code" className="block text-sm font-medium text-slate-700">Mã phòng</label>
@@ -90,7 +81,7 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
         <div><label htmlFor="room-floor" className="block text-sm font-medium text-slate-700">Tầng</label><select id="room-floor" className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2" {...form.register('floor_id')}><option value="">Chưa thiết lập tầng</option>{(floorsQuery.data?.data?.data || []).map((floor) => <option key={floor.id} value={String(floor.id)}>{floor.name}</option>)}</select>{errors.floor_id && <p className="text-sm text-red-600">{errors.floor_id.message}</p>}</div>
         <div>
           <label htmlFor="room-area" className="block text-sm font-medium text-slate-700">Diện tích (m²)</label>
-          <input id="room-area" type="number" min="0" step="0.01" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('area', { valueAsNumber: true })} />
+          <input id="room-area" type="number" min="0" step="0.01" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('area')} />
           {errors.area && <p className="mt-1 text-sm text-red-600">{errors.area.message}</p>}
         </div>
         <div>
@@ -100,7 +91,7 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
         </div>
         <div>
           <label htmlFor="room-max-tenants" className="block text-sm font-medium text-slate-700">Số người tối đa</label>
-          <input id="room-max-tenants" type="number" min="1" step="1" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('max_tenants', { valueAsNumber: true })} />
+          <input id="room-max-tenants" type="number" min="1" step="1" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('max_tenants')} />
           {errors.max_tenants && <p className="mt-1 text-sm text-red-600">{errors.max_tenants.message}</p>}
         </div>
         <div>

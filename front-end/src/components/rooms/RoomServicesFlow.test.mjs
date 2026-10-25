@@ -7,6 +7,7 @@ import { transformWithOxc } from 'vite'
 import { roomKeys } from '../../api/roomKeys.js'
 import { serviceKeys } from '../../api/serviceKeys.js'
 import { utilityKeys } from '../../api/utilityKeys.js'
+import { numberFieldError } from '../../utils/formValidation.js'
 import { BILLING_METHOD_LABELS, getSuggestedServiceUnit, SERVICE_TYPE_LABELS } from '../../utils/service.js'
 
 async function loadFunctions(path, names, bindings = {}) {
@@ -160,6 +161,7 @@ async function meterHarness(services, initialValues = {}) {
   let previousDependencies
   const submitted = []
   const Component = await loadComponent('../forms/UtilityMeterForm.jsx', {
+    numberFieldError,
     useState: () => ['', () => {}],
     useEffect: (effect, dependencies) => {
       if (!previousDependencies || dependencies.some((item, index) => item !== previousDependencies[index])) {

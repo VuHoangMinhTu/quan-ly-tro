@@ -11,7 +11,13 @@ export default function MoneyInput({ value = '', onChange, ...props }) {
       type="text"
       inputMode="numeric"
       value={displayValue}
-      onChange={(event) => onChange(parseVnd(event.target.value))}
+      onChange={(event) => {
+        const raw = event.target.value
+        const parsed = parseVnd(raw)
+        // Preserve the sign so form validation can reject a negative amount,
+        // instead of silently turning a pasted -100 into a valid +100.
+        onChange(raw.trim().startsWith('-') && parsed !== '' ? -parsed : parsed)
+      }}
     />
   )
 }

@@ -13,7 +13,7 @@ export default function BulkRoomForm({ initialRooms, onBack, onSubmit, submitLab
   const [to, setTo] = useState('')
   const [generatorError, setGeneratorError] = useState('')
   const [submitError, setSubmitError] = useState('')
-  const form = useForm({ resolver: zodResolver(bulkRoomsSchema), defaultValues: { rooms: initialRooms } })
+  const form = useForm({ resolver: zodResolver(bulkRoomsSchema), defaultValues: { rooms: initialRooms }, mode: 'onTouched' })
   const { fields, append, remove } = useFieldArray({ control: form.control, name: 'rooms' })
   const draftRooms = useWatch({ control: form.control, name: 'rooms' })
   const { errors, isSubmitting } = form.formState
@@ -46,7 +46,7 @@ export default function BulkRoomForm({ initialRooms, onBack, onSubmit, submitLab
     }
   }
 
-  return <form onSubmit={form.handleSubmit(submit)} className="space-y-5 rounded-xl bg-white p-4 shadow-sm sm:p-6">
+  return <form noValidate onSubmit={form.handleSubmit(submit)} className="space-y-5 rounded-xl bg-white p-4 shadow-sm sm:p-6">
     <div><h3 className="text-lg font-semibold">Tạo phòng</h3><p className="mt-1 text-sm text-slate-600">Chỉ cần mã phòng. Diện tích, giá thuê và số người tối đa có thể bổ sung sau. Để trống giá thuê là chưa thiết lập, không phải giá 0.</p></div>
     <fieldset disabled={isSubmitting} className="min-w-0 space-y-5">
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">

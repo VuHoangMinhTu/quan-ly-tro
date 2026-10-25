@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { getSignatureImage } from '../../api/contractSigningApi'
+import { normalizeHandoverPrint } from '../../utils/contractHandoverPrint'
 
 export default function FrozenContractHtml({ html, id, token, onReady }) {
   const container = useRef(null)
@@ -19,5 +20,5 @@ export default function FrozenContractHtml({ html, id, token, onReady }) {
       .catch(() => { if (!controller.signal.aborted) setFailed(true) })
     return () => { controller.abort(); urls.forEach(url => URL.revokeObjectURL(url)) }
   }, [html, id, token, onReady])
-  return <>{failed && <p role="alert" className="no-print my-3 text-sm text-red-700">Chưa tải được ảnh chữ ký. Vui lòng tải lại trang trước khi in.</p>}<div ref={container} className="contract-document-html" dangerouslySetInnerHTML={{ __html: html }} /></>
+  return <>{failed && <p role="alert" className="no-print my-3 text-sm text-red-700">Chưa tải được ảnh chữ ký. Vui lòng tải lại trang trước khi in.</p>}<div ref={container} className="contract-document-html" dangerouslySetInnerHTML={{ __html: normalizeHandoverPrint(html) }} /></>
 }

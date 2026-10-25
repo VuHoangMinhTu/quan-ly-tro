@@ -5,9 +5,9 @@ import { z } from 'zod'
 import { getApiErrorMessage, applyApiFieldErrors } from '../../api/getApiErrorMessage'
 
 const schema = z.object({
-  name: z.string().trim().min(1, 'Vui lòng nhập tên nhà trọ').max(255),
-  address: z.string().trim().min(1, 'Vui lòng nhập địa chỉ').max(500),
-  ward: z.string().trim().max(255),
+  name: z.string().trim().min(1, 'Vui lòng nhập tên nhà trọ').max(255, 'Tên nhà trọ tối đa 255 ký tự.'),
+  address: z.string().trim().min(1, 'Vui lòng nhập địa chỉ').max(500, 'Địa chỉ tối đa 500 ký tự.'),
+  ward: z.string().trim().max(255, 'Phường/xã tối đa 255 ký tự.'),
   description: z.string().optional(),
 })
 
@@ -18,6 +18,7 @@ export default function BoardingHouseForm({ initialValues = emptyValues, onSubmi
   const form = useForm({
     resolver: zodResolver(schema),
     defaultValues: emptyValues,
+    mode: 'onTouched',
   })
 
   useEffect(() => {
@@ -39,16 +40,14 @@ export default function BoardingHouseForm({ initialValues = emptyValues, onSubmi
         ward: values.ward?.trim() || null,
       })
     } catch (error) {
-      applyApiFieldErrors(error, form.setError)
-
-      setSubmitError(getApiErrorMessage(error))
+      if (!applyApiFieldErrors(error, form.setError)) setSubmitError(getApiErrorMessage(error))
     }
   }
 
   const { errors, isSubmitting } = form.formState
 
   return (
-    <form onSubmit={form.handleSubmit(handleSubmit)} className="min-w-0 break-words space-y-5 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
+    <form noValidate onSubmit={form.handleSubmit(handleSubmit)} className="min-w-0 break-words space-y-5 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
       <div>
         <label className="block text-sm font-medium text-slate-700" htmlFor="boarding-house-name">
           Tên nhà trọ
