@@ -46,6 +46,8 @@ class BoardingHouseController extends Controller
             foreach ($data['rooms'] as $room) {
                 app(RoomOrderingService::class)->create($house, [
                     'room_code' => $room['room_code'],
+                    'room_type' => $room['room_type'] ?? 'PRIVATE_ROOM',
+                    'private_room_type' => $room['private_room_type'] ?? null,
                     'area' => $room['area'] ?? null,
                     'monthly_rent' => $room['monthly_rent'] ?? null,
                     'max_tenants' => $room['max_tenants'] ?? null,

@@ -19,6 +19,9 @@ class StoreBulkRoomsRequest extends FormRequest
                 if (is_array($room) && is_string($room['room_code'] ?? null)) {
                     $room['room_code'] = trim($room['room_code']);
                 }
+                if (is_array($room) && ($room['room_type'] ?? 'PRIVATE_ROOM') === 'DORMITORY') {
+                    $room['private_room_type'] = null;
+                }
 
                 return $room;
             }, $this->input('rooms'))]);
@@ -30,9 +33,10 @@ class StoreBulkRoomsRequest extends FormRequest
         return [
             'floor_id' => ['nullable', 'integer'],
             'rooms' => ['required', 'array', 'list', 'min:1', 'max:200'],
-            'rooms.*' => ['required', 'array:room_code,room_type,room_name,area,monthly_rent,max_tenants,description'],
+            'rooms.*' => ['required', 'array:room_code,room_type,private_room_type,room_name,area,monthly_rent,max_tenants,description'],
             'rooms.*.room_code' => ['required', 'string', 'max:50', 'distinct:ignore_case'],
-            'rooms.*.room_type' => ['sometimes', Rule::in(['PRIVATE_ROOM'])],
+            'rooms.*.room_type' => ['sometimes', Rule::in(['PRIVATE_ROOM', 'DORMITORY'])],
+            'rooms.*.private_room_type' => ['nullable', Rule::in(['STUDIO', 'LOFT', 'NO_LOFT', 'CLOSED_ROOM'])],
             'rooms.*.room_name' => ['nullable', 'string', 'max:255'],
             'rooms.*.description' => ['nullable', 'string'],
             'rooms.*.area' => ['nullable', 'numeric', 'min:0', 'max:99999999.99'],
@@ -49,6 +53,8 @@ class StoreBulkRoomsRequest extends FormRequest
             'rooms.max' => 'Mỗi lần chỉ được tạo tối đa 200 phòng.',
             'rooms.*.room_code.required' => 'Vui lòng nhập mã phòng.',
             'rooms.*.room_code.distinct' => 'Mã phòng bị trùng trong danh sách.',
+            'rooms.*.room_type.in' => 'Loại phòng không hợp lệ.',
+            'rooms.*.private_room_type.in' => 'Phân loại phòng không hợp lệ.',
             'rooms.*.area.numeric' => 'Diện tích phải là số.',
             'rooms.*.area.min' => 'Diện tích phải từ 0 trở lên.',
             'rooms.*.monthly_rent.numeric' => 'Giá thuê phải là số.',

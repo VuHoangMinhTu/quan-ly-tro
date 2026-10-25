@@ -18,6 +18,7 @@ import InvoiceStatusBadge from '../../components/invoices/InvoiceStatusBadge'
 import { roomKeys } from '../../api/roomKeys'
 import { deleteRoom, getRoom } from '../../api/roomApi'
 import { formatArea, formatCurrency, formatDate } from '../../utils/formatters'
+import { privateRoomTypeLabel, roomTypeLabel } from '../../utils/roomTypes'
 
 const placeholders = []
 
@@ -78,7 +79,8 @@ export default function RoomDetailPage() {
       <div className="min-w-0 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
         <h3 className="text-lg font-semibold">Thông tin phòng</h3>
         <dl className="mt-5 grid gap-5 sm:grid-cols-2">
-          <div><dt className="text-sm text-slate-500">Loại phòng</dt><dd className="mt-1 font-medium">{room.room_type === 'DORMITORY' ? 'Phòng KTX' : 'Phòng trọ'}</dd></div>
+          <div><dt className="text-sm text-slate-500">Loại phòng</dt><dd className="mt-1 font-medium">{roomTypeLabel(room.room_type)}</dd></div>
+          {room.room_type !== 'DORMITORY' && <div><dt className="text-sm text-slate-500">Phân loại</dt><dd className="mt-1 font-medium">{privateRoomTypeLabel(room.private_room_type)}</dd></div>}
           <div><dt className="text-sm text-slate-500">Tầng</dt><dd className="mt-1 font-medium">{room.floor?.name || 'Chưa thiết lập tầng'}</dd></div>
           {room.room_type !== 'DORMITORY' && <div><dt className="text-sm text-slate-500">Giá thuê</dt><dd className="mt-1 break-words font-medium">{room.monthly_rent == null ? 'Chưa thiết lập giá thuê' : formatCurrency(room.monthly_rent) + '/tháng'}</dd></div>}
           <div><dt className="text-sm text-slate-500">Diện tích</dt><dd className="mt-1 break-words font-medium">{formatArea(room.area)}</dd></div>

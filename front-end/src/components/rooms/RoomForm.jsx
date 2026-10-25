@@ -9,11 +9,14 @@ import { roomKeys } from '../../api/roomKeys'
 import { getFloors } from '../../api/roomApi'
 import MoneyInput from '../ui/MoneyInput'
 import { numberInput } from '../../utils/formValidation'
+import { privateRoomTypeOptions, roomTypeOptions, ROOM_TYPES } from '../../utils/roomTypes'
 
 const schema = z.object({
   room_code: z.string().trim().min(1, 'Vui lòng nhập mã phòng').max(50, 'Mã phòng tối đa 50 ký tự.'),
   room_name: z.string().max(255, 'Tên phòng tối đa 255 ký tự.').optional(),
   floor_id: z.string().optional(),
+  room_type: z.enum([ROOM_TYPES.PRIVATE_ROOM, ROOM_TYPES.DORMITORY]),
+  private_room_type: z.preprocess((value) => value || null, z.enum(['STUDIO', 'LOFT', 'NO_LOFT', 'CLOSED_ROOM']).nullable()),
   area: numberInput('Diện tích', { optional: true, max: 99999999.99 }),
   monthly_rent: numberInput('Giá thuê', { optional: true, max: 9999999999999.99 }),
   max_tenants: numberInput('Số người tối đa', { optional: true, integer: true, min: 1, max: 4294967295 }),
@@ -23,7 +26,7 @@ const schema = z.object({
 })
 
 const emptyValues = {
-  room_code: '', room_name: '', floor_id: '', area: '', monthly_rent: '', max_tenants: '', status: 'AVAILABLE', description: '', amenity_ids: [],
+  room_code: '', room_name: '', floor_id: '', room_type: ROOM_TYPES.PRIVATE_ROOM, private_room_type: null, area: '', monthly_rent: '', max_tenants: '', status: 'AVAILABLE', description: '', amenity_ids: [],
 }
 
 export default function RoomForm({ initialValues = emptyValues, onSubmit, submitLabel }) {
@@ -37,6 +40,8 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
       room_code: initialValues.room_code || '',
       room_name: initialValues.room_name || '',
       floor_id: initialValues.floor_id == null ? '' : String(initialValues.floor_id),
+      room_type: initialValues.room_type || ROOM_TYPES.PRIVATE_ROOM,
+      private_room_type: initialValues.private_room_type || null,
       area: initialValues.area ?? '',
       monthly_rent: initialValues.monthly_rent ?? '',
       max_tenants: initialValues.max_tenants ?? '',
@@ -53,6 +58,7 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
         ...values,
         room_name: values.room_name?.trim() || null,
         floor_id: values.floor_id ? Number(values.floor_id) : null,
+        private_room_type: values.room_type === ROOM_TYPES.DORMITORY ? null : values.private_room_type,
         description: values.description?.trim() || null,
         amenity_ids: (values.amenity_ids || []).map(Number),
       })
@@ -79,6 +85,8 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
           {errors.room_name && <p className="mt-1 text-sm text-red-600">{errors.room_name.message}</p>}
         </div>
         <div><label htmlFor="room-floor" className="block text-sm font-medium text-slate-700">Tầng</label><select id="room-floor" className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2" {...form.register('floor_id')}><option value="">Chưa thiết lập tầng</option>{(floorsQuery.data?.data?.data || []).map((floor) => <option key={floor.id} value={String(floor.id)}>{floor.name}</option>)}</select>{errors.floor_id && <p className="text-sm text-red-600">{errors.floor_id.message}</p>}</div>
+        <div><label htmlFor="room-type" className="block text-sm font-medium text-slate-700">Loại phòng</label><select id="room-type" className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2" {...form.register('room_type', { onChange: (event) => { if (event.target.value === ROOM_TYPES.DORMITORY) form.setValue('private_room_type', null) } })}>{roomTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{errors.room_type && <p className="text-sm text-red-600">{errors.room_type.message}</p>}</div>
+        {form.watch('room_type') === ROOM_TYPES.PRIVATE_ROOM && <div><label htmlFor="private-room-type" className="block text-sm font-medium text-slate-700">Phân loại</label><select id="private-room-type" className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3 py-2" {...form.register('private_room_type')}><option value="">Chưa phân loại</option>{privateRoomTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{errors.private_room_type && <p className="text-sm text-red-600">{errors.private_room_type.message}</p>}</div>}
         <div>
           <label htmlFor="room-area" className="block text-sm font-medium text-slate-700">Diện tích (m²)</label>
           <input id="room-area" type="number" min="0" step="0.01" className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2" {...form.register('area')} />

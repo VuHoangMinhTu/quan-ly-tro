@@ -15,6 +15,7 @@ class Room extends Model
         'boarding_house_id',
         'floor_id',
         'room_type',
+        'private_room_type',
         'room_code',
         'sort_order',
         'room_name',

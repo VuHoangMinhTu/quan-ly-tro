@@ -3,6 +3,7 @@ import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { bulkRoomsSchema, emptyBulkRoom, generateRoomCodes, MAX_BULK_ROOMS } from '../../utils/roomOnboarding'
+import { PRIVATE_ROOM_TYPES, privateRoomTypeOptions, roomTypeOptions, ROOM_TYPES } from '../../utils/roomTypes'
 import MoneyInput from '../ui/MoneyInput'
 
 const inputClass = 'min-h-11 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 sm:min-h-0 sm:text-sm'
@@ -13,6 +14,8 @@ export default function BulkRoomForm({ initialRooms, onBack, onSubmit, submitLab
   const [to, setTo] = useState('')
   const [generatorError, setGeneratorError] = useState('')
   const [submitError, setSubmitError] = useState('')
+  const [defaultRoomType, setDefaultRoomType] = useState(ROOM_TYPES.PRIVATE_ROOM)
+  const [defaultPrivateRoomType, setDefaultPrivateRoomType] = useState(PRIVATE_ROOM_TYPES.NO_LOFT)
   const form = useForm({ resolver: zodResolver(bulkRoomsSchema), defaultValues: { rooms: initialRooms }, mode: 'onTouched' })
   const { fields, append, remove } = useFieldArray({ control: form.control, name: 'rooms' })
   const draftRooms = useWatch({ control: form.control, name: 'rooms' })
@@ -21,7 +24,7 @@ export default function BulkRoomForm({ initialRooms, onBack, onSubmit, submitLab
   const generate = () => {
     setGeneratorError('')
     try {
-      const generated = generateRoomCodes(from, to)
+      const generated = generateRoomCodes(from, to, defaultRoomType, defaultPrivateRoomType)
       const current = form.getValues('rooms')
       if (current.length + generated.length > MAX_BULK_ROOMS) throw new Error('Mỗi lần chỉ được tạo tối đa 200 phòng.')
       const codes = new Set(current.map((room) => room.room_code.trim().toLocaleLowerCase('vi-VN')))
@@ -30,6 +33,11 @@ export default function BulkRoomForm({ initialRooms, onBack, onSubmit, submitLab
     } catch (error) {
       setGeneratorError(error.message)
     }
+  }
+
+  const changeRowType = (index, roomType) => {
+    form.setValue(`rooms.${index}.room_type`, roomType, { shouldDirty: true, shouldValidate: true })
+    form.setValue(`rooms.${index}.private_room_type`, roomType === ROOM_TYPES.DORMITORY ? null : defaultPrivateRoomType, { shouldDirty: true, shouldValidate: true })
   }
 
   const submit = async ({ rooms }) => {
@@ -51,22 +59,28 @@ export default function BulkRoomForm({ initialRooms, onBack, onSubmit, submitLab
     <fieldset disabled={isSubmitting} className="min-w-0 space-y-5">
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
         <h4 className="text-sm font-semibold">Tạo nhanh mã phòng</h4>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-sm">Loại phòng mặc định<select value={defaultRoomType} onChange={(event) => setDefaultRoomType(event.target.value)} className={inputClass}>{roomTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          {defaultRoomType === ROOM_TYPES.PRIVATE_ROOM && <label className="text-sm">Phân loại mặc định<select value={defaultPrivateRoomType} onChange={(event) => setDefaultPrivateRoomType(event.target.value)} className={inputClass}>{privateRoomTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}
+        </div>
         <div className="mt-3 grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
           <div className="min-w-0 flex-1"><label htmlFor="bulk-from" className="mb-1 block text-sm">Từ</label><input id="bulk-from" inputMode="numeric" value={from} onChange={(event) => setFrom(event.target.value)} placeholder="101" className={inputClass} /></div>
           <div className="min-w-0 flex-1"><label htmlFor="bulk-to" className="mb-1 block text-sm">Đến</label><input id="bulk-to" inputMode="numeric" value={to} onChange={(event) => setTo(event.target.value)} placeholder="110" className={inputClass} /></div>
           <button type="button" onClick={generate} className={buttonClass}>Sinh mã phòng</button>
         </div>
         {generatorError && <p role="alert" className="mt-2 text-sm text-red-600">{generatorError}</p>}
-        <p className="mt-2 text-xs text-slate-500">Generator chỉ sinh mã phòng; tối đa {MAX_BULK_ROOMS} phòng mỗi lần.</p>
+        <p className="mt-2 text-xs text-slate-500">Dòng mới nhận loại mặc định; bạn có thể đổi từng phòng sau khi sinh. Tối đa {MAX_BULK_ROOMS} phòng mỗi lần.</p>
       </div>
       <div className="md:overflow-x-auto md:rounded-lg md:border md:border-slate-200">
         <table className="block w-full text-sm md:table md:min-w-[700px]">
-          <thead className="hidden bg-slate-50 text-left md:table-header-group"><tr>{['Mã phòng *', 'Diện tích', 'Giá thuê/tháng', 'Số người tối đa', 'Thao tác'].map((label) => <th key={label} scope="col" className="px-3 py-3 font-medium">{label}</th>)}</tr></thead>
+          <thead className="hidden bg-slate-50 text-left md:table-header-group"><tr>{['Mã phòng *', 'Loại phòng', 'Phân loại', 'Diện tích', 'Giá thuê/tháng', 'Số người tối đa', 'Thao tác'].map((label) => <th key={label} scope="col" className="px-3 py-3 font-medium">{label}</th>)}</tr></thead>
           <tbody className="block space-y-3 md:table-row-group md:space-y-0">{fields.map((row, index) => {
             const rowErrors = errors.rooms?.[index]
             const prefix = 'rooms.' + index + '.'
             return <tr key={row.id} className="block rounded-xl border border-slate-200 bg-white p-4 align-top md:table-row md:rounded-none md:border-0 md:border-t md:p-0">
               <td className="block min-w-0 py-2 md:table-cell md:px-3 md:py-3"><p className="mb-3 break-words border-b border-slate-100 pb-2 font-semibold text-slate-900 md:hidden">Phòng {draftRooms?.[index]?.room_code?.trim() || index + 1}</p><label className="mb-1 block font-medium md:hidden" htmlFor={row.id + '-code'}>Mã phòng *</label><input id={row.id + '-code'} aria-label={'Mã phòng dòng ' + (index + 1)} aria-invalid={Boolean(rowErrors?.room_code)} className={inputClass} {...form.register(prefix + 'room_code')} />{rowErrors?.room_code && <p className="mt-1 text-xs text-red-600">{rowErrors.room_code.message}</p>}</td>
+              <td className="block min-w-0 py-2 md:table-cell md:px-3 md:py-3"><label className="mb-1 block font-medium md:hidden" htmlFor={row.id + '-type'}>Loại phòng</label><select id={row.id + '-type'} aria-label={'Loại phòng dòng ' + (index + 1)} value={draftRooms?.[index]?.room_type || ROOM_TYPES.PRIVATE_ROOM} onChange={(event) => changeRowType(index, event.target.value)} className={inputClass}>{roomTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{rowErrors?.room_type && <p className="mt-1 text-xs text-red-600">{rowErrors.room_type.message}</p>}</td>
+              <td className="block min-w-0 py-2 md:table-cell md:px-3 md:py-3">{draftRooms?.[index]?.room_type === ROOM_TYPES.DORMITORY ? <span className="text-slate-500">—</span> : <><label className="mb-1 block font-medium md:hidden" htmlFor={row.id + '-private-type'}>Phân loại</label><select id={row.id + '-private-type'} aria-label={'Phân loại phòng dòng ' + (index + 1)} className={inputClass} {...form.register(prefix + 'private_room_type')}>{privateRoomTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{rowErrors?.private_room_type && <p className="mt-1 text-xs text-red-600">{rowErrors.private_room_type.message}</p>}</>}</td>
               <td className="block min-w-0 py-2 md:table-cell md:px-3 md:py-3"><label className="mb-1 block font-medium md:hidden" htmlFor={row.id + '-area'}>Diện tích</label><div className="flex items-center gap-2"><input id={row.id + '-area'} type="number" min="0" step="0.01" placeholder="VD: 20" aria-label={'Diện tích dòng ' + (index + 1)} className={inputClass} {...form.register(prefix + 'area')} /><span className="shrink-0 text-slate-500">m²</span></div>{rowErrors?.area && <p className="mt-1 text-xs text-red-600">{rowErrors.area.message}</p>}</td>
               <td className="block min-w-0 py-2 md:table-cell md:px-3 md:py-3"><label className="mb-1 block font-medium md:hidden" htmlFor={row.id + '-rent'}>Giá thuê/tháng</label><Controller name={prefix + 'monthly_rent'} control={form.control} render={({ field }) => <MoneyInput {...field} id={row.id + '-rent'} aria-label={'Giá thuê dòng ' + (index + 1)} placeholder="Chưa thiết lập" className={inputClass} />} />{rowErrors?.monthly_rent && <p className="mt-1 text-xs text-red-600">{rowErrors.monthly_rent.message}</p>}</td>
               <td className="block min-w-0 py-2 md:table-cell md:px-3 md:py-3"><label className="mb-1 block font-medium md:hidden" htmlFor={row.id + '-max'}>Số người tối đa</label><input id={row.id + '-max'} type="number" min="1" step="1" placeholder="Chưa thiết lập" aria-label={'Số người tối đa dòng ' + (index + 1)} className={inputClass} {...form.register(prefix + 'max_tenants')} />{rowErrors?.max_tenants && <p className="mt-1 text-xs text-red-600">{rowErrors.max_tenants.message}</p>}</td>
@@ -76,7 +90,7 @@ export default function BulkRoomForm({ initialRooms, onBack, onSubmit, submitLab
         </table>
         {fields.length === 0 && <p className="p-6 text-center text-sm text-slate-500">Chưa có phòng. Sinh mã hoặc thêm một dòng bên dưới.</p>}
       </div>
-      <button type="button" disabled={fields.length >= MAX_BULK_ROOMS} onClick={() => append(emptyBulkRoom())} className={buttonClass}>+ Thêm phòng thủ công</button>
+      <button type="button" disabled={fields.length >= MAX_BULK_ROOMS} onClick={() => append(emptyBulkRoom('', defaultRoomType, defaultPrivateRoomType))} className={buttonClass}>+ Thêm phòng thủ công</button>
       {(errors.rooms?.message || errors.rooms?.root?.message) && <p role="alert" className="text-sm text-red-600">{errors.rooms.message || errors.rooms.root.message}</p>}
       {submitError && <p role="alert" className="text-sm text-red-600">{submitError}</p>}
       <div className="flex flex-col-reverse justify-between gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:flex-wrap">

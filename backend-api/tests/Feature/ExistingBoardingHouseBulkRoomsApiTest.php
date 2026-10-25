@@ -34,6 +34,24 @@ class ExistingBoardingHouseBulkRoomsApiTest extends TestCase
         $this->assertDatabaseCount('rooms', 3);
     }
 
+    public function test_bulk_creation_supports_private_room_type_per_room_and_clears_it_for_dormitories(): void
+    {
+        $landlord = $this->owner();
+        $house = $landlord->boardingHouses()->create(['name' => 'BeeHouse', 'address' => 'Dĩ An']);
+
+        $this->actingAsOwner($landlord)->postJson("/api/boarding-houses/{$house->id}/rooms/bulk", [
+            'rooms' => [
+                ['room_code' => '101', 'room_type' => 'PRIVATE_ROOM', 'private_room_type' => 'STUDIO'],
+                ['room_code' => '102', 'room_type' => 'PRIVATE_ROOM', 'private_room_type' => 'LOFT'],
+                ['room_code' => '103', 'room_type' => 'DORMITORY', 'private_room_type' => 'STUDIO'],
+            ],
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('rooms', ['boarding_house_id' => $house->id, 'room_code' => '101', 'room_type' => 'PRIVATE_ROOM', 'private_room_type' => 'STUDIO']);
+        $this->assertDatabaseHas('rooms', ['boarding_house_id' => $house->id, 'room_code' => '102', 'room_type' => 'PRIVATE_ROOM', 'private_room_type' => 'LOFT']);
+        $this->assertDatabaseHas('rooms', ['boarding_house_id' => $house->id, 'room_code' => '103', 'room_type' => 'DORMITORY', 'private_room_type' => null]);
+    }
+
     public function test_existing_code_rejects_entire_batch(): void
     {
         $landlord = $this->owner();

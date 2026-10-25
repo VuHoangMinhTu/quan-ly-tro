@@ -1,14 +1,24 @@
 import { z } from 'zod'
 import { numberInput } from './formValidation.js'
+import { PRIVATE_ROOM_TYPES, ROOM_TYPES } from './roomTypes.js'
 
 export const MAX_BULK_ROOMS = 200
-export const emptyBulkRoom = (roomCode = '') => ({ room_code: roomCode, area: '', monthly_rent: '', max_tenants: '' })
+export const emptyBulkRoom = (roomCode = '', roomType = ROOM_TYPES.PRIVATE_ROOM, privateRoomType = PRIVATE_ROOM_TYPES.NO_LOFT) => ({
+  room_code: roomCode,
+  room_type: roomType,
+  private_room_type: roomType === ROOM_TYPES.DORMITORY ? null : privateRoomType,
+  area: '',
+  monthly_rent: '',
+  max_tenants: '',
+})
 
 const optionalNumber = (label, maximum, integer = false) => numberInput(label, { optional: true, min: integer ? 1 : 0, max: maximum, integer })
 
 export const bulkRoomsSchema = z.object({
   rooms: z.array(z.object({
     room_code: z.string().trim().min(1, 'Vui lòng nhập mã phòng.').max(50, 'Mã phòng tối đa 50 ký tự.'),
+    room_type: z.enum([ROOM_TYPES.PRIVATE_ROOM, ROOM_TYPES.DORMITORY]),
+    private_room_type: z.enum([PRIVATE_ROOM_TYPES.STUDIO, PRIVATE_ROOM_TYPES.LOFT, PRIVATE_ROOM_TYPES.NO_LOFT, PRIVATE_ROOM_TYPES.CLOSED_ROOM]).nullable(),
     area: optionalNumber('Diện tích', 99999999.99),
     monthly_rent: optionalNumber('Giá thuê', 9999999999999.99),
     max_tenants: optionalNumber('Số người tối đa', 4294967295, true),
@@ -24,9 +34,14 @@ export const bulkRoomsSchema = z.object({
       })
     } else indexes.set(code, index)
   })
+  rooms.forEach((room, index) => {
+    if (room.room_type === ROOM_TYPES.DORMITORY && room.private_room_type !== null) {
+      context.addIssue({ code: 'custom', path: ['rooms', index, 'private_room_type'], message: 'Phòng KTX không có phân loại phòng trọ.' })
+    }
+  })
 })
 
-export function generateRoomCodes(from, to) {
+export function generateRoomCodes(from, to, roomType = ROOM_TYPES.PRIVATE_ROOM, privateRoomType = PRIVATE_ROOM_TYPES.NO_LOFT) {
   const start = String(from).trim()
   const end = String(to).trim()
   if (!/^\d+$/.test(start) || !/^\d+$/.test(end)) throw new Error('Vui lòng nhập mã bắt đầu và kết thúc bằng số.')
@@ -35,5 +50,5 @@ export function generateRoomCodes(from, to) {
   if (!Number.isSafeInteger(first) || !Number.isSafeInteger(last) || last < first) throw new Error('Khoảng mã phòng không hợp lệ.')
   if (last - first + 1 > MAX_BULK_ROOMS) throw new Error('Mỗi lần chỉ được tạo tối đa 200 phòng.')
   const width = start.startsWith('0') ? start.length : 0
-  return Array.from({ length: last - first + 1 }, (_, index) => emptyBulkRoom(String(first + index).padStart(width, '0')))
+  return Array.from({ length: last - first + 1 }, (_, index) => emptyBulkRoom(String(first + index).padStart(width, '0'), roomType, privateRoomType))
 }

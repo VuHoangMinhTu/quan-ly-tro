@@ -96,6 +96,7 @@ class RoomController extends Controller
                     'description' => $room['description'] ?? null,
                     'floor_id' => $floorId,
                     'room_type' => $room['room_type'] ?? 'PRIVATE_ROOM',
+                    'private_room_type' => $room['private_room_type'] ?? null,
                     'area' => $room['area'] ?? null,
                     'monthly_rent' => $room['monthly_rent'] ?? null,
                     'max_tenants' => $room['max_tenants'] ?? null,
@@ -138,6 +139,9 @@ class RoomController extends Controller
         $room = $this->findOwnedRoom($request, $id);
 
         $data = $request->validated();
+        if (($data['room_type'] ?? $room->room_type) === 'PRIVATE_ROOM' && $room->room_type === 'DORMITORY' && $room->beds()->exists()) {
+            throw ValidationException::withMessages(['room_type' => 'Không thể đổi phòng KTX có giường thành phòng trọ.']);
+        }
         if ($room->status === 'INACTIVE' && ($data['status'] ?? 'INACTIVE') !== 'INACTIVE') {
             throw ValidationException::withMessages(['status' => 'Phòng đã ngừng sử dụng không thể chuyển lại trạng thái hoạt động.']);
         }

@@ -1,5 +1,6 @@
 import { Users } from 'lucide-react'
 import { formatArea, formatCurrency } from '../../utils/formatters'
+import { privateRoomTypeLabel } from '../../utils/roomTypes'
 
 const statusStyles = {
   AVAILABLE: 'bg-green-100 text-green-800',
@@ -31,6 +32,7 @@ export default function RoomCard({ room, actions }) {
       </div>
       <p className="mt-5 break-words text-lg font-semibold text-slate-900 sm:text-xl">{room.room_type === 'DORMITORY' ? `${room.beds_count ?? 0} giường` : room.monthly_rent == null ? 'Chưa thiết lập giá thuê' : formatCurrency(room.monthly_rent)}{room.room_type !== 'DORMITORY' && room.monthly_rent != null && <span className="text-sm font-normal text-slate-500">/tháng</span>}</p>
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-600">
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">{room.room_type === 'DORMITORY' ? 'KTX' : privateRoomTypeLabel(room.private_room_type)}</span>
         {room.active_occupants_count != null && <span className="w-full">{room.active_occupants_count > 0 ? `Đang có người · ${room.active_occupants_count} người ở` : 'Chưa có người ở'}</span>}
         <span>{formatArea(room.area)}</span>
         <span className="inline-flex items-center gap-1"><Users size={15} /> {room.room_type === 'DORMITORY' ? 'Phòng KTX' : room.max_tenants ? `Tối đa ${room.max_tenants}` : 'Chưa đặt'}</span>

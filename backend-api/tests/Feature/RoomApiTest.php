@@ -55,6 +55,34 @@ class RoomApiTest extends TestCase
         $this->assertDatabaseCount('room_amenities', 0);
     }
 
+    public function test_private_room_type_is_saved_for_private_rooms_and_legacy_value_remains_nullable(): void
+    {
+        $landlord = $this->createLandlord();
+        $boardingHouse = $this->createBoardingHouse($landlord);
+
+        $this->withBearerToken($landlord)->postJson("/api/boarding-houses/{$boardingHouse->id}/rooms", $this->roomPayload([
+            'room_type' => 'PRIVATE_ROOM',
+            'private_room_type' => 'STUDIO',
+        ]))->assertCreated()->assertJsonPath('data.private_room_type', 'STUDIO');
+
+        $legacyRoom = $this->createRoom($boardingHouse, ['room_code' => 'P002', 'private_room_type' => null]);
+        $this->withBearerToken($landlord)->getJson("/api/rooms/{$legacyRoom->id}")
+            ->assertOk()->assertJsonPath('data.private_room_type', null);
+    }
+
+    public function test_dormitory_forces_private_room_type_to_null(): void
+    {
+        $landlord = $this->createLandlord();
+        $boardingHouse = $this->createBoardingHouse($landlord);
+
+        $this->withBearerToken($landlord)->postJson("/api/boarding-houses/{$boardingHouse->id}/rooms", $this->roomPayload([
+            'room_type' => 'DORMITORY',
+            'private_room_type' => 'STUDIO',
+        ]))->assertCreated()->assertJsonPath('data.private_room_type', null);
+
+        $this->assertDatabaseHas('rooms', ['boarding_house_id' => $boardingHouse->id, 'room_code' => 'P001', 'room_type' => 'DORMITORY', 'private_room_type' => null]);
+    }
+
     public function test_room_can_be_created_with_an_empty_amenity_list(): void
     {
         $landlord = $this->createLandlord();

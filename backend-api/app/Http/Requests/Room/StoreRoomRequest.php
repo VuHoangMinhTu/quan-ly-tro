@@ -12,6 +12,13 @@ class StoreRoomRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('room_type', 'PRIVATE_ROOM') === 'DORMITORY') {
+            $this->merge(['private_room_type' => null]);
+        }
+    }
+
     /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
@@ -23,6 +30,7 @@ class StoreRoomRequest extends FormRequest
             'sort_order' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:4294967295'],
             'floor_id' => ['nullable', 'integer', Rule::exists('floors', 'id')->where('boarding_house_id', $boardingHouseId ?? 0)],
             'room_type' => ['sometimes', Rule::in(['PRIVATE_ROOM', 'DORMITORY'])],
+            'private_room_type' => ['nullable', Rule::in(['STUDIO', 'LOFT', 'NO_LOFT', 'CLOSED_ROOM'])],
             'area' => ['nullable', 'numeric', 'min:0'],
             'monthly_rent' => ['nullable', 'numeric', 'min:0'],
             'max_tenants' => ['nullable', 'integer', 'min:1'],

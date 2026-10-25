@@ -2,24 +2,35 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { bulkRoomsSchema, emptyBulkRoom, generateRoomCodes } from './roomOnboarding.js'
 
-test('generator only creates codes and empty editable fields', () => {
+test('generator applies the selected room defaults to every generated row', () => {
   const rooms = generateRoomCodes('101', '110')
   assert.equal(rooms.length, 10)
-  assert.deepEqual(rooms[0], { room_code: '101', area: '', monthly_rent: '', max_tenants: '' })
+  assert.deepEqual(rooms[0], { room_code: '101', room_type: 'PRIVATE_ROOM', private_room_type: 'NO_LOFT', area: '', monthly_rent: '', max_tenants: '' })
   assert.equal(rooms[9].room_code, '110')
-  assert.deepEqual(bulkRoomsSchema.parse({ rooms }).rooms[0], { room_code: '101', area: null, monthly_rent: null, max_tenants: null })
+  assert.deepEqual(bulkRoomsSchema.parse({ rooms }).rooms[0], { room_code: '101', room_type: 'PRIVATE_ROOM', private_room_type: 'NO_LOFT', area: null, monthly_rent: null, max_tenants: null })
+  assert.deepEqual(generateRoomCodes('201', '201', 'DORMITORY', 'STUDIO')[0], { room_code: '201', room_type: 'DORMITORY', private_room_type: null, area: '', monthly_rent: '', max_tenants: '' })
 })
 
 test('mixed prices, decimal area and zero survive numeric payload normalization', () => {
   const result = bulkRoomsSchema.parse({ rooms: [
-    { room_code: '101', area: '20.5', monthly_rent: 3800000, max_tenants: '2' },
+    { room_code: '101', room_type: 'PRIVATE_ROOM', private_room_type: 'NO_LOFT', area: '20.5', monthly_rent: 3800000, max_tenants: '2' },
     emptyBulkRoom('102'),
-    { room_code: '103', area: '0', monthly_rent: 0, max_tenants: '' },
+    { room_code: '103', room_type: 'PRIVATE_ROOM', private_room_type: 'NO_LOFT', area: '0', monthly_rent: 0, max_tenants: '' },
   ] })
-  assert.deepEqual(result.rooms[0], { room_code: '101', area: 20.5, monthly_rent: 3800000, max_tenants: 2 })
+  assert.deepEqual(result.rooms[0], { room_code: '101', room_type: 'PRIVATE_ROOM', private_room_type: 'NO_LOFT', area: 20.5, monthly_rent: 3800000, max_tenants: 2 })
   assert.equal(result.rooms[1].monthly_rent, null)
   assert.equal(result.rooms[2].monthly_rent, 0)
   assert.equal(result.rooms[2].area, 0)
+})
+
+test('each bulk row can override its private room classification independently', () => {
+  const rooms = generateRoomCodes('101', '103')
+  rooms[1].private_room_type = 'STUDIO'
+  rooms[2] = { ...rooms[2], room_type: 'DORMITORY', private_room_type: null }
+  const result = bulkRoomsSchema.parse({ rooms })
+  assert.equal(result.rooms[0].private_room_type, 'NO_LOFT')
+  assert.equal(result.rooms[1].private_room_type, 'STUDIO')
+  assert.equal(result.rooms[2].private_room_type, null)
 })
 
 test('duplicates are reported against both rows, ignoring whitespace and case', () => {
