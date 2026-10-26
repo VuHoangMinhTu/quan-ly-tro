@@ -10,6 +10,7 @@ import { roomKeys } from '../../api/roomKeys'
 import { deleteTenant, getTenants } from '../../api/tenantApi'
 import { tenantKeys } from '../../api/tenantKeys'
 import { formatDate } from '../../utils/formatters'
+import TenantImportModal from '../../components/tenants/TenantImportModal'
 
 const occupancyOptions = [['ACTIVE', 'Đang ở'], ['MOVED_OUT', 'Đã chuyển đi'], ['UNASSIGNED', 'Chưa xếp phòng']]
 const roleOptions = [['PRIMARY', 'Người đứng tên'], ['ROOMMATE', 'Người ở cùng']]
@@ -55,6 +56,7 @@ export default function TenantListPage() {
   const [searchReset, setSearchReset] = useState(0)
   const [confirmingId, setConfirmingId] = useState(null)
   const [deleteError, setDeleteError] = useState('')
+  const [isImportOpen, setIsImportOpen] = useState(false)
   const location = useLocation()
   const queryClient = useQueryClient()
   const filters = {
@@ -116,8 +118,9 @@ export default function TenantListPage() {
   return <section className="min-w-0">
     <div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div><h2 className="break-words text-xl font-bold sm:text-2xl">Người thuê</h2><p className="mt-1 text-sm text-slate-600">Quản lý hồ sơ người thuê của bạn.</p></div>
-      <Link to="/tenants/new" className="inline-flex min-h-11 sm:min-h-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"><Plus size={17} /> Thêm người thuê</Link>
+      <div className="flex flex-wrap gap-2">{queryClient.getQueryData(['me'])?.data?.data?.landlord && <button type="button" onClick={() => setIsImportOpen(true)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium">Import Excel</button>}<Link to="/tenants/new" className="inline-flex min-h-11 sm:min-h-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"><Plus size={17} /> Thêm người thuê</Link></div>
     </div>
+    {isImportOpen && <TenantImportModal onClose={() => setIsImportOpen(false)} />}
     {location.state?.message && <p className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{location.state.message}</p>}
     {deleteError && <p role="alert" className="mb-4 text-sm text-red-600">{deleteError}</p>}
     <div className="mb-4 space-y-3">

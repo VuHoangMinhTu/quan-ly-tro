@@ -100,7 +100,7 @@ test('tenant mobile cards and desktop table reuse tenant actions and delete the 
     },
     useEffect: () => {}, useCallback: (callback) => callback, useId: () => `filter-${inputId++}`,
     useRef: (current) => ({ current }), useSearchParams: () => [new URLSearchParams(), () => {}],
-    useLocation: () => ({}), useQueryClient: () => queryClient,
+    useLocation: () => ({}), useQueryClient: () => ({ ...queryClient, getQueryData: () => ({ data: { data: { landlord: { id: 1 } } } }) }),
     useQuery: ({ queryKey }) => ({ data: { data: { data: queryKey[0] === 'tenants' ? [tenant] : [] } } }),
     useMutation: () => ({ isPending: false, mutate: (id) => deleted.push(id) }), keepPreviousData: () => {},
     boardingHouseKeys, roomKeys, tenantKeys, getApiErrorMessage: () => 'API error',
@@ -109,6 +109,7 @@ test('tenant mobile cards and desktop table reuse tenant actions and delete the 
   })
   const render = () => { stateIndex = 0; return elements(Component()) }
   const nodes = render()
+  assert.ok(nodes.some((element) => element.type === 'button' && text(element) === 'Import Excel'))
   const mobileList = nodes.find((element) => element.props.className === 'space-y-3 md:hidden')
   const desktopTable = nodes.find((element) => element.props.className?.includes('hidden overflow-x-auto') && element.props.className.includes('md:block'))
   assert.ok(mobileList)
