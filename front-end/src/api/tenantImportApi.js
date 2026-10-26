@@ -7,4 +7,4 @@ export const previewTenantImport = (file, signal) => {
   return client.post('/tenants/import/preview', form, { headers: { 'Content-Type': 'multipart/form-data' }, signal })
 }
 export const confirmTenantImport = (payload) => client.post('/tenants/import/confirm', payload)
-export const cancelTenantImport = (token) => client.post('/tenants/import/cancel', { token })
+export const cancelTenantImport = (token) => client.post('/tenants/import/cancel', { token }, { toast: false })

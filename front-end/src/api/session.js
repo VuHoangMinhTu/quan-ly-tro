@@ -1,4 +1,5 @@
 import { createAppQueryClient } from './queryClient.js'
+import { clearToasts } from '../notifications/toastStore.js'
 
 let nextId = 0
 const listeners = new Set()
@@ -19,6 +20,7 @@ export function replaceSession(token, expected = session, errorMessage = '') {
   previous.controller.abort()
   void previous.queryClient.cancelQueries()
   previous.queryClient.clear()
+  clearToasts()
   for (const listener of listeners) listener()
   return session
 }

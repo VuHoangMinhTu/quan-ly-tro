@@ -5,12 +5,13 @@ import { z } from 'zod'
 import './index.css'
 import App from './App.jsx'
 import { APP_TITLE } from './utils/brand'
+import ToastProvider from './notifications/ToastProvider'
 
 z.config(z.locales.vi())
 document.title = APP_TITLE
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <SessionQueryProvider><App /></SessionQueryProvider>
+    <ToastProvider><SessionQueryProvider><App /></SessionQueryProvider></ToastProvider>
   </StrictMode>,
 )

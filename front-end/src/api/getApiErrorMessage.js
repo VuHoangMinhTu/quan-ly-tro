@@ -1,5 +1,25 @@
 const SYSTEM_ERROR = 'Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau.'
 const NETWORK_ERROR = 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối và thử lại.'
+const fieldLabels = { name: 'tên thiết bị', quantity: 'số lượng', condition: 'tình trạng', note: 'ghi chú', key_count: 'số lượng chìa', remote_count: 'số lượng remote', room_code: 'mã phòng', room_type: 'loại phòng', private_room_type: 'phân loại phòng', full_name: 'họ tên', phone: 'số điện thoại', email: 'email', identity_number: 'CCCD/CMND', contract_code: 'mã hợp đồng', billing_period: 'kỳ hóa đơn', monthly_rent: 'giá thuê', max_tenants: 'số người tối đa', area: 'diện tích', status: 'trạng thái', date_of_birth: 'ngày sinh', start_date: 'ngày bắt đầu', end_date: 'ngày kết thúc', amount: 'số tiền', bed_code: 'mã giường' }
+
+export function normalizeValidationMessage(message, field = '') {
+  if (typeof message !== 'string') return ''
+  const nested = field.match(/^(items|rooms|beds|occupants)\.(\d+)\.([a-z_]+)$/)
+    || message.match(/\b(items|rooms|beds|occupants)\.(\d+)\.([a-z_]+)\b/)
+  let text = message
+  if (nested) {
+    const [, group, index, property] = nested
+    const key = `${group}.${index}.${property}`
+    const label = fieldLabels[property] || 'thông tin'
+    if (text.startsWith(`${key}:`)) text = text.slice(key.length + 1).trim()
+    text = text.replaceAll(key, label)
+    const prefix = `${{ items: 'Hạng mục', rooms: 'Phòng dòng', beds: 'Giường dòng', occupants: 'Người ở dòng' }[group]} ${Number(index) + 1}: `
+    if (!text.startsWith(prefix)) text = prefix + text
+  }
+  for (const [key, label] of Object.entries(fieldLabels)) text = text.replace(new RegExp(`\\b${key}\\b`, 'g'), label)
+  if (/\b(?:validation\.[a-z_.]+|[a-z_]+\.\d+(?:\.[a-z_]+)?)\b/i.test(text)) return 'Dữ liệu chưa hợp lệ. Vui lòng kiểm tra các trường được đánh dấu.'
+  return text
+}
 const fallbackMessages = {
   400: 'Yêu cầu không hợp lệ.',
   401: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
@@ -26,7 +46,7 @@ export function getApiFieldErrors(error) {
   const errors = error?.response?.data?.errors
   if (!errors || typeof errors !== 'object' || Array.isArray(errors)) return {}
   return Object.fromEntries(Object.entries(errors).flatMap(([field, messages]) => {
-    const message = (Array.isArray(messages) ? messages : [messages]).map(usableMessage).find(Boolean)
+    const message = (Array.isArray(messages) ? messages : [messages]).map(usableMessage).filter(Boolean).map((message) => normalizeValidationMessage(message, field)).find(Boolean)
     return message ? [[field, message]] : []
   }))
 }
@@ -48,7 +68,8 @@ export function getApiErrorMessage(error) {
   const status = error.response.status
   // Even a verbose development response must never leak a server exception.
   if (status >= 500) return SYSTEM_ERROR
-  return usableMessage(error.response.data?.message)
+  return (status === 422 ? Object.values(getApiFieldErrors(error))[0] : '')
+    || normalizeValidationMessage(usableMessage(error.response.data?.message))
     || Object.values(getApiFieldErrors(error))[0]
     || fallbackMessages[status]
     || 'Không thể thực hiện yêu cầu. Vui lòng thử lại.'

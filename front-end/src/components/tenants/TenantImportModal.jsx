@@ -4,6 +4,8 @@ import { cancelTenantImport, confirmTenantImport, downloadTenantTemplate, previe
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { tenantKeys } from '../../api/tenantKeys'
 import { defaultImportSelection, exportImportErrors, IMPORT_PAGE_SIZE, importStatusLabels, maskedIdentity, selectableImportRow, validateTenantImportFile } from '../../utils/tenantImport'
+import { toast } from '../../notifications/toastStore'
+import { notifyApiError } from '../../api/notificationTransport'
 
 const buttonClass = 'inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50'
 
@@ -37,16 +39,17 @@ export default function TenantImportModal({ onClose }) {
   const run = async (name, work) => {
     if (pending.current) return
     pending.current = true; setBusy(name); setError('')
-    try { await work() } catch (failure) { setError(getApiErrorMessage(failure)) }
+    try { await work() } catch (failure) { setError(getApiErrorMessage(failure)); notifyApiError(failure) }
     finally { pending.current = false; setBusy('') }
   }
   const download = () => run('download', async () => {
     const response = await downloadTenantTemplate()
     saveBlob(response.data, 'BeeHouse-mau-nguoi-thue.xlsx')
+    toast.success('Đã tải file Excel mẫu.')
   })
   const upload = () => {
     const fileError = validateTenantImportFile(file)
-    if (fileError) { setError(fileError); return }
+    if (fileError) { setError(fileError); toast.warning(fileError); return }
     run('upload', async () => {
       if (token.current) { await cancelTenantImport(token.current); token.current = null }
       abort.current = new AbortController()
@@ -55,6 +58,7 @@ export default function TenantImportModal({ onClose }) {
       if (data.rows.length > 1000 || data.summary.total > 1000) {
         await cancelTenantImport(data.token)
         setError('File chỉ được chứa tối đa 1.000 người thuê.')
+        toast.warning('File chỉ được chứa tối đa 1.000 người thuê.')
         return
       }
       token.current = data.token; setPreview(data); setSelected(defaultImportSelection(data.rows)); setPage(1); setAcceptWarnings(false)

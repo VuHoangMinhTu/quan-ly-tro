@@ -52,3 +52,11 @@ test('offline and transport errors do not expose Axios messages', () => {
   assert.equal(getApiErrorMessage(apiError(422, { message: 'Request failed with status code 422' })), 'Dữ liệu không hợp lệ.')
   assert.deepEqual(getApiFieldErrors(apiError(422, { errors: null })), {})
 })
+
+test('nested Laravel keys become human-readable numbered Vietnamese validation messages', () => {
+  const error = apiError(422, { message: 'items.13.name: Vui lòng nhập items.13.name.', errors: { 'items.13.name': ['Vui lòng nhập items.13.name.'] } })
+  assert.equal(getApiErrorMessage(error), 'Hạng mục 14: Vui lòng nhập tên thiết bị.')
+  assert.equal(getApiFieldErrors(error)['items.13.name'], 'Hạng mục 14: Vui lòng nhập tên thiết bị.')
+  assert.equal(getApiErrorMessage(apiError(422, { message: 'items.13.name: Vui lòng nhập items.13.name.' })), 'Hạng mục 14: Vui lòng nhập tên thiết bị.')
+  assert.equal(getApiErrorMessage(apiError(422, { errors: { 'rooms.2.room_code': ['Vui lòng nhập room_code.'] } })), 'Phòng dòng 3: Vui lòng nhập mã phòng.')
+})

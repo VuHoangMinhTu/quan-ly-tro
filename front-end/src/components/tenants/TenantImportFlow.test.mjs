@@ -5,6 +5,8 @@ import React from 'react'
 import { transformWithOxc } from 'vite'
 import { getApiErrorMessage } from '../../api/getApiErrorMessage.js'
 import { tenantKeys } from '../../api/tenantKeys.js'
+import { toast } from '../../notifications/toastStore.js'
+import { notifyApiError } from '../../api/notificationTransport.js'
 import { defaultImportSelection, exportImportErrors, IMPORT_PAGE_SIZE, importStatusLabels, maskedIdentity, selectableImportRow, validateTenantImportFile } from '../../utils/tenantImport.js'
 
 const elements = (node) => Array.isArray(node) ? node.flatMap(elements) : React.isValidElement(node) ? [node, ...elements(node.props.children)] : []
@@ -38,7 +40,7 @@ async function harness({ confirmImpl, previewRows = rows } = {}) {
     document: { activeElement: null, createElement: () => ({ click() {} }) },
     URL: { createObjectURL: (blob) => { calls.blobs.push(blob); return 'blob:test' }, revokeObjectURL() {} },
     setTimeout: (fn) => { fn(); return 1 },
-    tenantKeys, getApiErrorMessage, defaultImportSelection, exportImportErrors, IMPORT_PAGE_SIZE, importStatusLabels, maskedIdentity, selectableImportRow, validateTenantImportFile,
+    tenantKeys, getApiErrorMessage, toast, notifyApiError, defaultImportSelection, exportImportErrors, IMPORT_PAGE_SIZE, importStatusLabels, maskedIdentity, selectableImportRow, validateTenantImportFile,
   }
   const source = (await readFile(new URL('./TenantImportModal.jsx', import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
   const { code } = await transformWithOxc(source, 'TenantImportModal.jsx', { jsx: { runtime: 'classic' } })
