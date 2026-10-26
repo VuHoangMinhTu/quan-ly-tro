@@ -1,3 +1,42 @@
 # Google OAuth credentials
 /Oauth Google.json
+# Temporary benchmark builds and scratch output (test sources stay tracked).
+/tmp/
+
+# Generated browser/test output, wherever the runner is started.
+**/test-results/
+**/playwright-report/
+**/blob-report/
+**/playwright/.cache/
+**/coverage/
+
+# Generated audit measurements; keep scripts, example fixtures and documentation.
+/docs/*-metrics.json
+/tests/performance/*-metrics.json
+/tests/**/results/
+/tests/**/reports/
+/tests/**/screenshots/
+/tests/**/videos/
+/tests/**/traces/
+/front-end/tests/**/results/
+/front-end/tests/**/reports/
+/front-end/tests/**/screenshots/
+/front-end/tests/**/videos/
+/front-end/tests/**/traces/
+
+# Temporary test databases and captured request/log output.
+/tests/**/*.sqlite
+/tests/**/*.sqlite-*
+/tests/**/*.db
+/tests/**/*.db-*
+/tests/**/*.har
+/tests/**/*.log
+/tests/**/trace*.zip
+/front-end/tests/**/*.sqlite
+/front-end/tests/**/*.sqlite-*
+/front-end/tests/**/*.db
+/front-end/tests/**/*.db-*
+/front-end/tests/**/*.har
+/front-end/tests/**/*.log
+/front-end/tests/**/trace*.zip
 
