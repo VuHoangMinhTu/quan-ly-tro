@@ -17,6 +17,7 @@ use App\Services\InvoicePaymentInfoService;
 use App\Services\PayOSService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -24,7 +25,26 @@ class InvoiceController extends Controller
 {
     public function index(Request $r, int $roomId, BoardingHouseAccessService $access): JsonResponse
     {
-        return ApiResponse::success($access->room($r->user(), $roomId)->invoices()->with('contract:id,room_id,tenant_id,contract_code,status')->orderByDesc('billing_period')->get(), 'Lấy danh sách hóa đơn thành công.');
+        $filters = $r->validate([
+            'search' => ['nullable', 'string', 'max:100'], 'status' => ['nullable', Rule::in(['DRAFT', 'UNPAID', 'PARTIALLY_PAID', 'PAID', 'CANCELLED'])],
+            'month' => ['nullable', 'integer', 'between:1,12'], 'year' => ['nullable', 'integer', 'between:2000,2100'], 'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+        $room = $access->room($r->user(), $roomId);
+        $invoices = $room->invoices()->with(['contract:id,room_id,tenant_id,contract_code,status', 'contract.tenant:id,full_name'])
+            ->when($filters['search'] ?? null, function ($query, string $search): void {
+                $term = '%'.addcslashes(trim($search), '%_\\').'%';
+                $query->where(function ($matches) use ($term): void {
+                    $matches->where('invoice_code', 'like', $term)
+                        ->orWhereHas('room', fn ($room) => $room->where('room_code', 'like', $term)->orWhere('room_name', 'like', $term))
+                        ->orWhereHas('contract.tenant', fn ($tenant) => $tenant->where('full_name', 'like', $term));
+                });
+            })
+            ->when($filters['status'] ?? null, fn ($query, string $status) => $query->where('status', $status))
+            ->when($filters['month'] ?? null, fn ($query, int $month) => $query->whereMonth('billing_period', $month))
+            ->when($filters['year'] ?? null, fn ($query, int $year) => $query->whereYear('billing_period', $year))
+            ->orderByDesc('billing_period')->orderByDesc('id')->paginate(20);
+
+        return ApiResponse::success(['items' => $invoices->items(), 'pagination' => ['current_page' => $invoices->currentPage(), 'last_page' => $invoices->lastPage(), 'per_page' => $invoices->perPage(), 'total' => $invoices->total()]], 'Lấy danh sách hóa đơn thành công.');
     }
 
     public function store(StoreInvoiceRequest $r, int $roomId, ContractService $contracts): JsonResponse

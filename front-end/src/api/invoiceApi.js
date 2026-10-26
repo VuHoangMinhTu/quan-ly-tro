@@ -1,5 +1,5 @@
 import client from './axiosClient'
-export const getInvoicesByRoom=roomId=>client.get(`/rooms/${roomId}/invoices`)
+export const getInvoicesByRoom=(roomId,params={},config={})=>client.get(`/rooms/${roomId}/invoices`,{...config,params})
 export const getInvoice=id=>client.get(`/invoices/${id}`)
 export const createInvoice=(roomId,p)=>client.post(`/rooms/${roomId}/invoices`,p)
 export const updateInvoice=(id,p)=>client.put(`/invoices/${id}`,p)

@@ -7,6 +7,7 @@ import { invoiceKeys } from '../../api/invoiceKeys.js'
 import { paymentKeys } from '../../api/paymentKeys.js'
 import { canEditInvoiceFinancials } from '../../utils/invoiceFinancials.js'
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage.js'
+import { invoiceStatusLabels } from '../../utils/invoiceStatus.js'
 
 function elements(node) {
   if (Array.isArray(node)) return node.flatMap(elements)
@@ -33,16 +34,18 @@ async function pageHarness(path, { invoice = invoiceFixture, payments = [] } = {
   let mutationCursor = 0
   const mutations = []
   const bindings = {
-    invoiceKeys, paymentKeys, canEditInvoiceFinancials, applyApiFieldErrors, getApiErrorMessage,
+    invoiceKeys, paymentKeys, canEditInvoiceFinancials, applyApiFieldErrors, getApiErrorMessage, invoiceStatusLabels,
     useState: (initial) => {
       const index = stateCursor++
       if (!(index in states)) states[index] = initial
       return [states[index], (value) => { states[index] = value }]
     },
+    useEffect: () => {}, useRef: (value) => ({ current: value }), useCallback: (callback) => callback, keepPreviousData: undefined,
     useParams: () => ({ id: '1', roomId: '2' }),
+    useSearchParams: () => [new URLSearchParams(), () => {}],
     useNavigate: () => () => {},
     useQueryClient: () => ({ invalidateQueries: () => {} }),
-    useQuery: ({ queryKey }) => ({ data: { data: { data: queryKey[0] === 'payments' ? payments : queryKey[0] === 'invoices' ? [invoice] : invoice } } }),
+    useQuery: ({ queryKey }) => ({ data: { data: { data: queryKey[0] === 'payments' ? payments : queryKey[0] === 'invoices' ? { items: [invoice], pagination: { current_page: 1, last_page: 1 } } : invoice } } }),
     useMutation: (options) => {
       const index = mutationCursor++
       if (!mutations[index]) mutations[index] = { options, calls: [] }
@@ -52,6 +55,7 @@ async function pageHarness(path, { invoice = invoiceFixture, payments = [] } = {
     formatDate: (value) => value || '—',
     Link: ({ to, children, ...props }) => React.createElement('a', { ...props, href: to }, children),
     InvoiceStatusBadge: ({ status }) => React.createElement('span', null, status),
+    Search: () => null, X: () => null,
     PaymentForm: (props) => React.createElement('payment-form', props),
     QRCodeSVG: (props) => React.createElement('svg', props),
     deleteInvoice: () => {}, generateInvoice: () => {}, getInvoice: () => {}, getInvoicesByRoom: () => {},
