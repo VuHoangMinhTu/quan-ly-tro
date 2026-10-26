@@ -69,7 +69,7 @@ export default function ContractHandoverSection({ contract }) {
     {!query.isPending && !query.isError && !report && <div className="space-y-3"><p className="text-sm text-slate-500">Chưa có biên bản bàn giao.</p><button type="button" disabled={busy} onClick={() => submit(create)} className="min-h-11 rounded-lg bg-slate-900 px-4 text-sm text-white disabled:opacity-50">{create.isPending ? 'Đang tạo...' : 'Tạo biên bản bàn giao'}</button></div>}
     {report && <>
       <p className="text-sm font-medium">{report.status === 'CONFIRMED' ? 'Đã xác nhận bàn giao' : 'Bản nháp — có thể chỉnh sửa'}</p>
-      <div className="space-y-3">{items.map((item, index) => isRoomRental ? <div key={`${item.name}-${index}`} className="space-y-3 rounded-lg border p-3 text-sm">
+      <div className="space-y-3">{items.map((item, index) => isRoomRental ? <div key={index} className="space-y-3 rounded-lg border p-3 text-sm">
         <p className="font-semibold">{index + 1}. {item.name}</p>
         {index >= roomRentalItems.length && report.status === 'DRAFT' && <label className="block">Thiết bị và dụng cụ<input name={`items.${index}.name`} value={item.name} onChange={event => change(index, 'name', event.target.value)} className="mt-1 w-full rounded border p-2" /></label>}
         {item.name === 'Khóa cửa' && <label className="block">Số lượng chìa<input disabled={report.status !== 'DRAFT'} type="number" min="0" value={item.key_count ?? ''} onChange={event => change(index, 'key_count', event.target.value)} className="mt-1 w-full rounded border p-2 sm:max-w-32" /></label>}

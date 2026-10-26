@@ -1,0 +1,404 @@
+{
+  "environment": "Chromium + Vite development React Profiler + Laravel HTTP kernel + disposable SQLite; 1 warmup / 20 samples; no Dashboard requests",
+  "baseline": "Không có baseline trước sửa",
+  "summary": [
+    {
+      "count": 13,
+      "scenario": "save",
+      "samples": 20,
+      "visibleMs": {
+        "median": 280.2,
+        "p95": 316.9
+      },
+      "apiMs": {
+        "median": 264.11,
+        "p95": 301.32
+      },
+      "kernelMs": {
+        "median": 84.5,
+        "p95": 96.08
+      },
+      "writes": 1,
+      "queries": [
+        5
+      ],
+      "selects": [
+        4
+      ],
+      "updates": [
+        1
+      ],
+      "transactions": [
+        1
+      ],
+      "payloadBytes": 1666,
+      "refetches": [
+        0,
+        1
+      ],
+      "parentRenders": [
+        0
+      ],
+      "detailRenders": [
+        0
+      ],
+      "reactCommitMs": {
+        "median": 0.5,
+        "p95": 4.2
+      }
+    },
+    {
+      "count": 20,
+      "scenario": "save",
+      "samples": 20,
+      "visibleMs": {
+        "median": 280.1,
+        "p95": 353.7
+      },
+      "apiMs": {
+        "median": 260.85,
+        "p95": 335.61
+      },
+      "kernelMs": {
+        "median": 86.1,
+        "p95": 102.71
+      },
+      "writes": 1,
+      "queries": [
+        5
+      ],
+      "selects": [
+        4
+      ],
+      "updates": [
+        1
+      ],
+      "transactions": [
+        1
+      ],
+      "payloadBytes": 2632,
+      "refetches": [
+        0
+      ],
+      "parentRenders": [
+        0
+      ],
+      "detailRenders": [
+        0
+      ],
+      "reactCommitMs": {
+        "median": 4,
+        "p95": 7.2
+      }
+    },
+    {
+      "count": 20,
+      "scenario": "invalid",
+      "samples": 20,
+      "visibleMs": {
+        "median": 280.6,
+        "p95": 342
+      },
+      "apiMs": {
+        "median": 254.29,
+        "p95": 311.08
+      },
+      "kernelMs": {
+        "median": 75.06,
+        "p95": 94.23
+      },
+      "writes": 1,
+      "queries": [
+        2
+      ],
+      "selects": [
+        2
+      ],
+      "updates": [
+        0
+      ],
+      "transactions": [
+        0
+      ],
+      "payloadBytes": 2602,
+      "refetches": [
+        0
+      ],
+      "parentRenders": [
+        0
+      ],
+      "detailRenders": [
+        0
+      ],
+      "reactCommitMs": {
+        "median": 4.2,
+        "p95": 6.3
+      }
+    },
+    {
+      "count": 20,
+      "scenario": "confirm",
+      "samples": 20,
+      "visibleMs": {
+        "median": 537.6,
+        "p95": 689.4
+      },
+      "apiMs": {
+        "median": 512.03,
+        "p95": 645.61
+      },
+      "kernelMs": {
+        "median": 155.87,
+        "p95": 183.63
+      },
+      "writes": 2,
+      "queries": [
+        5,
+        6
+      ],
+      "selects": [
+        4,
+        4
+      ],
+      "updates": [
+        1,
+        2
+      ],
+      "transactions": [
+        1,
+        1
+      ],
+      "payloadBytes": 2632,
+      "refetches": [
+        0
+      ],
+      "parentRenders": [
+        0
+      ],
+      "detailRenders": [
+        0
+      ],
+      "reactCommitMs": {
+        "median": 4.2,
+        "p95": 6.8
+      }
+    },
+    {
+      "count": 20,
+      "scenario": "confirm-error",
+      "samples": 20,
+      "visibleMs": {
+        "median": 741.5,
+        "p95": 864.1
+      },
+      "apiMs": {
+        "median": 514.4,
+        "p95": 594.03
+      },
+      "kernelMs": {
+        "median": 157.47,
+        "p95": 187.44
+      },
+      "writes": 2,
+      "queries": [
+        6,
+        4
+      ],
+      "selects": [
+        4,
+        4
+      ],
+      "updates": [
+        2,
+        0
+      ],
+      "transactions": [
+        1,
+        1
+      ],
+      "payloadBytes": 2632,
+      "refetches": [
+        0
+      ],
+      "parentRenders": [
+        0
+      ],
+      "detailRenders": [
+        0
+      ],
+      "reactCommitMs": {
+        "median": 0.4,
+        "p95": 7.5
+      }
+    },
+    {
+      "count": 50,
+      "scenario": "save",
+      "samples": 20,
+      "visibleMs": {
+        "median": 297.1,
+        "p95": 436.5
+      },
+      "apiMs": {
+        "median": 275.41,
+        "p95": 408.72
+      },
+      "kernelMs": {
+        "median": 102.83,
+        "p95": 158.89
+      },
+      "writes": 1,
+      "queries": [
+        6
+      ],
+      "selects": [
+        4
+      ],
+      "updates": [
+        2
+      ],
+      "transactions": [
+        1
+      ],
+      "payloadBytes": 6772,
+      "refetches": [
+        0
+      ],
+      "parentRenders": [
+        0
+      ],
+      "detailRenders": [
+        0
+      ],
+      "reactCommitMs": {
+        "median": 9,
+        "p95": 13.4
+      }
+    }
+  ],
+  "interactions": {
+    "addRemove13": {
+      "addMs": 34.1,
+      "removeMs": 205.6,
+      "typedName": "S",
+      "expectedName": "Synthetic name",
+      "requests": 0
+    },
+    "addRemove20": {
+      "addMs": 37.7,
+      "removeMs": 186.7,
+      "typedName": "S",
+      "expectedName": "Synthetic name",
+      "requests": 0
+    },
+    "addRemove50": {
+      "addMs": 46.6,
+      "removeMs": 203.7,
+      "typedName": "S",
+      "expectedName": "Synthetic name",
+      "requests": 0
+    },
+    "rapidSaveClicks": {
+      "clicks": 3,
+      "writes": 1,
+      "toasts": 1
+    },
+    "validationRetries": 0,
+    "reloadKeepsDraft": true,
+    "input50RowsMs": {
+      "median": 12.2,
+      "p95": 18.5
+    },
+    "toast": {
+      "parentRenders": 0,
+      "detailRenders": 0,
+      "handoverRenders": 0,
+      "commitMs": [
+        0.09999999962747097,
+        0.2000000011175871
+      ],
+      "layoutShift": 0
+    },
+    "mobile": {
+      "scrollY": 17458,
+      "toastTop": 0,
+      "toastBottom": 90,
+      "saveTop": 800,
+      "overflow": false
+    },
+    "toastTimers": "success 4s / error 7s; browser clock verified",
+    "toastHeapDelta500": 127880
+  },
+  "initialRenders": [
+    {
+      "count": 13,
+      "commits": [
+        10.300000000745058,
+        16.600000001490116,
+        3.300000000745058,
+        8.599999999627471,
+        0.40000000037252903
+      ]
+    },
+    {
+      "count": 20,
+      "commits": [
+        1.5000000018626451,
+        4.300000000745058,
+        2.799999998882413,
+        9.699999999254942,
+        0.2999999988824129
+      ]
+    },
+    {
+      "count": 50,
+      "commits": [
+        2.300000000745058,
+        4.599999999627471,
+        2.900000000372529,
+        19.09999999962747,
+        0.3999999985098839
+      ]
+    },
+    {
+      "count": 20,
+      "commits": [
+        1.900000000372529,
+        8.099999999627471,
+        4.699999999254942,
+        9.800000000745058,
+        0.2999999988824129
+      ]
+    },
+    {
+      "count": 20,
+      "commits": [
+        1.800000000745058,
+        4.700000001117587,
+        3.200000001117587,
+        9.300000000745058,
+        0.30000000074505806
+      ]
+    },
+    {
+      "count": 13,
+      "commits": [
+        1.700000001117587,
+        4.599999999627471,
+        3,
+        7.600000001490116,
+        0.40000000037252903
+      ]
+    },
+    {
+      "count": 50,
+      "commits": [
+        5.199999999254942,
+        5,
+        5.099999999627471,
+        19.200000001117587,
+        0.5
+      ]
+    }
+  ]
+}
