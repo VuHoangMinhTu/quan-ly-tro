@@ -58,6 +58,7 @@ async function pageHarness(path, { invoice = invoiceFixture, payments = [] } = {
     Search: () => null, X: () => null,
     PaymentForm: (props) => React.createElement('payment-form', props),
     QRCodeSVG: (props) => React.createElement('svg', props),
+    PrivatePaymentQr: ({ profile, className }) => React.createElement('img', { src: 'blob:bank-qr', className, 'data-endpoint': profile.payment_qr_url }),
     deleteInvoice: () => {}, generateInvoice: () => {}, getInvoice: () => {}, getInvoicesByRoom: () => {},
     createInvoiceItem: () => {}, deleteInvoiceItem: () => {}, updateInvoiceItem: () => {},
     createPayment: () => {}, deletePayment: () => {}, getPayments: () => {}, updatePayment: () => {}, createPayOSPaymentRequest: () => {},
@@ -124,4 +125,17 @@ test('PAID invoice hides payment creation and retains the paid display', async (
   assert.equal(rendered.some((node) => node.type === 'button' && text(node) === 'Ghi nhận tiền mặt'), false)
   assert.equal(rendered.some((node) => node.type === 'button' && text(node) === 'Tạo QR thanh toán'), false)
   assert.ok(rendered.some((node) => text(node).includes('Đã thanh toán đầy đủ')))
+})
+
+test('invoice detail renders the invoice bank profile beside existing payment actions without creating a request', async () => {
+  const bank = { bank_name: 'MB Bank', bank_account_name: 'CHỦ TRỌ TEST', bank_account_number: '0012345', payment_qr_url: '/invoices/1/payment-qr', payment_qr_version: 'issued-snapshot' }
+  const page = await pageHarness('./InvoiceDetailPage.jsx', { invoice: { ...invoiceFixture, payment_profile: bank } })
+  const rendered = page.render()
+  const image = rendered.find(node => node.type === 'img')
+  assert.equal(image.props['data-endpoint'], '/invoices/1/payment-qr')
+  assert.match(image.props.className, /object-contain/)
+  assert.match(text(rendered), /MB Bank/)
+  assert.match(text(rendered), /CHỦ TRỌ TEST/)
+  assert.match(text(rendered), /0012345/)
+  assert.ok(page.mutations.every(mutation => mutation.calls.length === 0))
 })

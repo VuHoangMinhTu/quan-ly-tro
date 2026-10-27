@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Exceptions\InvoiceFinancialEditException;
 use App\Models\BoardingHouse;
+use App\Models\Contract;
+use App\Models\Invoice;
 use App\Models\Landlord;
 use App\Models\Room;
 use App\Models\RoomTenant;
@@ -23,18 +25,21 @@ class BillingVatApiTest extends TestCase
     use RefreshDatabase;
 
     #[DataProvider('billingMethods')]
-    public function test_each_billing_method_generates_a_separate_snapshotted_vat_item(string $method, string $amount, string $tax): void
+    public function test_each_billing_method_generates_only_the_base_charge_even_with_a_configured_vat_rate(string $method, string $amount): void
     {
         [$user, $invoice, $service] = $this->fixture($method);
         $this->actingAs($user, 'sanctum')->postJson("/api/invoices/{$invoice->id}/generate")->assertOk()->assertJsonPath('data', null);
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY', 'amount' => $amount, 'source' => 'AUTO']);
-        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'SERVICE_TAX', 'description' => 'VAT tiền điện (8%)', 'quantity' => 1, 'unit_price' => $tax, 'amount' => $tax, 'tax_rate' => 8, 'source' => 'AUTO']);
-        $this->assertDatabaseCount('invoice_items', 2);
+        $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'SERVICE_TAX']);
+        $this->assertDatabaseCount('invoice_items', 1);
+        $this->assertSame($amount, $invoice->fresh()->subtotal);
+        $this->assertSame($amount, $invoice->fresh()->total_amount);
+        $this->assertSame('8.00', $service->fresh()->vat_rate);
     }
 
     public static function billingMethods(): array
     {
-        return ['fixed' => ['FIXED', '284000.00', '22720.00'], 'per unit' => ['PER_UNIT', '284000.00', '22720.00'], 'per person' => ['PER_PERSON', '284000.00', '22720.00'], 'tiered' => ['TIERED', '234000.00', '18720.00']];
+        return ['fixed' => ['FIXED', '284000.00'], 'per unit' => ['PER_UNIT', '284000.00'], 'per person' => ['PER_PERSON', '284000.00'], 'tiered' => ['TIERED', '234000.00']];
     }
 
     public function test_zero_rate_does_not_create_tax_and_other_service_is_not_changed(): void
@@ -49,33 +54,36 @@ class BillingVatApiTest extends TestCase
         $this->assertSame('0.00', $water->fresh()->vat_rate);
     }
 
-    public function test_regeneration_recalculates_vat_without_duplicates_or_losing_manual_items(): void
+    public function test_explicit_regeneration_removes_legacy_auto_tax_without_duplicates_or_losing_manual_items(): void
     {
         [$user, $invoice, $service] = $this->fixture('FIXED');
         $manual = $invoice->items()->create(['type' => 'OTHER', 'description' => 'Thủ công', 'quantity' => 1, 'unit_price' => 10000, 'amount' => 10000, 'source' => 'MANUAL']);
         $this->actingAs($user, 'sanctum')->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+        $this->addHistoricalTax($invoice);
         $service->update(['vat_rate' => 10]);
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'description' => 'VAT tiền điện (8%)', 'tax_rate' => 8]);
         $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
         $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
         $this->assertModelExists($manual);
-        $this->assertDatabaseCount('invoice_items', 3);
-        $this->assertDatabaseHas('invoice_items', ['type' => 'SERVICE_TAX', 'amount' => 28400, 'tax_rate' => 10, 'description' => 'VAT tiền điện (10%)']);
-        $this->assertSame('322400.00', $invoice->fresh()->total_amount);
+        $this->assertDatabaseCount('invoice_items', 2);
+        $this->assertDatabaseMissing('invoice_items', ['type' => 'SERVICE_TAX']);
+        $this->assertSame('294000.00', $invoice->fresh()->total_amount);
     }
 
-    public function test_tax_rounds_half_up_to_one_dong_without_float_artifacts(): void
+    public function test_small_fractional_base_charge_is_preserved_without_tax_or_float_artifacts(): void
     {
         [$user, $invoice, $service] = $this->fixture('FIXED');
         $service->update(['base_price' => '6.25']);
         $this->actingAs($user, 'sanctum')->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
-        $this->assertSame('1.00', $invoice->items()->where('type', 'SERVICE_TAX')->sole()->amount);
+        $this->assertSame('6.25', $invoice->fresh()->total_amount);
+        $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'SERVICE_TAX']);
     }
 
     public function test_paid_invoice_cannot_regenerate_and_keeps_its_tax_snapshot(): void
     {
         [$user, $invoice, $service] = $this->fixture('FIXED');
         $this->actingAs($user, 'sanctum')->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+        $this->addHistoricalTax($invoice);
         $invoice->refresh()->update(['status' => 'PAID', 'paid_amount' => 306720]);
         $service->update(['vat_rate' => 10]);
         $this->postJson("/api/invoices/{$invoice->id}/generate")->assertUnprocessable();
@@ -83,7 +91,7 @@ class BillingVatApiTest extends TestCase
         $this->assertSame('306720.00', $invoice->fresh()->total_amount);
     }
 
-    public function test_real_payos_flow_uses_the_remaining_amount_including_tax(): void
+    public function test_real_payos_flow_uses_the_remaining_amount_without_tax_for_new_charges(): void
     {
         [$user, $invoice] = $this->fixture('PER_UNIT');
         config(['services.payos.global_fallback_landlord_id' => $user->landlord->id,
@@ -92,17 +100,18 @@ class BillingVatApiTest extends TestCase
         $this->postJson("/api/invoices/{$invoice->id}/payments", ['amount' => 10000, 'payment_method' => 'CASH', 'paid_at' => '2026-10-15 10:00:00'])->assertCreated();
         $service = Mockery::mock(PayOSService::class)->makePartial()->shouldAllowMockingProtectedMethods();
         $service->shouldReceive('createPaymentLink')->once()->withArgs(function ($current, $request): bool {
-            return $current->total_amount === '306720.00' && $request->amount === '296720.00';
-        })->andReturnUsing(fn ($current, $request) => new CreatePaymentLinkResponse('970422', '123456789', 'Test', 296720, 'Test', $request->order_code, 'VND', 'vat-test', PaymentLinkStatus::PENDING, 'https://pay.example/vat', '000201010212'));
+            return $current->total_amount === '284000.00' && $request->amount === '274000.00';
+        })->andReturnUsing(fn ($current, $request) => new CreatePaymentLinkResponse('970422', '123456789', 'Test', 274000, 'Test', $request->order_code, 'VND', 'vat-test', PaymentLinkStatus::PENDING, 'https://pay.example/vat', '000201010212'));
         $this->app->instance(PayOSService::class, $service);
-        $this->postJson("/api/invoices/{$invoice->id}/payos")->assertOk()->assertJsonPath('data.payment_request.amount', 296720);
-        $this->assertDatabaseHas('payos_payment_requests', ['invoice_id' => $invoice->id, 'amount' => 296720, 'payment_link_id' => 'vat-test']);
+        $this->postJson("/api/invoices/{$invoice->id}/payos")->assertOk()->assertJsonPath('data.payment_request.amount', 274000);
+        $this->assertDatabaseHas('payos_payment_requests', ['invoice_id' => $invoice->id, 'amount' => 274000, 'payment_link_id' => 'vat-test']);
     }
 
     public function test_stale_loaded_invoice_cannot_regenerate_after_persisted_invoice_is_paid(): void
     {
         [$user, $stale, $service] = $this->fixture('FIXED');
         $this->actingAs($user, 'sanctum')->postJson("/api/invoices/{$stale->id}/generate")->assertOk();
+        $this->addHistoricalTax($stale);
         $stale->fresh()->update(['status' => 'PAID', 'paid_amount' => 306720]);
         $service->update(['vat_rate' => 10]);
         try {
@@ -113,6 +122,63 @@ class BillingVatApiTest extends TestCase
         }
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $stale->id, 'tax_rate' => 8, 'amount' => 22720]);
         $this->assertSame('306720.00', $stale->fresh()->total_amount);
+    }
+
+    public function test_new_invoice_keeps_rent_water_services_manual_charges_and_discount_without_vat(): void
+    {
+        [$user, $invoice] = $this->fixture('PER_UNIT');
+        $contract = Contract::factory()->create(['room_id' => $invoice->room_id, 'tenant_id' => Tenant::create(['landlord_id' => $user->landlord->id, 'full_name' => 'Người thuê'])->id,
+            'start_date' => '2026-10-01', 'end_date' => '2027-09-30', 'monthly_rent' => 3000000]);
+        $invoice->update(['contract_id' => $contract->id]);
+        $house = $invoice->room->boardingHouse;
+        $water = $house->services()->create(['name' => 'Nước', 'type' => 'WATER', 'billing_method' => 'FIXED', 'base_price' => 20000, 'vat_rate' => 8]);
+        $internet = $house->services()->create(['name' => 'Internet', 'type' => 'INTERNET', 'billing_method' => 'FIXED', 'base_price' => 100000, 'vat_rate' => 10]);
+        $invoice->room->services()->attach([$water->id => ['is_active' => true], $internet->id => ['is_active' => true]]);
+        $manual = $invoice->items()->create(['type' => 'OTHER', 'description' => 'Khoản thu khác', 'quantity' => 1, 'unit_price' => 50000, 'amount' => 50000, 'source' => 'MANUAL']);
+
+        $this->actingAs($user, 'sanctum')->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+        $invoice->refresh()->update(['discount_amount' => 10000]);
+        $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+
+        $this->assertSame('3454000.00', $invoice->fresh()->subtotal);
+        $this->assertSame('3444000.00', $invoice->fresh()->total_amount);
+        $this->assertSame(5, $invoice->items()->count());
+        $this->assertModelExists($manual);
+        $this->assertDatabaseMissing('invoice_items', ['type' => 'SERVICE_TAX']);
+    }
+
+    public function test_reading_an_issued_legacy_invoice_preserves_its_tax_and_totals(): void
+    {
+        [$user, $invoice] = $this->fixture('FIXED');
+        $this->actingAs($user, 'sanctum')->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+        $this->addHistoricalTax($invoice);
+
+        $this->getJson("/api/invoices/{$invoice->id}")->assertOk()->assertJsonPath('data.total_amount', '306720.00');
+
+        $this->assertSame('306720.00', $invoice->fresh()->total_amount);
+        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'SERVICE_TAX', 'amount' => 22720]);
+    }
+
+    public function test_agreed_contract_service_rate_does_not_add_vat_to_new_invoice(): void
+    {
+        [$user, $invoice, $service] = $this->fixture('FIXED');
+        $contract = Contract::factory()->create(['room_id' => $invoice->room_id, 'monthly_rent' => 3000000]);
+        $term = $contract->agreedServices()->create(['service_id' => $service->id, 'service_name' => 'Điện', 'service_type' => 'ELECTRICITY',
+            'billing_method' => 'FIXED', 'base_price' => 284000, 'vat_rate' => 8, 'is_active' => true, 'effective_from' => '2026-10-01']);
+        $contract->forceFill(['service_terms_version' => 1, 'signing_snapshot' => ['services' => [['id' => $term->id]]]])->save();
+        $invoice->update(['contract_id' => $contract->id]);
+
+        $this->actingAs($user, 'sanctum')->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+
+        $this->assertSame('3284000.00', $invoice->fresh()->total_amount);
+        $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'SERVICE_TAX']);
+        $this->assertSame('8.00', $term->fresh()->vat_rate);
+    }
+
+    private function addHistoricalTax(Invoice $invoice): void
+    {
+        $invoice->items()->create(['type' => 'SERVICE_TAX', 'description' => 'VAT tiền điện (8%)', 'quantity' => 1, 'unit_price' => 22720, 'amount' => 22720, 'tax_rate' => 8, 'source' => 'AUTO']);
+        $invoice->recalculateTotals();
     }
 
     private function fixture(string $method): array

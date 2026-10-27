@@ -98,6 +98,10 @@ class PaymentQrApiTest extends TestCase
         $this->get("/api/invoices/{$bInvoice->id}/payment-qr")->assertNotFound();
         $this->actingAs($b, 'sanctum')->getJson("/api/invoices/{$bInvoice->id}")->assertOk()->assertJsonPath('data.payment_profile.bank_name', 'MB Bank');
         $this->get("/api/invoices/{$aInvoice->id}/payment-qr")->assertNotFound();
+        $aInvoice->room->boardingHouse->managers()->attach($b);
+        $this->getJson("/api/invoices/{$aInvoice->id}")->assertOk()->assertJsonPath('data.payment_profile.bank_name', 'Vietcombank');
+        $this->get("/api/invoices/{$aInvoice->id}/payment-qr")->assertOk()
+            ->assertStreamedContent(Storage::disk('local')->get($aInvoice->payment_snapshot['payment_qr_path']));
         $manager = User::factory()->create();
         $aInvoice->room->boardingHouse->managers()->attach($manager);
         $this->actingAs($manager, 'sanctum')->putJson('/api/landlord/payment-profile', ['remove_payment_qr' => true])->assertForbidden();
@@ -117,6 +121,9 @@ class PaymentQrApiTest extends TestCase
         $invoice->update(['status' => 'UNPAID', 'issued_at' => '2026-10-24']);
         $snapshot = $invoice->fresh()->payment_snapshot;
         $this->upload($owner, ['bank_name' => 'ACB'])->assertOk();
+        $newInvoice = $this->invoice($owner, 'UNPAID');
+        $this->getJson("/api/invoices/{$newInvoice->id}")->assertOk()->assertJsonPath('data.payment_profile.bank_name', 'ACB');
+        $this->assertNotSame($snapshot['payment_qr_path'], $newInvoice->payment_snapshot['payment_qr_path']);
         $this->putJson('/api/landlord/payment-profile', ['remove_payment_qr' => true])->assertOk();
         $this->getJson("/api/invoices/{$invoice->id}")->assertOk()->assertJsonPath('data.payment_profile.bank_name', 'MB Bank')
             ->assertJsonMissingPath('data.payment_snapshot');

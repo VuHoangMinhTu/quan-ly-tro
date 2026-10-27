@@ -12,6 +12,7 @@ import { createPayOSPaymentRequest } from '../../api/payosApi'
 import { paymentKeys } from '../../api/paymentKeys'
 import PaymentForm from '../../components/forms/PaymentForm'
 import InvoiceStatusBadge from '../../components/invoices/InvoiceStatusBadge'
+import PrivatePaymentQr from '../../components/payments/PrivatePaymentQr'
 import { formatCurrency, formatDate } from '../../utils/formatters'
 import MoneyInput from '../../components/ui/MoneyInput'
 import { canEditInvoiceFinancials } from '../../utils/invoiceFinancials'
@@ -78,6 +79,7 @@ export default function InvoiceDetailPage() {
   if (invoiceQuery.isError) return <p className="text-red-600">{getApiErrorMessage(invoiceQuery.error)}</p>
 
   const invoice = invoiceQuery.data.data.data
+  const bank = invoice.payment_profile
   const canManage = invoice.can_manage !== false
   const draft = canManage && invoice.status === 'DRAFT'
   const canEditFinancials = canEditInvoiceFinancials(invoice)
@@ -125,6 +127,19 @@ export default function InvoiceDetailPage() {
       </div>
     </div>
     <div className="mt-6 min-w-0 rounded-xl bg-white p-4 shadow sm:p-5">
+      <h3 className="font-semibold">Thông tin thanh toán</h3>
+      {bank?.payment_qr_url && <div className="mt-3 grid justify-items-center gap-2">
+        <PrivatePaymentQr profile={bank} className="h-48 w-48 max-w-full object-contain" />
+        <p className="text-center text-sm text-slate-600">Quét mã QR để chuyển khoản thanh toán.</p>
+      </div>}
+      <dl className="mt-3 space-y-2 break-words text-sm">
+        {bank?.bank_name && <div><dt className="text-slate-500">Ngân hàng</dt><dd>{bank.bank_name}</dd></div>}
+        {bank?.bank_account_name && <div><dt className="text-slate-500">Chủ tài khoản</dt><dd>{bank.bank_account_name}</dd></div>}
+        {bank?.bank_account_number && <div><dt className="text-slate-500">Số tài khoản</dt><dd>{bank.bank_account_number}</dd></div>}
+      </dl>
+      {!bank?.payment_qr_url && !bank?.bank_name && !bank?.bank_account_name && !bank?.bank_account_number && <p className="mt-3 text-sm text-slate-600">Vui lòng liên hệ chủ trọ để biết thông tin thanh toán.</p>}
+    </div>
+    <div className="mt-6 min-w-0 rounded-xl bg-white p-4 shadow sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h3 className="font-semibold">Thanh toán</h3>
         {canPay && <div className="flex flex-wrap gap-2"><button onClick={() => setPayment({})} className="min-h-11 px-2 text-sm underline">Ghi nhận tiền mặt</button>{(invoice.payos_available || invoice.payos_payment_request) && <button disabled={payosMutation.isPending} onClick={openPayOS} className="min-h-11 rounded bg-blue-700 px-3 py-2 text-sm text-white disabled:opacity-60">{payosMutation.isPending ? 'Đang tạo QR...' : invoice.payos_payment_request ? 'Xem QR thanh toán' : 'Tạo QR thanh toán'}</button>}</div>}
@@ -163,8 +178,9 @@ export default function InvoiceDetailPage() {
       </div>
       {generateMessage && <p className="mt-3 break-words text-sm text-slate-700">{generateMessage}</p>}
       <div className="mt-4 min-w-0 max-w-full overflow-x-auto">
-        <table className="min-w-[560px] w-full text-sm"><tbody>{(invoice.items || []).map((currentItem) => <tr key={currentItem.id} className="border-t"><td className="max-w-80 break-words p-2">{currentItem.description}</td><td className="whitespace-nowrap p-2">{formatCurrency(currentItem.amount)}</td><td className="whitespace-nowrap p-2"><span className="rounded-full bg-slate-100 px-2 py-1 text-xs">{currentItem.source === 'AUTO' ? 'Tự động' : 'Thủ công'}</span></td><td className="p-2">{canEditFinancials && currentItem.source !== 'AUTO' && <div className="flex gap-2"><button onClick={() => setItem(currentItem)} className="min-h-11 px-2 underline">Sửa</button><button onClick={() => window.confirm('Xóa khoản thu này?') && deleteItemMutation.mutate(currentItem.id)} className="min-h-11 px-2 text-red-700">Xóa</button></div>}</td></tr>)}</tbody></table>
+        <table className="min-w-[560px] w-full text-sm"><tbody>{(invoice.items || []).map((currentItem) => <tr key={currentItem.id} className="border-t"><td className="max-w-80 break-words p-2">{currentItem.description}</td><td className="whitespace-nowrap p-2">{formatCurrency(currentItem.amount)}</td><td className="p-2">{canEditFinancials && currentItem.source !== 'AUTO' && <div className="flex gap-2"><button onClick={() => setItem(currentItem)} className="min-h-11 px-2 underline">Sửa</button><button onClick={() => window.confirm('Xóa khoản thu này?') && deleteItemMutation.mutate(currentItem.id)} className="min-h-11 px-2 text-red-700">Xóa</button></div>}</td></tr>)}</tbody></table>
       </div>
+      {(invoice.items || []).some(currentItem => currentItem.type === 'SERVICE_TAX') && <p className="mt-3 text-sm text-slate-600">Khoản VAT đã ghi nhận được giữ theo hóa đơn gốc, không tự điều chỉnh dữ liệu lịch sử.</p>}
     </div>
     {payment && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4" role="dialog" aria-modal="true" aria-label={payment.id ? 'Sửa thanh toán' : 'Ghi nhận thanh toán'}><div className="max-h-[90dvh] w-full min-w-0 max-w-md overflow-y-auto rounded-xl bg-white p-4 sm:p-6"><div className="mb-4 flex items-center justify-between gap-2"><b>{payment.id ? 'Sửa' : 'Ghi nhận'} thanh toán</b><button type="button" onClick={() => setPayment(null)} aria-label="Đóng" className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center">✕</button></div><PaymentForm remaining={payment.id ? remaining + Number(payment.amount) : remaining} initialValues={payment} onSubmit={(payload) => paymentMutation.mutateAsync(payload)} label="Lưu thanh toán" /></div></div>}
     {activePayosRequest && payosRequest && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Thanh toán qua payOS"><div className="max-h-[90dvh] w-full min-w-0 max-w-md overflow-y-auto rounded-xl bg-white p-4 text-center sm:p-6"><div className="flex items-center justify-between gap-2"><b className="text-left">Thanh toán qua payOS</b><button type="button" onClick={() => setPayosRequest(null)} aria-label="Đóng" className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center">✕</button></div>{invoice.status === 'PAID' ? <p className="mt-6 text-green-700">Hóa đơn đã được xác nhận thanh toán.</p> : <><p className="mt-3 text-sm text-slate-600">Quét mã QR hoặc mở trang thanh toán payOS. Trạng thái sẽ tự cập nhật sau khi payOS xác nhận.</p>{activePayosRequest.qr_code && <div className="mx-auto mt-5 w-fit max-w-full rounded-lg border bg-white p-3"><QRCodeSVG value={activePayosRequest.qr_code} size={220} level="M" className="block h-auto max-w-full" /></div>}<p className="mt-4 text-lg font-semibold">{formatCurrency(activePayosRequest.amount)}</p>{activePayosRequest.checkout_url && <a href={activePayosRequest.checkout_url} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-11 items-center justify-center rounded bg-slate-900 px-4 py-2 text-sm text-white">Mở trang thanh toán</a>}<p className="mt-4 break-words text-xs text-slate-500">Mã đơn: {activePayosRequest.order_code}</p>{activePayosRequest.description && <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-left"><p className="text-xs text-slate-500">Nội dung chuyển khoản</p><p className="mt-1 break-words text-sm font-semibold text-slate-800">{activePayosRequest.description}</p></div>}</>}</div></div>}

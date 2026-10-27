@@ -90,7 +90,7 @@ class ContractServiceTermsApiTest extends TestCase
         $this->putJson("/api/contracts/{$contract->id}", ['services' => []])->assertUnprocessable();
     }
 
-    public function test_billing_uses_historical_contract_price_vat_and_period_when_regenerated_later(): void
+    public function test_billing_uses_historical_contract_price_and_period_without_vat_when_regenerated_later(): void
     {
         [$contract, $owner, $service] = $this->fixture();
         $this->activate($contract, $owner, $service);
@@ -103,9 +103,9 @@ class ContractServiceTermsApiTest extends TestCase
         $this->postJson("/api/invoices/{$june->id}/generate")->assertOk();
 
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $may->id, 'type' => 'ELECTRICITY', 'quantity' => 20, 'unit_price' => 4000, 'amount' => 80000]);
-        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $may->id, 'type' => 'SERVICE_TAX', 'amount' => 6400, 'tax_rate' => 8]);
+        $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $may->id, 'type' => 'SERVICE_TAX']);
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $june->id, 'type' => 'ELECTRICITY', 'quantity' => 30, 'unit_price' => 4500, 'amount' => 135000]);
-        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $june->id, 'type' => 'SERVICE_TAX', 'amount' => 13500, 'tax_rate' => 10]);
+        $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $june->id, 'type' => 'SERVICE_TAX']);
         $juneItems = $june->items()->get()->toArray();
         $this->travelTo('2027-07-15');
         $this->postJson("/api/invoices/{$may->id}/generate")->assertOk();
@@ -123,7 +123,7 @@ class ContractServiceTermsApiTest extends TestCase
         $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
 
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY', 'amount' => 60000]);
-        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'SERVICE_TAX', 'amount' => 4800]);
+        $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'SERVICE_TAX']);
     }
 
     public function test_tier_adjustment_changes_only_future_tier_snapshot_and_vat(): void
@@ -142,7 +142,7 @@ class ContractServiceTermsApiTest extends TestCase
         $this->assertSame($tiers, $original->fresh()->pricing_snapshot);
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $may->id, 'type' => 'ELECTRICITY', 'amount' => 60000]);
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $june->id, 'type' => 'ELECTRICITY', 'amount' => 150000]);
-        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $june->id, 'type' => 'SERVICE_TAX', 'tax_rate' => 10, 'amount' => 15000]);
+        $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $june->id, 'type' => 'SERVICE_TAX']);
     }
 
     public function test_paid_period_blocks_stop_and_new_service_addition_too(): void

@@ -185,20 +185,5 @@ class BillingService
         $invoice->items()->create(['type' => $type, 'description' => $description, 'quantity' => (string) $quantity,
             'unit' => $unit, 'unit_price' => (string) $price,
             'amount' => (string) $amount, 'source' => 'AUTO']);
-        $rate = BigDecimal::of($service?->vat_rate ?? 0);
-        if ($rate->isZero()) {
-            return;
-        }
-
-        // Tax is a service configuration, not a legal default. Snapshot the rate
-        // and round half-up to a whole dong; regeneration replaces only AUTO items.
-        $tax = $amount->multipliedBy($rate)->dividedBy(100, 0, RoundingMode::HalfUp);
-        $label = mb_strtolower(__('services.types.'.($service instanceof ContractTerm ? $service->service_type : $service->type)));
-        $rateLabel = str_contains((string) $rate, '.') ? rtrim(rtrim((string) $rate, '0'), '.') : (string) $rate;
-        $invoice->items()->create([
-            'type' => 'SERVICE_TAX', 'description' => 'VAT tiền '.$label.' ('.$rateLabel.'%)',
-            'quantity' => 1, 'unit_price' => (string) $tax, 'amount' => (string) $tax,
-            'source' => 'AUTO', 'tax_rate' => (string) $rate,
-        ]);
     }
 }
