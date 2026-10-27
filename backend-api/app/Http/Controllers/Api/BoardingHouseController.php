@@ -43,8 +43,15 @@ class BoardingHouseController extends Controller
         $boardingHouse = DB::transaction(function () use ($request, $data): BoardingHouse {
             // Both ownership keys are assigned by relations, never by the client.
             $house = $this->landlordBoardingHouses($request)->create($data['boarding_house']);
+            $floorIds = [];
+            foreach ($data['floors'] ?? [] as $floor) {
+                $floorIds[$floor['client_key']] = $house->floors()->create([
+                    'name' => $floor['name'], 'sort_order' => $floor['sort_order'],
+                ])->id;
+            }
             foreach ($data['rooms'] as $room) {
                 app(RoomOrderingService::class)->create($house, [
+                    'floor_id' => isset($room['floor_client_key']) ? $floorIds[$room['floor_client_key']] : null,
                     'room_code' => $room['room_code'],
                     'room_type' => $room['room_type'] ?? 'PRIVATE_ROOM',
                     'private_room_type' => $room['private_room_type'] ?? null,

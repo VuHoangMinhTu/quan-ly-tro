@@ -15,7 +15,12 @@ export const emptyBulkRoom = (roomCode = '', roomType = ROOM_TYPES.PRIVATE_ROOM,
 const optionalNumber = (label, maximum, integer = false) => numberInput(label, { optional: true, min: integer ? 1 : 0, max: maximum, integer })
 
 export const bulkRoomsSchema = z.object({
+  floors: z.array(z.object({
+    client_key: z.string().min(1).max(100),
+    name: z.string().trim().min(1, 'Vui lòng nhập tên tầng.').max(100, 'Tên tầng tối đa 100 ký tự.'),
+  })).max(200, 'Mỗi lần chỉ được tạo tối đa 200 tầng.').optional(),
   rooms: z.array(z.object({
+    floor_client_key: z.string().nullable().optional(),
     room_code: z.string().trim().min(1, 'Vui lòng nhập mã phòng.').max(50, 'Mã phòng tối đa 50 ký tự.'),
     room_type: z.enum([ROOM_TYPES.PRIVATE_ROOM, ROOM_TYPES.DORMITORY]),
     private_room_type: z.enum([PRIVATE_ROOM_TYPES.STUDIO, PRIVATE_ROOM_TYPES.LOFT, PRIVATE_ROOM_TYPES.NO_LOFT, PRIVATE_ROOM_TYPES.CLOSED_ROOM]).nullable(),
@@ -23,7 +28,19 @@ export const bulkRoomsSchema = z.object({
     monthly_rent: optionalNumber('Giá thuê', 9999999999999.99),
     max_tenants: optionalNumber('Số người tối đa', 4294967295, true),
   })).min(1, 'Vui lòng thêm ít nhất một phòng.').max(MAX_BULK_ROOMS, 'Mỗi lần chỉ được tạo tối đa 200 phòng.'),
-}).superRefine(({ rooms }, context) => {
+}).superRefine(({ rooms, floors }, context) => {
+  if (floors) {
+    const names = new Map()
+    floors.forEach((floor, index) => {
+      const name = floor.name.toLocaleLowerCase('vi-VN')
+      if (names.has(name)) {
+        for (const duplicate of [names.get(name), index]) context.addIssue({ code: 'custom', path: ['floors', duplicate, 'name'], message: 'Tên tầng bị trùng trong danh sách.' })
+      } else names.set(name, index)
+    })
+    rooms.forEach((room, index) => {
+      if (room.floor_client_key && !floors.some(floor => floor.client_key === room.floor_client_key)) context.addIssue({ code: 'custom', path: ['rooms', index, 'floor_client_key'], message: 'Vui lòng chọn lại tầng cho phòng.' })
+    })
+  }
   const indexes = new Map()
   rooms.forEach((room, index) => {
     const code = room.room_code.trim().toLocaleLowerCase('vi-VN')

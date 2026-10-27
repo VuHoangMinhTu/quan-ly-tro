@@ -58,3 +58,16 @@ test('generator rejects invalid or excessive ranges and preserves leading zeros'
   assert.throws(() => generateRoomCodes('1', 'a'))
   assert.equal(generateRoomCodes('001', '010')[0].room_code, '001')
 })
+
+test('temporary floor validation keeps explicit assignments and rejects removed floors or duplicate names', () => {
+  const floors = [{ client_key: 'ground', name: ' Tầng trệt ' }, { client_key: 'first', name: 'Tầng 1' }]
+  const rooms = [{ ...emptyBulkRoom('105'), floor_client_key: 'ground' }, { ...emptyBulkRoom('201'), floor_client_key: null }]
+  const parsed = bulkRoomsSchema.parse({ floors, rooms })
+  assert.equal(parsed.floors[0].name, 'Tầng trệt')
+  assert.equal(parsed.rooms[0].floor_client_key, 'ground')
+  assert.equal(parsed.rooms[1].floor_client_key, null)
+  assert.deepEqual(bulkRoomsSchema.safeParse({ floors: [], rooms }).error.issues[0].path, ['rooms', 0, 'floor_client_key'])
+  const duplicate = bulkRoomsSchema.safeParse({ floors: [floors[0], { client_key: 'other', name: 'tầng trệt' }], rooms: [emptyBulkRoom('101')] })
+  assert.deepEqual(duplicate.error.issues.map(issue => issue.path), [['floors', 0, 'name'], ['floors', 1, 'name']])
+  assert.equal(bulkRoomsSchema.safeParse({ floors: [{ client_key: 'blank', name: '  ' }], rooms }).success, false)
+})

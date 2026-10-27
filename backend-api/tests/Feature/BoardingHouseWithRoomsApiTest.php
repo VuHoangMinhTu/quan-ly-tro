@@ -105,12 +105,72 @@ class BoardingHouseWithRoomsApiTest extends TestCase
         });
 
         try {
-            $this->postJson('/api/boarding-houses/with-rooms', $this->payload())->assertStatus(500);
+            $data = $this->payload();
+            $data['floors'] = [['client_key' => 'ground', 'name' => 'Tầng trệt', 'sort_order' => 0]];
+            $data['rooms'][0]['floor_client_key'] = 'ground';
+            $this->postJson('/api/boarding-houses/with-rooms', $data)->assertStatus(500);
             $this->assertDatabaseCount('boarding_houses', 0);
+            $this->assertDatabaseCount('floors', 0);
             $this->assertDatabaseCount('rooms', 0);
         } finally {
             Event::forget('eloquent.creating: '.Room::class);
         }
+    }
+
+    public function test_temporary_floors_map_to_new_house_and_room_list_preserves_floor_groups(): void
+    {
+        $landlord = $this->owner();
+        $data = $this->payload();
+        $data['floors'] = [
+            ['client_key' => 'ground', 'name' => 'Tầng trệt', 'sort_order' => 0],
+            ['client_key' => 'first', 'name' => 'Tầng 1', 'sort_order' => 1],
+            ['client_key' => 'roof', 'name' => 'Sân thượng', 'sort_order' => 2],
+        ];
+        $data['rooms'] = array_map(fn (int $code) => ['room_code' => (string) $code, 'floor_client_key' => 'first', 'room_type' => 'PRIVATE_ROOM', 'private_room_type' => 'STUDIO'], range(101, 110));
+        $data['rooms'][4]['floor_client_key'] = 'ground';
+        $data['rooms'][8] = ['room_code' => '109', 'floor_client_key' => 'roof', 'room_type' => 'DORMITORY', 'private_room_type' => 'LOFT'];
+        $data['rooms'][9]['floor_client_key'] = null;
+        $id = $this->actingAsOwner($landlord)->postJson('/api/boarding-houses/with-rooms', $data)->assertCreated()->assertJsonPath('data.rooms_count', 10)->json('data.id');
+        $house = BoardingHouse::findOrFail($id);
+        $floors = $house->floors()->pluck('id', 'name');
+        $this->assertDatabaseCount('floors', 3);
+        $this->assertDatabaseCount('rooms', 10);
+        $this->assertDatabaseHas('floors', ['id' => $floors['Tầng trệt'], 'boarding_house_id' => $id, 'sort_order' => 0]);
+        $this->assertDatabaseHas('rooms', ['boarding_house_id' => $id, 'room_code' => '101', 'floor_id' => $floors['Tầng 1'], 'room_type' => 'PRIVATE_ROOM', 'private_room_type' => 'STUDIO']);
+        $this->assertDatabaseHas('rooms', ['boarding_house_id' => $id, 'room_code' => '105', 'floor_id' => $floors['Tầng trệt']]);
+        $this->assertDatabaseHas('rooms', ['boarding_house_id' => $id, 'room_code' => '109', 'floor_id' => $floors['Sân thượng'], 'room_type' => 'DORMITORY', 'private_room_type' => null]);
+        $this->assertDatabaseHas('rooms', ['boarding_house_id' => $id, 'room_code' => '110', 'floor_id' => null]);
+        $this->getJson("/api/boarding-houses/{$id}/rooms")->assertOk()
+            ->assertJsonPath('data.0.room_code', '105')->assertJsonPath('data.0.floor_id', $floors['Tầng trệt'])
+            ->assertJsonPath('data.0.floor.name', 'Tầng trệt')->assertJsonPath('data.0.floor.sort_order', 0)
+            ->assertJsonPath('data.9.room_code', '110');
+        $this->actingAsOwner($this->owner())->getJson("/api/boarding-houses/{$id}/floors")->assertNotFound();
+    }
+
+    public function test_invalid_floor_references_duplicates_and_foreign_ids_return_422_without_partial_writes(): void
+    {
+        $otherHouse = $this->house($this->owner());
+        $foreignFloor = $otherHouse->floors()->create(['name' => 'Tầng ngoài workspace', 'sort_order' => 0]);
+        $this->actingAsOwner($this->owner());
+        $data = $this->payload();
+        $data['rooms'][0]['floor_id'] = $foreignFloor->id;
+        $this->postJson('/api/boarding-houses/with-rooms', $data)->assertUnprocessable()->assertJsonValidationErrors('rooms.0');
+        unset($data['rooms'][0]['floor_id']);
+        $data['rooms'][0]['floor_client_key'] = (string) $foreignFloor->id;
+        $this->postJson('/api/boarding-houses/with-rooms', $data)->assertUnprocessable()->assertJsonValidationErrors('rooms.0.floor_client_key');
+        $data['rooms'][0]['floor_client_key'] = 'a';
+        $data['floors'] = [
+            ['client_key' => 'a', 'name' => ' Trệt ', 'sort_order' => 0],
+            ['client_key' => 'a', 'name' => 'trệt', 'sort_order' => -1],
+        ];
+        $this->postJson('/api/boarding-houses/with-rooms', $data)->assertUnprocessable()
+            ->assertJsonValidationErrors(['floors.0.client_key', 'floors.1.name', 'floors.1.sort_order'])
+            ->assertJsonFragment(['Tên tầng bị trùng trong danh sách.']);
+        $data['floors'] = [['client_key' => 'a', 'name' => '  ', 'sort_order' => 0]];
+        $this->postJson('/api/boarding-houses/with-rooms', $data)->assertUnprocessable()->assertJsonValidationErrors('floors.0.name');
+        $this->assertDatabaseCount('boarding_houses', 1);
+        $this->assertDatabaseCount('floors', 1);
+        $this->assertDatabaseCount('rooms', 0);
     }
 
     public function test_single_room_create_and_update_accept_null_rent_and_preserve_zero(): void

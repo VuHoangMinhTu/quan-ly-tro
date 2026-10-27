@@ -48,17 +48,19 @@ test('phase transition and back only keep drafts; final submit sends one atomic 
   ]
   await wizard.houseForm().onSubmit(house)
   assert.equal(wizard.calls.length, 0)
-  wizard.roomsForm().onBack(drafts)
+  const floors = [{ client_key: 'ground', name: 'Tầng trệt' }]
+  wizard.roomsForm().onBack(drafts, floors)
   assert.deepEqual(wizard.houseForm().initialValues, { ...house, description: '' })
   await wizard.houseForm().onSubmit(house)
   assert.deepEqual(wizard.roomsForm().initialRooms, drafts)
+  assert.deepEqual(wizard.roomsForm().initialFloors, floors)
   assert.equal(wizard.calls.length, 0)
   const rooms = [
     { room_code: '101', area: 20.5, monthly_rent: 3800000, max_tenants: 2 },
     { room_code: '102', area: null, monthly_rent: null, max_tenants: null },
   ]
-  await wizard.roomsForm().onSubmit(rooms)
-  assert.deepEqual(wizard.calls, [{ boarding_house: house, rooms }])
+  await wizard.roomsForm().onSubmit(rooms, [{ ...floors[0], sort_order: 0 }])
+  assert.deepEqual(wizard.calls, [{ boarding_house: house, rooms, floors: [{ ...floors[0], sort_order: 0 }] }])
   assert.deepEqual(wizard.invalidated, [boardingHouseKeys.all, roomKeys.byBoardingHouse(77)])
   assert.deepEqual(wizard.navigation(), ['/boarding-houses/77', { replace: true, state: { message: 'Đã tạo nhà trọ và 2 phòng thành công.' } }])
 })

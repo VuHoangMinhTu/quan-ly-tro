@@ -11,12 +11,13 @@ export default function BoardingHouseCreatePage() {
   const [phase, setPhase] = useState(1)
   const [house, setHouse] = useState({ name: '', address: '', ward: '', description: '' })
   const [rooms, setRooms] = useState([])
+  const [floors, setFloors] = useState([])
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const mutation = useMutation({ mutationFn: createBoardingHouseWithRooms })
 
-  const handleSubmit = async (newRooms) => {
-    const response = await mutation.mutateAsync({ boarding_house: house, rooms: newRooms })
+  const handleSubmit = async (newRooms, newFloors = []) => {
+    const response = await mutation.mutateAsync({ boarding_house: house, floors: newFloors, rooms: newRooms })
     const id = response.data.data.id
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: boardingHouseKeys.all }),
@@ -33,6 +34,6 @@ export default function BoardingHouseCreatePage() {
     </ol>
     {phase === 1
       ? <BoardingHouseForm initialValues={{ ...house, description: house.description ?? '' }} onSubmit={async (values) => { setHouse(values); setPhase(2) }} submitLabel="Tiếp tục: Tạo phòng →" />
-      : <><div className="mb-4 break-words rounded-lg bg-slate-100 p-4 text-sm"><p className="font-semibold">{house.name}</p><p className="mt-1 text-slate-600">{house.address}</p><p className="mt-2 text-xs text-slate-500">Chưa lưu dữ liệu. Nhà trọ và các phòng chỉ được tạo khi bạn xác nhận bên dưới.</p></div><BulkRoomForm initialRooms={rooms} onBack={(draftRooms) => { setRooms(draftRooms); setPhase(1) }} onSubmit={handleSubmit} /></>}
+      : <><div className="mb-4 break-words rounded-lg bg-slate-100 p-4 text-sm"><p className="font-semibold">{house.name}</p><p className="mt-1 text-slate-600">{house.address}</p><p className="mt-2 text-xs text-slate-500">Chưa lưu dữ liệu. Nhà trọ, tầng và các phòng chỉ được tạo khi bạn xác nhận bên dưới.</p></div><BulkRoomForm initialRooms={rooms} initialFloors={floors} onBack={(draftRooms, draftFloors) => { setRooms(draftRooms); setFloors(draftFloors); setPhase(1) }} onSubmit={handleSubmit} /></>}
   </section>
 }

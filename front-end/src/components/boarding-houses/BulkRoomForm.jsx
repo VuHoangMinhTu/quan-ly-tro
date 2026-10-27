@@ -10,16 +10,54 @@ import MoneyInput from '../ui/MoneyInput'
 const inputClass = 'min-h-11 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 sm:min-h-0 sm:text-sm'
 const buttonClass = 'min-h-11 w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 sm:w-auto'
 
-export default function BulkRoomForm({ initialRooms, onBack, onSubmit, submitLabel }) {
+function TemporaryFloors({ form, defaultFloor, setDefaultFloor }) {
+  const { fields, append, remove, move } = useFieldArray({ control: form.control, name: 'floors' })
+  const deleteFloor = (index) => {
+    const floor = form.getValues(`floors.${index}`)
+    const rooms = form.getValues('rooms')
+    const count = rooms.filter(room => room.floor_client_key === floor.client_key).length
+    const confirmation = count
+      ? `Tầng "${floor.name || 'Chưa đặt tên'}" đang được ${count} phòng sử dụng. Xóa tầng và chuyển các phòng này sang "Chưa phân tầng"?`
+      : defaultFloor === floor.client_key ? 'Tầng này đang được chọn làm tầng mặc định. Xóa tầng và bỏ lựa chọn tầng mặc định?' : null
+    if (confirmation && !window.confirm(confirmation)) return
+    rooms.forEach((room, row) => {
+      if (room.floor_client_key === floor.client_key) form.setValue(`rooms.${row}.floor_client_key`, null, { shouldDirty: true })
+    })
+    if (defaultFloor === floor.client_key) setDefaultFloor('')
+    remove(index)
+  }
+  return <section className="space-y-3 rounded-lg border border-slate-200 p-4">
+    <h4 className="text-sm font-semibold">Thiết lập tầng</h4>
+    <p className="text-xs text-slate-500">Đặt tên tùy ý và dùng nút lên/xuống để sắp xếp. Có thể để phòng chưa phân tầng.</p>
+    {fields.map((floor, index) => <div key={floor.id} className="space-y-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="min-w-0 flex-1 text-sm">Tên tầng {index + 1}<input maxLength={100} className={inputClass} {...form.register(`floors.${index}.name`)} /></label>
+        <div className="flex gap-1">
+          <button type="button" disabled={index === 0} aria-label={`Đưa tầng ${index + 1} lên`} onClick={() => move(index, index - 1)} className="min-h-11 rounded border px-3 disabled:opacity-30">↑</button>
+          <button type="button" disabled={index === fields.length - 1} aria-label={`Đưa tầng ${index + 1} xuống`} onClick={() => move(index, index + 1)} className="min-h-11 rounded border px-3 disabled:opacity-30">↓</button>
+          <button type="button" aria-label={`Xóa tầng ${index + 1}`} onClick={() => deleteFloor(index)} className="min-h-11 rounded border px-3 text-sm text-red-600">Xóa</button>
+        </div>
+      </div>
+      {form.formState.errors.floors?.[index]?.name && <p role="alert" className="text-xs text-red-600">{form.formState.errors.floors[index].name.message}</p>}
+    </div>)}
+    <button type="button" disabled={fields.length >= 200} onClick={() => append({ client_key: crypto.randomUUID(), name: '' })} className={buttonClass}>+ Thêm tầng</button>
+    {form.formState.errors.floors?.message && <p role="alert" className="text-sm text-red-600">{form.formState.errors.floors.message}</p>}
+  </section>
+}
+
+export default function BulkRoomForm({ initialRooms, initialFloors, onBack, onSubmit, submitLabel }) {
+  const floorSetup = initialFloors !== undefined
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [generatorError, setGeneratorError] = useState('')
   const [submitError, setSubmitError] = useState('')
   const [defaultRoomType, setDefaultRoomType] = useState(ROOM_TYPES.PRIVATE_ROOM)
   const [defaultPrivateRoomType, setDefaultPrivateRoomType] = useState(PRIVATE_ROOM_TYPES.NO_LOFT)
-  const form = useForm({ resolver: zodResolver(bulkRoomsSchema), defaultValues: { rooms: initialRooms }, mode: 'onSubmit' })
+  const [defaultFloor, setDefaultFloor] = useState('')
+  const form = useForm({ resolver: zodResolver(bulkRoomsSchema), defaultValues: { rooms: initialRooms, ...(floorSetup ? { floors: initialFloors } : {}) }, mode: 'onSubmit' })
   const { fields, append, remove } = useFieldArray({ control: form.control, name: 'rooms' })
   const draftRooms = useWatch({ control: form.control, name: 'rooms' })
+  const floors = useWatch({ control: form.control, name: 'floors' }) ?? []
   const { errors, isSubmitting } = form.formState
 
   const generate = () => {
@@ -30,7 +68,7 @@ export default function BulkRoomForm({ initialRooms, onBack, onSubmit, submitLab
       if (current.length + generated.length > MAX_BULK_ROOMS) throw new Error('Mỗi lần chỉ được tạo tối đa 200 phòng.')
       const codes = new Set(current.map((room) => room.room_code.trim().toLocaleLowerCase('vi-VN')))
       if (generated.some((room) => codes.has(room.room_code))) throw new Error('Khoảng mã này trùng với phòng đã thêm. Vui lòng chọn khoảng khác.')
-      append(generated)
+      append(floorSetup ? generated.map(room => ({ ...room, floor_client_key: defaultFloor || null })) : generated)
     } catch (error) {
       setGeneratorError(error.message)
     }
@@ -41,12 +79,12 @@ export default function BulkRoomForm({ initialRooms, onBack, onSubmit, submitLab
     form.setValue(`rooms.${index}.private_room_type`, roomType === ROOM_TYPES.DORMITORY ? null : defaultPrivateRoomType, { shouldDirty: true, shouldValidate: true })
   }
 
-  const submit = async ({ rooms }) => {
+  const submit = async ({ rooms, floors }) => {
     setSubmitError('')
     try {
-      await onSubmit(rooms)
+      await onSubmit(rooms, floors?.map((floor, sort_order) => ({ ...floor, sort_order })))
     } catch (error) {
-      const applied = applyApiFieldErrors(error, form.setError, (field) => field.startsWith('rooms.') ? field : null)
+      const applied = applyApiFieldErrors(error, form.setError, (field) => field.startsWith('rooms.') || field.startsWith('floors.') ? field : null)
       if (!applied) setSubmitError(getApiErrorMessage(error))
       const houseErrors = error.response?.data?.errors
       if (houseErrors && Object.keys(houseErrors).some((field) => field.startsWith('boarding_house.'))) {
@@ -58,11 +96,13 @@ export default function BulkRoomForm({ initialRooms, onBack, onSubmit, submitLab
   return <form noValidate onSubmit={handleFormSubmit(form, submit)} className="space-y-5 rounded-xl bg-white p-4 shadow-sm sm:p-6">
     <div><h3 className="text-lg font-semibold">Tạo phòng</h3><p className="mt-1 text-sm text-slate-600">Chỉ cần mã phòng. Diện tích, giá thuê và số người tối đa có thể bổ sung sau. Để trống giá thuê là chưa thiết lập, không phải giá 0.</p></div>
     <fieldset disabled={isSubmitting} className="min-w-0 space-y-5">
+      {floorSetup && <TemporaryFloors form={form} defaultFloor={defaultFloor} setDefaultFloor={setDefaultFloor} />}
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
         <h4 className="text-sm font-semibold">Tạo nhanh mã phòng</h4>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label className="text-sm">Loại phòng mặc định<select value={defaultRoomType} onChange={(event) => setDefaultRoomType(event.target.value)} className={inputClass}>{roomTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           {defaultRoomType === ROOM_TYPES.PRIVATE_ROOM && <label className="text-sm">Phân loại mặc định<select value={defaultPrivateRoomType} onChange={(event) => setDefaultPrivateRoomType(event.target.value)} className={inputClass}>{privateRoomTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}
+          {floorSetup && <label className="text-sm">Tầng mặc định<select value={defaultFloor} onChange={event => setDefaultFloor(event.target.value)} className={inputClass}><option value="">Chưa phân tầng</option>{floors.map((floor, index) => <option key={floor.client_key} value={floor.client_key}>{floor.name || `Tầng chưa đặt tên ${index + 1}`}</option>)}</select></label>}
         </div>
         <div className="mt-3 grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
           <div className="min-w-0 flex-1"><label htmlFor="bulk-from" className="mb-1 block text-sm">Từ</label><input id="bulk-from" inputMode="numeric" value={from} onChange={(event) => setFrom(event.target.value)} placeholder="101" className={inputClass} /></div>
@@ -72,14 +112,16 @@ export default function BulkRoomForm({ initialRooms, onBack, onSubmit, submitLab
         {generatorError && <p role="alert" className="mt-2 text-sm text-red-600">{generatorError}</p>}
         <p className="mt-2 text-xs text-slate-500">Dòng mới nhận loại mặc định; bạn có thể đổi từng phòng sau khi sinh. Tối đa {MAX_BULK_ROOMS} phòng mỗi lần.</p>
       </div>
+      <h4 className="text-sm font-semibold">Danh sách phòng đã sinh</h4>
       <div className="md:overflow-x-auto md:rounded-lg md:border md:border-slate-200">
-        <table className="block w-full text-sm md:table md:min-w-[700px]">
-          <thead className="hidden bg-slate-50 text-left md:table-header-group"><tr>{['Mã phòng *', 'Loại phòng', 'Phân loại', 'Diện tích', 'Giá thuê/tháng', 'Số người tối đa', 'Thao tác'].map((label) => <th key={label} scope="col" className="px-3 py-3 font-medium">{label}</th>)}</tr></thead>
+        <table className={'block w-full text-sm md:table ' + (floorSetup ? 'md:min-w-[1200px]' : 'md:min-w-[700px]')}>
+          <thead className="hidden bg-slate-50 text-left md:table-header-group"><tr>{['Mã phòng *', ...(floorSetup ? ['Tầng'] : []), 'Loại phòng', 'Phân loại', 'Diện tích', 'Giá thuê/tháng', 'Số người tối đa', 'Thao tác'].map((label) => <th key={label} scope="col" className="px-3 py-3 font-medium">{label}</th>)}</tr></thead>
           <tbody className="block space-y-3 md:table-row-group md:space-y-0">{fields.map((row, index) => {
             const rowErrors = errors.rooms?.[index]
             const prefix = 'rooms.' + index + '.'
             return <tr key={row.id} className="block rounded-xl border border-slate-200 bg-white p-4 align-top md:table-row md:rounded-none md:border-0 md:border-t md:p-0">
               <td className="block min-w-0 py-2 md:table-cell md:px-3 md:py-3"><p className="mb-3 break-words border-b border-slate-100 pb-2 font-semibold text-slate-900 md:hidden">Phòng {draftRooms?.[index]?.room_code?.trim() || index + 1}</p><label className="mb-1 block font-medium md:hidden" htmlFor={row.id + '-code'}>Mã phòng *</label><input id={row.id + '-code'} aria-label={'Mã phòng dòng ' + (index + 1)} aria-invalid={Boolean(rowErrors?.room_code)} className={inputClass} {...form.register(prefix + 'room_code')} />{rowErrors?.room_code && <p className="mt-1 text-xs text-red-600">{rowErrors.room_code.message}</p>}</td>
+              {floorSetup && <td className="block min-w-0 py-2 md:table-cell md:px-3 md:py-3"><label className="mb-1 block font-medium md:hidden" htmlFor={row.id + '-floor'}>Tầng</label><select id={row.id + '-floor'} aria-label={'Tầng phòng dòng ' + (index + 1)} value={draftRooms?.[index]?.floor_client_key ?? ''} onChange={event => form.setValue(prefix + 'floor_client_key', event.target.value || null, { shouldDirty: true })} className={inputClass}><option value="">Chưa phân tầng</option>{floors.map((floor, floorIndex) => <option key={floor.client_key} value={floor.client_key}>{floor.name || `Tầng chưa đặt tên ${floorIndex + 1}`}</option>)}</select>{rowErrors?.floor_client_key && <p className="mt-1 text-xs text-red-600">{rowErrors.floor_client_key.message}</p>}</td>}
               <td className="block min-w-0 py-2 md:table-cell md:px-3 md:py-3"><label className="mb-1 block font-medium md:hidden" htmlFor={row.id + '-type'}>Loại phòng</label><select id={row.id + '-type'} aria-label={'Loại phòng dòng ' + (index + 1)} value={draftRooms?.[index]?.room_type || ROOM_TYPES.PRIVATE_ROOM} onChange={(event) => changeRowType(index, event.target.value)} className={inputClass}>{roomTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{rowErrors?.room_type && <p className="mt-1 text-xs text-red-600">{rowErrors.room_type.message}</p>}</td>
               <td className="block min-w-0 py-2 md:table-cell md:px-3 md:py-3">{draftRooms?.[index]?.room_type === ROOM_TYPES.DORMITORY ? <span className="text-slate-500">—</span> : <><label className="mb-1 block font-medium md:hidden" htmlFor={row.id + '-private-type'}>Phân loại</label><select id={row.id + '-private-type'} aria-label={'Phân loại phòng dòng ' + (index + 1)} className={inputClass} {...form.register(prefix + 'private_room_type')}>{privateRoomTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{rowErrors?.private_room_type && <p className="mt-1 text-xs text-red-600">{rowErrors.private_room_type.message}</p>}</>}</td>
               <td className="block min-w-0 py-2 md:table-cell md:px-3 md:py-3"><label className="mb-1 block font-medium md:hidden" htmlFor={row.id + '-area'}>Diện tích</label><div className="flex items-center gap-2"><input id={row.id + '-area'} type="number" min="0" step="0.01" placeholder="VD: 20" aria-label={'Diện tích dòng ' + (index + 1)} className={inputClass} {...form.register(prefix + 'area')} /><span className="shrink-0 text-slate-500">m²</span></div>{rowErrors?.area && <p className="mt-1 text-xs text-red-600">{rowErrors.area.message}</p>}</td>
@@ -91,11 +133,11 @@ export default function BulkRoomForm({ initialRooms, onBack, onSubmit, submitLab
         </table>
         {fields.length === 0 && <p className="p-6 text-center text-sm text-slate-500">Chưa có phòng. Sinh mã hoặc thêm một dòng bên dưới.</p>}
       </div>
-      <button type="button" disabled={fields.length >= MAX_BULK_ROOMS} onClick={() => append(emptyBulkRoom('', defaultRoomType, defaultPrivateRoomType))} className={buttonClass}>+ Thêm phòng thủ công</button>
+      <button type="button" disabled={fields.length >= MAX_BULK_ROOMS} onClick={() => append({ ...emptyBulkRoom('', defaultRoomType, defaultPrivateRoomType), ...(floorSetup ? { floor_client_key: defaultFloor || null } : {}) })} className={buttonClass}>+ Thêm phòng thủ công</button>
       {(errors.rooms?.message || errors.rooms?.root?.message) && <p role="alert" className="text-sm text-red-600">{errors.rooms.message || errors.rooms.root.message}</p>}
       {submitError && <p role="alert" className="text-sm text-red-600">{submitError}</p>}
       <div className="flex flex-col-reverse justify-between gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:flex-wrap">
-        {onBack && <button type="button" onClick={() => onBack(form.getValues('rooms'))} className={buttonClass}>← Thông tin nhà trọ</button>}
+        {onBack && <button type="button" onClick={() => onBack(form.getValues('rooms'), form.getValues('floors'))} className={buttonClass}>← Thông tin nhà trọ</button>}
         <button type="submit" className="min-h-11 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 sm:min-h-0 sm:w-auto">{isSubmitting ? 'Đang tạo...' : submitLabel?.(fields.length) ?? 'Tạo nhà trọ và ' + fields.length + ' phòng'}</button>
       </div>
     </fieldset>
