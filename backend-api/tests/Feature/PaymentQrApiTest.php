@@ -9,6 +9,7 @@ use App\Models\Room;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -117,6 +118,7 @@ class PaymentQrApiTest extends TestCase
         $this->assertNull($invoice->payment_snapshot);
         $this->upload($owner, ['bank_name' => 'MB Bank'])->assertOk();
         $this->getJson("/api/invoices/{$invoice->id}")->assertOk()->assertJsonPath('data.payment_profile.bank_name', 'MB Bank');
+        $this->get("/api/invoices/{$invoice->id}/payment-qr")->assertOk();
 
         $invoice->update(['status' => 'UNPAID', 'issued_at' => '2026-10-24']);
         $snapshot = $invoice->fresh()->payment_snapshot;
@@ -141,7 +143,105 @@ class PaymentQrApiTest extends TestCase
         $this->upload($owner)->assertOk();
 
         $this->getJson("/api/invoices/{$invoice->id}")->assertOk()->assertJsonPath('data.payment_profile.bank_name', null)
-            ->assertJsonPath('data.payment_profile.has_payment_qr', false);
+            ->assertJsonPath('data.payment_profile.has_payment_qr', false)
+            ->assertJsonPath('data.payment_profile.source', 'missing_snapshot')
+            ->assertJsonPath('data.payment_profile.current_profile_configured', true);
         $this->get("/api/invoices/{$invoice->id}/payment-qr")->assertNotFound();
+        $this->assertSame($invoice->payment_snapshot, $invoice->fresh()->payment_snapshot);
+    }
+
+    public function test_legacy_null_and_empty_snapshots_are_read_only_even_when_invoice_note_is_saved(): void
+    {
+        $owner = $this->owner();
+        $invoice = $this->invoice($owner, 'UNPAID');
+        $this->upload($owner)->assertOk();
+        foreach ([null, '[]', '{}'] as $snapshot) {
+            DB::table('invoices')->where('id', $invoice->id)->update(['payment_snapshot' => $snapshot, 'subtotal' => 120000, 'total_amount' => 120000]);
+            $before = DB::table('invoices')->where('id', $invoice->id)->first();
+
+            $this->getJson("/api/invoices/{$invoice->id}")->assertOk()
+                ->assertJsonPath('data.payment_profile.source', 'missing_snapshot')
+                ->assertJsonPath('data.payment_profile.current_profile_configured', true)
+                ->assertJsonPath('data.payment_profile.bank_name', null)
+                ->assertJsonPath('data.total_amount', '120000.00');
+            $this->get("/api/invoices/{$invoice->id}/payment-qr")->assertNotFound();
+            $invoice->fresh()->update(['note' => 'Ghi chú']);
+
+            $after = DB::table('invoices')->where('id', $invoice->id)->first();
+            $this->assertSame($before->payment_snapshot, $after->payment_snapshot);
+            $this->assertSame($before->total_amount, $after->total_amount);
+            $this->assertSame($before->paid_amount, $after->paid_amount);
+        }
+    }
+
+    public function test_missing_qr_file_preserves_snapshot_bank_details_without_adopting_replacement_qr(): void
+    {
+        $owner = $this->owner();
+        $this->upload($owner)->assertOk();
+        $invoice = $this->invoice($owner, 'UNPAID');
+        $snapshot = $invoice->payment_snapshot;
+        Storage::disk('local')->delete($snapshot['payment_qr_path']);
+        $this->upload($owner, ['bank_name' => 'MB Bank'])->assertOk();
+
+        $this->getJson("/api/invoices/{$invoice->id}")->assertOk()
+            ->assertJsonPath('data.payment_profile.source', 'snapshot')
+            ->assertJsonPath('data.payment_profile.bank_name', 'Vietcombank')
+            ->assertJsonPath('data.payment_profile.bank_account_name', 'Chủ tài khoản')
+            ->assertJsonPath('data.payment_profile.bank_account_number', '001234567')
+            ->assertJsonPath('data.payment_profile.payment_qr_missing', true)
+            ->assertJsonPath('data.payment_profile.payment_qr_url', null);
+        $this->get("/api/invoices/{$invoice->id}/payment-qr")->assertNotFound();
+        $this->assertSame($snapshot, $invoice->fresh()->payment_snapshot);
+    }
+
+    public function test_bank_only_profile_can_be_printed_without_qr(): void
+    {
+        $owner = $this->owner();
+        $this->actingAs($owner, 'sanctum')->putJson('/api/landlord/payment-profile', [
+            'bank_name' => 'ACB', 'bank_account_name' => 'Chủ tài khoản', 'bank_account_number' => '123456',
+        ])->assertOk();
+        $invoice = $this->invoice($owner);
+
+        $this->getJson("/api/invoices/{$invoice->id}")->assertOk()
+            ->assertJsonPath('data.payment_profile.source', 'current_profile')
+            ->assertJsonPath('data.payment_profile.bank_name', 'ACB')
+            ->assertJsonPath('data.payment_profile.bank_account_number', '123456')
+            ->assertJsonPath('data.payment_profile.payment_qr_url', null)
+            ->assertJsonPath('data.payment_profile.payment_qr_missing', false);
+    }
+
+    public function test_paid_legacy_invoice_read_does_not_change_snapshot_items_or_payments(): void
+    {
+        $owner = $this->owner();
+        $invoice = $this->invoice($owner, 'PAID');
+        $invoice->items()->create(['type' => 'RENT', 'description' => 'Tiền phòng', 'quantity' => 1, 'unit_price' => 120000, 'amount' => 120000, 'source' => 'AUTO']);
+        $invoice->payments()->create(['amount' => 120000, 'payment_method' => 'CASH', 'payment_source' => 'MANUAL', 'paid_at' => '2026-10-24 12:00:00']);
+        DB::table('invoices')->where('id', $invoice->id)->update(['payment_snapshot' => null, 'subtotal' => 120000, 'total_amount' => 120000, 'paid_amount' => 120000]);
+        $this->upload($owner)->assertOk();
+        $before = $invoice->fresh()->getAttributes();
+        $items = $invoice->items()->get()->toArray();
+        $payments = $invoice->payments()->get()->toArray();
+
+        $this->getJson("/api/invoices/{$invoice->id}")->assertOk()
+            ->assertJsonPath('data.payment_profile.source', 'missing_snapshot')
+            ->assertJsonPath('data.payment_profile.current_profile_configured', true);
+
+        $this->assertSame($before, $invoice->fresh()->getAttributes());
+        $this->assertSame($items, $invoice->items()->get()->toArray());
+        $this->assertSame($payments, $invoice->payments()->get()->toArray());
+    }
+
+    public function test_draft_uses_current_profile_even_if_legacy_snapshot_is_present(): void
+    {
+        $owner = $this->owner();
+        $invoice = $this->invoice($owner);
+        DB::table('invoices')->where('id', $invoice->id)->update(['payment_snapshot' => json_encode(['bank_name' => 'Ngân hàng cũ'])]);
+        $this->upload($owner)->assertOk();
+
+        $this->getJson("/api/invoices/{$invoice->id}")->assertOk()
+            ->assertJsonPath('data.payment_profile.source', 'current_profile')
+            ->assertJsonPath('data.payment_profile.bank_name', 'Vietcombank');
+        $this->get("/api/invoices/{$invoice->id}/payment-qr")->assertOk();
+        $this->assertSame(['bank_name' => 'Ngân hàng cũ'], $invoice->fresh()->payment_snapshot);
     }
 }

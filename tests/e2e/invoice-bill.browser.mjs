@@ -119,6 +119,22 @@ try {
   invoice = { ...invoice, payment_profile: null }
   await load()
   await page.getByText('Vui lòng liên hệ chủ trọ để biết thông tin thanh toán.', { exact: true }).waitFor()
+  assert.equal(await page.getByText('Thiết lập ngay', { exact: true }).count(), 0)
+
+  invoice = { ...invoice, payment_profile: { source: 'missing_snapshot', current_profile_configured: true } }
+  await load()
+  await page.getByText('Hóa đơn này chưa lưu thông tin nhận thanh toán tại thời điểm phát hành.', { exact: true }).waitFor()
+  assert.equal(await page.getByText('Chưa thiết lập thông tin nhận thanh toán.', { exact: true }).count(), 0)
+  assert.equal(await page.locator('.invoice-bank-qr img').count(), 0)
+  await page.emulateMedia({ media: 'print' })
+  assert.ok(await page.getByText('Chủ trọ đã có cấu hình thanh toán hiện tại; cấu hình này chưa được ghi nhận trên hóa đơn này.', { exact: true }).isVisible())
+  assert.equal(await page.locator('.invoice-sheet a, .invoice-sheet button').count(), 0)
+  await page.emulateMedia({ media: 'screen' })
+
+  invoice = { ...invoice, payment_profile: { ...bank, payment_qr_url: null, payment_qr_missing: true } }
+  await load()
+  await page.getByText('Vietcombank', { exact: true }).waitFor()
+  await page.getByText('Ảnh QR đã lưu không còn khả dụng. Vui lòng liên hệ chủ trọ để đối chiếu thông tin thanh toán.', { exact: true }).waitFor()
 
   assert.deepEqual(errors, [])
   assert.ok(requests.every(request => request.method === 'GET'))

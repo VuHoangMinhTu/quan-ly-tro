@@ -21,6 +21,6 @@ export default function PrivatePaymentQr({ profile, className = '', alt = 'QR ch
     retry: 1,
   })
   if (image.isPending) return <span className="no-print text-xs text-slate-500">Đang tải QR...</span>
-  if (image.isError) return <span className="no-print text-xs text-red-700">Không tải được QR. <button type="button" onClick={() => image.refetch()} className="underline">Thử lại</button></span>
+  if (image.isError) return <span className="text-xs text-red-700">Không tải được QR. Vui lòng đối chiếu thông tin ngân hàng với chủ trọ. <button type="button" onClick={() => image.refetch()} className="no-print underline">Thử lại</button></span>
   return image.data ? <LocalQrImage key={profile.payment_qr_version} blob={image.data} alt={alt} className={className} /> : null
 }

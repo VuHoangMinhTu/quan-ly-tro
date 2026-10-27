@@ -20,7 +20,7 @@ async function render(data) {
   const bindings = { BedDouble: Icon, Building2: Icon, CirclePlus: Icon, Droplet: Icon, Handshake: Icon, Home: Icon, Settings: Icon, Zap: Icon,
     QRCodeSVG: ({ value }) => React.createElement('svg', { 'data-payos-qr': value }),
     PrivatePaymentQr: ({ profile }) => React.createElement('img', { src: 'blob:qr-preview', alt: 'QR ngân hàng', 'data-endpoint': profile.payment_qr_url }),
-    invoicePayosQr, formatCurrency, formatUtilityValue, formatBillingPeriodForDisplay, formatDateForDisplay, invoiceStatusLabels, APP_TITLE: 'BeeHouse - Quản lý trọ' }
+    watermarkLogo: '/watermark.svg', invoicePayosQr, formatCurrency, formatUtilityValue, formatBillingPeriodForDisplay, formatDateForDisplay, invoiceStatusLabels, APP_TITLE: 'BeeHouse - Quản lý trọ' }
   const { code } = await transformWithOxc(source, 'InvoicePrintLayout.jsx', { jsx: { runtime: 'classic' } })
   const Layout = new Function('React', ...Object.keys(bindings), `${code}\nreturn InvoicePrintLayout`)(React, ...Object.values(bindings))
   return renderToStaticMarkup(React.createElement(Layout, { invoice: data }))
@@ -50,15 +50,30 @@ test('static landlord QR and bank details stay visible independently of an exist
   }
 })
 
-test('missing QR renders text without image placeholder and offers settings only to owner', async () => {
+test('missing QR preserves bank details and printed bills have no settings action', async () => {
   const textOnly = await render({ ...invoice, payment_profile: { ...bank, payment_qr_url: null } })
   assert.match(textOnly, /Vietcombank/)
   assert.doesNotMatch(textOnly, /data-endpoint=/)
   const empty = await render({ ...invoice, payment_profile: null, can_manage: true })
   assert.match(empty, /Chưa thiết lập thông tin nhận thanh toán/)
   assert.match(empty, /Vui lòng liên hệ chủ trọ/)
-  assert.match(empty, /Thiết lập ngay/)
+  assert.doesNotMatch(empty, /Thiết lập ngay|href="\/payment-settings"/)
   assert.doesNotMatch(empty, /data-endpoint=/)
+})
+
+test('historical missing snapshot is distinguished from unconfigured landlord without substituting live bank details', async () => {
+  const markup = await render({ ...invoice, payment_profile: { source: 'missing_snapshot', current_profile_configured: true }, can_manage: true })
+  assert.match(markup, /chưa lưu thông tin nhận thanh toán tại thời điểm phát hành/)
+  assert.match(markup, /Chủ trọ đã có cấu hình thanh toán hiện tại/)
+  assert.doesNotMatch(markup, /Chưa thiết lập|Thiết lập ngay|Vietcombank|data-endpoint=/)
+})
+
+test('missing stored QR warns visibly but preserves bank details', async () => {
+  const markup = await render({ ...invoice, payment_profile: { ...bank, payment_qr_url: null, payment_qr_missing: true } })
+  assert.match(markup, /Vietcombank/)
+  assert.match(markup, /0012345/)
+  assert.match(markup, /Ảnh QR đã lưu không còn khả dụng/)
+  assert.doesNotMatch(markup, /data-endpoint=/)
 })
 
 test('bill shows base charges without source badges and keeps historical VAT transparent', async () => {

@@ -105,6 +105,7 @@ function Totals({ invoice, remaining }) {
 function PaymentInfo({ invoice }) {
   const bank = invoice.payment_profile
   const configured = Boolean(bank?.bank_name || bank?.bank_account_name || bank?.bank_account_number || bank?.payment_qr_url)
+  const missingSnapshot = bank?.source === 'missing_snapshot'
   return <section className="invoice-transfer-section invoice-keep-together">
     <SectionHeading>Thông tin chuyển khoản</SectionHeading>
     <div className={`invoice-payment-details ${bank?.payment_qr_url ? 'has-bank-qr' : ''}`}>
@@ -117,7 +118,12 @@ function PaymentInfo({ invoice }) {
         </dl>
       </div>
       {bank?.payment_qr_url && <p className="invoice-qr-caption">Quét mã QR để chuyển khoản thanh toán.</p>}
-      {!configured && <div className="invoice-payment-fallback"><p>Chưa thiết lập thông tin nhận thanh toán.</p><p>Vui lòng liên hệ chủ trọ để biết thông tin thanh toán.</p>{invoice.can_manage && <a href="/payment-settings" className="no-print">Thiết lập ngay</a>}</div>}
+      {bank?.payment_qr_missing && <p className="invoice-payment-fallback">Ảnh QR đã lưu không còn khả dụng. Vui lòng liên hệ chủ trọ để đối chiếu thông tin thanh toán.</p>}
+      {!configured && <div className="invoice-payment-fallback">
+        <p>{missingSnapshot ? 'Hóa đơn này chưa lưu thông tin nhận thanh toán tại thời điểm phát hành.' : 'Chưa thiết lập thông tin nhận thanh toán.'}</p>
+        {missingSnapshot && bank.current_profile_configured && <p>Chủ trọ đã có cấu hình thanh toán hiện tại; cấu hình này chưa được ghi nhận trên hóa đơn này.</p>}
+        <p>Vui lòng liên hệ chủ trọ để {missingSnapshot ? 'đối chiếu và xác nhận' : 'biết'} thông tin thanh toán.</p>
+      </div>}
     </div>
   </section>
 }

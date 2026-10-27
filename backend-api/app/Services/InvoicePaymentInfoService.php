@@ -22,6 +22,11 @@ class InvoicePaymentInfoService
         if ($invoice->status === 'DRAFT' && $invoice->issued_at === null) {
             return;
         }
+        if ($invoice->exists && ($invoice->getOriginal('status') !== 'DRAFT' || $invoice->getOriginal('issued_at') !== null)) {
+            $invoice->payment_snapshot = null;
+
+            return;
+        }
         // Profile edits take the same landlord lock; snapshot capture and issue
         // occur in the invoice save transaction, never from a GET request.
         DB::table('landlords')->where('id', $invoice->landlord_id)->lockForUpdate()->firstOrFail();
@@ -48,20 +53,41 @@ class InvoicePaymentInfoService
 
     private function stored(Invoice $invoice): array
     {
-        return $invoice->payment_snapshot ?? ($invoice->status === 'DRAFT' && $invoice->issued_at === null ? $this->current($invoice->landlord_id) : []);
+        return $invoice->status === 'DRAFT' && $invoice->issued_at === null
+            ? $this->current($invoice->landlord_id)
+            : ($invoice->payment_snapshot ?? []);
     }
 
     public function forInvoice(Invoice $invoice): array
     {
-        return $this->present($this->stored($invoice), "/invoices/{$invoice->id}/payment-qr");
+        $info = $this->stored($invoice);
+        $draft = $invoice->status === 'DRAFT' && $invoice->issued_at === null;
+        $missingSnapshot = ! $draft && ! $this->configured($info);
+
+        return [...$this->present($info, "/invoices/{$invoice->id}/payment-qr"),
+            'source' => $draft ? 'current_profile' : ($missingSnapshot ? 'missing_snapshot' : 'snapshot'),
+            'current_profile_configured' => $missingSnapshot ? $this->configured($this->current($invoice->landlord_id)) : null];
+    }
+
+    private function configured(array $info): bool
+    {
+        foreach (self::FIELDS as $field) {
+            if (trim((string) ($info[$field] ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function present(array $info, string $endpoint): array
     {
-        $hasQr = ! empty($info['payment_qr_path']);
+        $hasQrPath = ! empty($info['payment_qr_path']);
+        $hasQr = $hasQrPath && Storage::disk('local')->exists($info['payment_qr_path']);
 
         return ['bank_name' => $info['bank_name'] ?? null, 'bank_account_name' => $info['bank_account_name'] ?? null,
             'bank_account_number' => $info['bank_account_number'] ?? null, 'has_payment_qr' => $hasQr,
+            'payment_qr_missing' => $hasQrPath && ! $hasQr,
             'payment_qr_version' => $hasQr ? hash('sha256', $info['payment_qr_path']) : null,
             'payment_qr_url' => $hasQr ? $endpoint : null];
     }
