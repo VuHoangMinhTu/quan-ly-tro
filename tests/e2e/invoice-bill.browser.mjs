@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -10,6 +10,7 @@ const { createServer } = await import(pathToFileURL(require.resolve('vite')))
 const { default: React } = await import(pathToFileURL(require.resolve('react')))
 const { renderToStaticMarkup } = await import(pathToFileURL(require.resolve('react-dom/server')))
 const { QRCodeSVG } = require('qrcode.react')
+const decodeQr = require('jsqr')
 const { chromium } = createRequire(resolve(process.env.PLAYWRIGHT_PACKAGE_PATH || 'C:/Users/Yato/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/package.json'))('playwright')
 const output = resolve(root, 'tmp/invoice-bill')
 await mkdir(output, { recursive: true })
@@ -29,7 +30,20 @@ try {
   const fixturePage = await browser.newPage()
   const svg = renderToStaticMarkup(React.createElement(QRCodeSVG, { value: 'BEEHOUSE-SYNTHETIC-BANK-QR', size: 300, marginSize: 4 }))
   await fixturePage.setContent(`<html><body style="margin:0;background:white">${svg}</body></html>`)
-  const qr = await fixturePage.locator('svg').screenshot()
+  let qr = await fixturePage.locator('svg').screenshot()
+  const portrait = Buffer.from(await fixturePage.evaluate(async markup => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 720; canvas.height = 1512
+    const context = canvas.getContext('2d')
+    context.fillStyle = '#b5c7db'; context.fillRect(0, 0, 720, 1512)
+    context.fillStyle = '#fff'; context.fillRect(95, 238, 530, 720)
+    context.fillStyle = '#17483e'; context.font = '24px Arial'; context.fillText('SYNTHETIC BANK', 140, 300)
+    const image = new Image()
+    image.src = `data:image/svg+xml;base64,${btoa(markup.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" '))}`
+    await image.decode()
+    context.drawImage(image, 125, 440, 470, 470)
+    return canvas.toDataURL('image/png').split(',')[1]
+  }, svg), 'base64')
   await fixturePage.close()
   const context = await browser.newContext({ viewport: { width: 1365, height: 1000 }, serviceWorkers: 'block' })
   const page = await context.newPage()
@@ -65,6 +79,16 @@ try {
     await page.evaluate(async () => { await document.fonts.ready; await Promise.all([...document.images].map(image => image.decode())) })
   }
   const metrics = {}
+  const decodeDisplayedQr = async () => {
+    const pixels = await page.locator('.invoice-bank-qr img').evaluate(image => {
+      const canvas = document.createElement('canvas')
+      canvas.width = canvas.height = 180
+      const context = canvas.getContext('2d')
+      context.drawImage(image, 0, 0, 180, 180)
+      return Array.from(context.getImageData(0, 0, 180, 180).data)
+    })
+    return decodeQr(new Uint8ClampedArray(pixels), 180, 180)
+  }
   for (const width of [1365, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 })
     await load()
@@ -81,7 +105,8 @@ try {
     assert.equal(metaAlignment.divider, '1px')
     const image = page.locator('.invoice-bank-qr img')
     assert.equal(await image.count(), 1)
-    assert.equal(await image.evaluate(img => img.naturalWidth), 300)
+    assert.equal((await decodeDisplayedQr())?.data, 'BEEHOUSE-SYNTHETIC-BANK-QR', 'The rendered QR must remain scannable at its displayed size')
+    assert.ok(await image.evaluate(img => img.naturalWidth > 0 && img.naturalWidth === img.naturalHeight))
     const bounds = await image.boundingBox()
     assert.equal(bounds.width, bounds.height)
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
@@ -104,6 +129,56 @@ try {
   metrics.pdfPages = [...pdf.toString('latin1').matchAll(/\/Type\s*\/Page\b/g)].length
   assert.equal(metrics.pdfPages, 1, 'A typical five-item bill and static bank QR should fit one A4 page')
   await page.emulateMedia({ media: 'screen' })
+
+  // Exercise a bank-style portrait upload through the actual print component.
+  qr = portrait
+  invoice = { ...invoice, payment_profile: { ...bank, payment_qr_version: 'synthetic-portrait' } }
+  await load()
+  const croppedQr = page.locator('.invoice-bank-qr img')
+  assert.ok(await croppedQr.evaluate(image => image.naturalWidth === image.naturalHeight && image.naturalWidth < 720))
+  assert.equal((await decodeDisplayedQr())?.data, 'BEEHOUSE-SYNTHETIC-BANK-QR')
+  await page.screenshot({ path: resolve(output, 'bill-portrait-qr.png'), fullPage: true })
+
+  // Optional private source stays outside Git and is never logged or sent off-device.
+  if (process.env.BILL_QR_SOURCE_PATH) {
+    qr = await readFile(process.env.BILL_QR_SOURCE_PATH)
+    invoice = { ...invoice, payment_profile: { ...bank, payment_qr_version: 'private-bank-image' } }
+    await load()
+    assert.ok(await croppedQr.evaluate(image => image.naturalWidth === image.naturalHeight && image.naturalWidth < 720))
+    const sourcePixels = await page.evaluate(async base64 => {
+      const bytes = Uint8Array.from(atob(base64), value => value.charCodeAt(0))
+      const source = await createImageBitmap(new Blob([bytes]))
+      const scale = Math.min(1, 1024 / Math.max(source.width, source.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(source.width * scale); canvas.height = Math.round(source.height * scale)
+      const context = canvas.getContext('2d')
+      context.drawImage(source, 0, 0, canvas.width, canvas.height)
+      source.close()
+      return { width: canvas.width, height: canvas.height, pixels: Array.from(context.getImageData(0, 0, canvas.width, canvas.height).data) }
+    }, qr.toString('base64'))
+    const originalCode = decodeQr(new Uint8ClampedArray(sourcePixels.pixels), sourcePixels.width, sourcePixels.height)
+    const displayedCode = await decodeDisplayedQr()
+    assert.ok(originalCode && displayedCode && originalCode.binaryData.length === displayedCode.binaryData.length && originalCode.binaryData.every((byte, index) => byte === displayedCode.binaryData[index]), 'Private source and displayed QR must encode identical bytes')
+    await croppedQr.screenshot({ path: resolve(output, 'qr-bank-cropped.png') })
+    await page.screenshot({ path: resolve(output, 'bill-private-qr.png'), fullPage: true })
+    await page.emulateMedia({ media: 'print' })
+    const privatePdf = await page.pdf({ path: resolve(output, 'bill-private-qr.pdf'), preferCSSPageSize: true, printBackground: true })
+    assert.equal([...privatePdf.toString('latin1').matchAll(/\/Type\s*\/Page\b/g)].length, 1)
+    await page.emulateMedia({ media: 'screen' })
+    metrics.privateQrCropped = true
+  }
+
+  const fallback = await page.evaluate(async () => {
+    const { cropPaymentQr } = await import('/src/utils/paymentQrImage.js')
+    const invalid = new Blob(['not-an-image'], { type: 'image/png' })
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = 100
+    const context = canvas.getContext('2d')
+    context.fillStyle = '#fff'; context.fillRect(0, 0, 100, 100)
+    const empty = await new Promise(resolve => canvas.toBlob(resolve))
+    return { invalid: await cropPaymentQr(invalid) === invalid, noQr: await cropPaymentQr(empty) === empty }
+  })
+  assert.deepEqual(fallback, { invalid: true, noQr: true })
 
   invoice = { ...invoice, payos_payment_request: { qr_code: 'SYNTHETIC-PAYOS', amount: 3494000, status: 'PENDING', order_code: 100001,
     payment_link_id: 'synthetic', checkout_url: 'https://pay.example/synthetic' } }

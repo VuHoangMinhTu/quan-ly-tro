@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getPaymentQrImage } from '../../api/paymentSettingsApi'
+import { cropPaymentQr } from '../../utils/paymentQrImage'
 
 export function LocalQrImage({ blob, alt, className }) {
   const image = useRef(null)
@@ -12,10 +13,13 @@ export function LocalQrImage({ blob, alt, className }) {
   return <img ref={image} alt={alt} className={className} />
 }
 
-export default function PrivatePaymentQr({ profile, className = '', alt = 'QR chuyển khoản ngân hàng' }) {
+export default function PrivatePaymentQr({ profile, className = '', alt = 'QR chuyển khoản ngân hàng', cropToQr = false }) {
   const image = useQuery({
-    queryKey: ['payment-qr', profile.payment_qr_url, profile.payment_qr_version],
-    queryFn: async () => (await getPaymentQrImage(profile.payment_qr_url)).data,
+    queryKey: ['payment-qr', profile.payment_qr_url, profile.payment_qr_version, cropToQr ? 'bill-crop-v1' : 'original'],
+    queryFn: async () => {
+      const blob = (await getPaymentQrImage(profile.payment_qr_url)).data
+      return cropToQr ? cropPaymentQr(blob) : blob
+    },
     enabled: Boolean(profile.payment_qr_url),
     staleTime: Infinity,
     retry: 1,

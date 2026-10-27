@@ -66,8 +66,8 @@
 .invoice-financial-row .invoice-section-heading { font-size: 11.5pt; letter-spacing: -.025em; }
 .invoice-payment-details { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 14px 12px; border: 1px solid #d4dfd9; border-radius: 10px; background: #fff; }
 .invoice-bank-content { display: flex; align-items: center; justify-content: center; gap: 13px; min-width: 0; }
-.invoice-bank-qr { flex: 0 0 156px; width: 156px; min-width: 0; background: #fff; break-inside: avoid; page-break-inside: avoid; }
-.invoice-bank-qr img { display: block; width: 156px; height: 156px; max-width: 100%; object-fit: contain; }
+.invoice-bank-qr { flex: 0 0 180px; width: 180px; min-width: 0; background: #fff; break-inside: avoid; page-break-inside: avoid; }
+.invoice-bank-qr img { display: block; width: 180px; height: 180px; max-width: 100%; object-fit: contain; }
 .invoice-payment-rows { display: grid; gap: 10px; min-width: 0; flex: 1; }
 .invoice-payment-rows dt { color: #5d6a63; font-size: 8pt; }
 .invoice-payment-rows dd { font-size: 9pt; font-weight: 700; overflow-wrap: anywhere; }

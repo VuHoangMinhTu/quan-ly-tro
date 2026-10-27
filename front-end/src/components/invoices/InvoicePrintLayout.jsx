@@ -110,7 +110,7 @@ function PaymentInfo({ invoice }) {
     <SectionHeading>Thông tin chuyển khoản</SectionHeading>
     <div className={`invoice-payment-details ${bank?.payment_qr_url ? 'has-bank-qr' : ''}`}>
       <div className="invoice-bank-content">
-        {bank?.payment_qr_url && <div className="invoice-bank-qr"><PrivatePaymentQr profile={bank} /></div>}
+        {bank?.payment_qr_url && <div className="invoice-bank-qr"><PrivatePaymentQr profile={bank} cropToQr /></div>}
         <dl className="invoice-payment-rows">
           {bank?.bank_name && <div><dt>Ngân hàng</dt><dd>{bank.bank_name}</dd></div>}
           {bank?.bank_account_number && <div><dt>Số tài khoản</dt><dd>{bank.bank_account_number}</dd></div>}
