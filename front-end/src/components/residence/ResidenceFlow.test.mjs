@@ -109,6 +109,20 @@ async function formHarness(initial, formContext = context) {
   return { form, props, render, submitted, submit: () => render().find(node => node.type === 'form').props.onSubmit() }
 }
 
+test('missing residence profile shows setup guidance without prefilling legal owner or household head', async () => {
+  const ui = await formHarness(undefined, { ...context, room: { id: 11, boarding_house_id: 3, boarding_house: { residence_profile: null } } })
+  const nodes = ui.render()
+  const warning = nodes.find(node => node.type === 'p' && node.props.role === 'status')
+  const markup = renderToStaticMarkup(warning)
+  assert.match(markup, /Nhà trọ chưa có cấu hình cư trú/)
+  assert.match(markup, /href="\/boarding-houses\/3"/)
+  assert.equal(ui.form.getValues('household_head_mode'), '')
+  assert.equal(ui.form.getValues('household_head_name'), '')
+  assert.equal(ui.form.getValues('authority_name'), '')
+  await ui.submit()
+  assert.equal(ui.submitted[0].household_head_name, null)
+})
+
 test('nullable declaration fields become editable strings and payload is limited to declaration data', () => {
   const values = residenceFormValues({ declarant_tenant_id: 1, contract_id: null, authority_name: null, relationship_to_household_head: null, request_content: null, members: [{ tenant_id: '2', relationship_to_household_head: null }] })
   assert.equal(values.authority_name, '')

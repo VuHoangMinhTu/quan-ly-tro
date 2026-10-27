@@ -204,9 +204,12 @@ class ResidenceDeclarationService
         if (blank($consent['document_place'] ?? null)) {
             $missing['document_place'] = 'Chưa cập nhật Phường/Xã của nhà trọ.';
         }
-        foreach (['host.full_name', 'host.birth_date', 'host.permanent_address', 'host.identity_number', 'host.phone',
-            'guest.full_name', 'guest.birth_year', 'guest.permanent_address', 'guest.identity_number', 'guest.phone',
-            'stay_address', 'start_date', 'end_date'] as $field) {
+        $labels = ['host.full_name' => 'họ tên Bên A', 'host.birth_date' => 'ngày sinh Bên A', 'host.permanent_address' => 'địa chỉ thường trú Bên A',
+            'host.identity_number' => 'số định danh cá nhân Bên A', 'host.phone' => 'số điện thoại Bên A',
+            'guest.full_name' => 'họ tên Bên B', 'guest.birth_year' => 'năm sinh Bên B', 'guest.permanent_address' => 'địa chỉ thường trú Bên B',
+            'guest.identity_number' => 'số định danh cá nhân Bên B', 'guest.phone' => 'số điện thoại Bên B',
+            'stay_address' => 'địa chỉ ở nhờ', 'start_date' => 'ngày bắt đầu ở nhờ', 'end_date' => 'ngày kết thúc ở nhờ'];
+        foreach ($labels as $field => $label) {
             // Frozen legacy documents only recorded a birth year; do not invent a date.
             if ($field === 'host.birth_date' && ! array_key_exists('birth_date', $consent['host'] ?? []) && filled(Arr::get($consent, 'host.birth_year'))) {
                 continue;
@@ -214,7 +217,7 @@ class ResidenceDeclarationService
             if (blank(Arr::get($consent, $field))) {
                 $missing[$field] = $field === 'guest.permanent_address'
                     ? 'Bên B chưa có địa chỉ thường trú. Vui lòng cập nhật hồ sơ người thuê trước khi in văn bản.'
-                    : 'Vui lòng bổ sung '.str_replace(['host.', 'guest.', '_'], ['Bên A: ', 'Bên B: ', ' '], $field).' trước khi in văn bản.';
+                    : 'Vui lòng bổ sung '.$label.' trước khi in văn bản.';
             }
         }
 
