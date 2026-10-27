@@ -1,3 +1,4 @@
+import watermarkLogo from '../../assets/bill-watermark.svg'
 import { BedDouble, CirclePlus, Droplet, Handshake, Settings, Zap } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { formatBillingPeriodForDisplay, formatDateForDisplay } from '../../utils/date'
@@ -134,6 +135,11 @@ export default function InvoicePrintLayout({ invoice }) {
   const remaining = Math.max(0, Number(invoice.total_amount || 0) - Number(invoice.paid_amount || 0))
 
   return <article className="invoice-sheet">
+    <div className="invoice-watermarks" aria-hidden="true">
+      <img className="invoice-watermark invoice-watermark-center" src={watermarkLogo} alt="" />
+      <img className="invoice-watermark invoice-watermark-top" src={watermarkLogo} alt="" />
+      <img className="invoice-watermark invoice-watermark-bottom" src={watermarkLogo} alt="" />
+    </div>
     <InvoicePrintHeader invoice={invoice} />
     <InvoicePrintSummary invoice={invoice} />
     <InvoicePrintItemsTable items={invoice.items || []} />
