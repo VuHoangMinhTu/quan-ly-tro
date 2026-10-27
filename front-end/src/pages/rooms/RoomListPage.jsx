@@ -21,6 +21,60 @@ export default function RoomListPage() {
 
   const boardingHouse = boardingHouseQuery.data.data.data
   const rooms = roomsQuery.data.data.data || []
+// phân loại room theo tầng
+function groupRoomsByFloor(rooms) {
+  const groups = new Map()
+
+  for (const room of rooms) {
+    const floorId = room.floor_id ?? room.floor?.id ?? null
+    const key = floorId === null ? 'unassigned' : String(floorId)
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        floorId,
+        floor: room.floor ?? null,
+        rooms: [],
+      })
+    }
+
+    const group = groups.get(key)
+
+    // Ưu tiên dữ liệu tầng có đầy đủ thông tin.
+    if (!group.floor && room.floor) {
+      group.floor = room.floor
+    }
+
+    group.rooms.push(room)
+  }
+
+  return [...groups.values()].sort((a, b) => {
+    // Phòng không có tầng nằm cuối.
+    if (a.floorId === null) return 1
+    if (b.floorId === null) return -1
+
+    // Sắp xếp theo thứ tự tầng cấu hình.
+    const orderA = a.floor?.sort_order ?? Number.MAX_SAFE_INTEGER
+    const orderB = b.floor?.sort_order ?? Number.MAX_SAFE_INTEGER
+
+    if (orderA !== orderB) {
+      return orderA - orderB
+    }
+
+    // Nếu sort_order bằng nhau, sắp theo tên tầng.
+    const nameA = a.floor?.name ?? ''
+    const nameB = b.floor?.name ?? ''
+
+    const nameComparison = nameA.localeCompare(nameB, 'vi', {
+      numeric: true,
+      sensitivity: 'base',
+    })
+
+    if (nameComparison !== 0) return nameComparison
+
+    return a.floorId - b.floorId
+  })
+}
+const floorGroups = groupRoomsByFloor(rooms)
 
   return (
     <section className="min-w-0">
@@ -41,15 +95,65 @@ export default function RoomListPage() {
           <Link className="mt-4 inline-flex min-h-11 sm:min-h-0 items-center text-sm font-medium underline" to={`/boarding-houses/${boardingHouseId}/rooms/new`}>Thêm phòng</Link>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {rooms.map((room) => (
-            <RoomCard
-              key={room.id}
-              room={room}
-              actions={<div className="flex flex-wrap gap-3 text-sm font-medium"><Link to={`/rooms/${room.id}`} className="inline-flex min-h-11 sm:min-h-0 items-center rounded-lg px-2 text-slate-700 hover:text-slate-950">Xem</Link><Link to={`/rooms/${room.id}/edit`} className="inline-flex min-h-11 sm:min-h-0 items-center rounded-lg px-2 text-slate-700 hover:text-slate-950">Sửa</Link></div>}
-            />
-          ))}
+ 
+<div className="space-y-8">
+  {floorGroups.map((group) => (
+    <section
+      key={group.floorId ?? 'unassigned'}
+      className="min-w-0"
+    >
+      {/* Tiêu đề tầng */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-xl">
+            🏢
+          </div>
+
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">
+              {group.floor?.name ??
+                (group.floorId === null
+                  ? 'Phòng chưa phân tầng'
+                  : `Tầng (ID ${group.floorId})`)}
+            </h3>
+
+            <p className="text-sm text-slate-500">
+              {group.rooms.length} phòng
+            </p>
+          </div>
         </div>
+      </div>
+
+      {/* Danh sách phòng thuộc tầng */}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {group.rooms.map((room) => (
+          <RoomCard
+            key={room.id}
+            room={room}
+            actions={
+              <div className="flex flex-wrap gap-3 text-sm font-medium">
+                <Link
+                  to={`/rooms/${room.id}`}
+                  className="inline-flex min-h-11 items-center rounded-lg px-2 text-slate-700 hover:text-slate-950 sm:min-h-0"
+                >
+                  Xem
+                </Link>
+
+                <Link
+                  to={`/rooms/${room.id}/edit`}
+                  className="inline-flex min-h-11 items-center rounded-lg px-2 text-slate-700 hover:text-slate-950 sm:min-h-0"
+                >
+                  Sửa
+                </Link>
+              </div>
+            }
+          />
+        ))}
+      </div>
+    </section>
+  ))}
+</div>
+
       )}
     </section>
   )
