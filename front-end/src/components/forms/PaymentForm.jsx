@@ -1,3 +1,4 @@
+import { handleFormSubmit } from '../../notifications/formFeedback'
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useEffect, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
@@ -9,7 +10,7 @@ import MoneyInput from '../ui/MoneyInput'
 export default function PaymentForm({ remaining, initialValues = {}, onSubmit, label }) {
   const form = useForm({
     resolver: zodResolver(paymentFormSchema(remaining)),
-    mode: 'onTouched',
+    mode: 'onSubmit',
     defaultValues: {
       amount: remaining,
       payment_method: 'CASH',
@@ -46,7 +47,7 @@ export default function PaymentForm({ remaining, initialValues = {}, onSubmit, l
   }
 
   return (
-    <form noValidate onSubmit={form.handleSubmit(submit)} className="min-w-0 break-words space-y-3">
+    <form noValidate onSubmit={handleFormSubmit(form, submit)} className="min-w-0 break-words space-y-3">
       <p className="text-sm">Còn phải thanh toán: {formatCurrency(remaining)}</p>
       <div>
         <label className="block text-sm font-medium" htmlFor="payment-amount">Số tiền thanh toán</label>

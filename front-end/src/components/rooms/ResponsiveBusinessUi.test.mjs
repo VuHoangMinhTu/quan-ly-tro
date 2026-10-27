@@ -1,3 +1,5 @@
+import { handleFormSubmit, notifyInvalidSubmit } from '../../notifications/formFeedback.js'
+import { privateRoomTypeLabel, roomTypeLabel } from '../../utils/roomTypes.js'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
@@ -14,6 +16,7 @@ import { invoiceKeys } from '../../api/invoiceKeys.js'
 // These component checks complement the browser viewport matrix. They protect
 // the shared mobile/desktop handlers without calling an API or adding a dependency.
 async function loadComponent(path, bindings = {}) {
+  bindings = { handleFormSubmit, notifyInvalidSubmit, privateRoomTypeLabel, roomTypeLabel, RoomBedsSection: () => null, ...bindings }
   let source = await readFile(new URL(path, import.meta.url), 'utf8')
   const name = source.match(/export default function (\w+)\(/)[1]
   source = source.replace(/^import .*$/gm, '').replace('export default function ', 'function ')

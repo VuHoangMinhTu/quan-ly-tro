@@ -1,3 +1,4 @@
+import { handleFormSubmit, notifyInvalidSubmit } from '../../notifications/formFeedback.js'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
@@ -16,7 +17,7 @@ async function renderBulkRooms(rooms) {
   const payloads = []
   const source = (await readFile(new URL('./BulkRoomForm.jsx', import.meta.url), 'utf8'))
     .replace(/^import .*$/gm, '').replace('export default function ', 'function ')
-  const bindings = {
+  const bindings = { handleFormSubmit, notifyInvalidSubmit,
     useState: (value) => [value, () => {}],
     useForm: (options) => {
       form = createFormControl(options)

@@ -1,3 +1,4 @@
+import { handleFormSubmit } from '../../notifications/formFeedback'
 import { useEffect, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
@@ -18,7 +19,7 @@ export default function BoardingHouseForm({ initialValues = emptyValues, onSubmi
   const form = useForm({
     resolver: zodResolver(schema),
     defaultValues: emptyValues,
-    mode: 'onTouched',
+    mode: 'onSubmit',
   })
 
   useEffect(() => {
@@ -47,7 +48,7 @@ export default function BoardingHouseForm({ initialValues = emptyValues, onSubmi
   const { errors, isSubmitting } = form.formState
 
   return (
-    <form noValidate onSubmit={form.handleSubmit(handleSubmit)} className="min-w-0 break-words space-y-5 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
+    <form noValidate onSubmit={handleFormSubmit(form, handleSubmit)} className="min-w-0 break-words space-y-5 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
       <div>
         <label className="block text-sm font-medium text-slate-700" htmlFor="boarding-house-name">
           Tên nhà trọ

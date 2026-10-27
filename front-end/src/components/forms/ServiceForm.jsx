@@ -1,3 +1,4 @@
+import { handleFormSubmit } from '../../notifications/formFeedback'
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useRef, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -26,7 +27,7 @@ const inputClass = 'mt-1 min-h-11 w-full min-w-0 sm:min-h-0 rounded border p-2'
 
 export default function ServiceForm({ initialValues = defaults, onSubmit, label }) {
   const values = { ...defaults, ...initialValues, unit: toFormString(initialValues.unit), base_price: initialValues.base_price ?? '', vat_rate: initialValues.vat_rate ?? 0, is_active: initialValues.is_active ?? true }
-  const form = useForm({ resolver: zodResolver(schema), defaultValues: values, mode: 'onTouched' })
+  const form = useForm({ resolver: zodResolver(schema), defaultValues: values, mode: 'onSubmit' })
   const [submitError, setSubmitError] = useState('')
   const [billingMethod, setBillingMethod] = useState(values.billing_method)
   const [serviceType, setServiceType] = useState(values.type)
@@ -58,7 +59,7 @@ export default function ServiceForm({ initialValues = defaults, onSubmit, label 
   }
   const { errors } = form.formState
 
-  return <form noValidate onSubmit={form.handleSubmit(submit)} className="min-w-0 break-words space-y-4">
+  return <form noValidate onSubmit={handleFormSubmit(form, submit)} className="min-w-0 break-words space-y-4">
     <div><label className="block text-sm font-medium">Tên dịch vụ</label><input className={inputClass} {...form.register('name')} />{errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}</div>
     <div className="grid gap-3 sm:grid-cols-2">
       <div><label className="block text-sm font-medium">Loại dịch vụ</label><select className={inputClass} {...typeRegistration} onChange={(event) => { typeRegistration.onChange(event); setServiceType(event.target.value); suggestUnit(event.target.value, form.getValues('billing_method')) }}>{SERVICE_TYPES.map((type) => <option key={type} value={type}>{SERVICE_TYPE_LABELS[type]}</option>)}</select>{errors.type && <p className="mt-1 text-sm text-red-600">{errors.type.message}</p>}</div>

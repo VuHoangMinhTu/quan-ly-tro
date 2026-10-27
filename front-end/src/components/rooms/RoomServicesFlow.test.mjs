@@ -1,3 +1,4 @@
+import { handleFormSubmit, notifyInvalidSubmit } from '../../notifications/formFeedback.js'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
@@ -24,6 +25,7 @@ const helpers = await loadFunctions('../../utils/roomServices.js', [
 ], { formatCurrency, getSuggestedServiceUnit })
 
 async function loadComponent(path, bindings) {
+  bindings = { handleFormSubmit, notifyInvalidSubmit, ...bindings }
   let source = await readFile(new URL(path, import.meta.url), 'utf8')
   const name = source.match(/export default function (\w+)\(/)[1]
   source = source.replace(/^import .*$/gm, '').replace('export default function ', 'function ')

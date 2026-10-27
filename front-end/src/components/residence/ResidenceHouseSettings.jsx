@@ -1,3 +1,4 @@
+import { handleFormSubmit } from '../../notifications/formFeedback'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Controller, useForm } from 'react-hook-form'
@@ -36,7 +37,7 @@ function ProfileForm({ houseId, initial }) {
     }
   }
   const { errors } = form.formState
-  return <form noValidate onSubmit={form.handleSubmit(submit)} className="space-y-3">
+  return <form noValidate onSubmit={handleFormSubmit(form, submit)} className="space-y-3">
     <h3 className="font-semibold">Thông tin cư trú & chủ sở hữu</h3><p className="text-sm text-slate-500">Chỉ nhập thông tin đã được xác nhận. BeeHouse không mặc định OWNER/MANAGER là chủ hộ hoặc chủ sở hữu.</p>
     <div><label htmlFor="residence-authority" className="text-sm">Cơ quan tiếp nhận CT01 mặc định</label><input id="residence-authority" maxLength={255} className={inputClass} {...form.register('residence_authority_name')} /></div>
     <div><label htmlFor="residence-head" className="text-sm">Họ tên chủ hộ</label><input id="residence-head" maxLength={255} className={inputClass} {...form.register('household_head_name')} /></div>

@@ -1,3 +1,4 @@
+import { handleFormSubmit } from '../../notifications/formFeedback'
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -22,7 +23,7 @@ export default function InvoiceForm({ roomId, initialValues = defaults, onSubmit
   const options = currentContract && !contracts.some((contract) => String(contract.id) === String(currentContract.id)) ? [currentContract, ...contracts] : contracts
   const codeLocked = Boolean(initialValues.id && (initialValues.status !== 'DRAFT' || initialValues.issued_at || Number(initialValues.paid_amount) > 0))
   const [submitError, setSubmitError] = useState('')
-  const form = useForm({ resolver: zodResolver(invoiceFormSchema(canEditFinancials)), defaultValues: defaults, mode: 'onTouched' })
+  const form = useForm({ resolver: zodResolver(invoiceFormSchema(canEditFinancials)), defaultValues: defaults, mode: 'onSubmit' })
   const autoCode = useWatch({ control: form.control, name: 'auto_code' })
   useEffect(() => {
     form.reset({
@@ -45,7 +46,7 @@ export default function InvoiceForm({ roomId, initialValues = defaults, onSubmit
       if (!applyApiFieldErrors(error, form.setError)) setSubmitError(getApiErrorMessage(error))
     }
   }
-  return <form noValidate onSubmit={form.handleSubmit(submit)} className="min-w-0 break-words space-y-5 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
+  return <form noValidate onSubmit={handleFormSubmit(form, submit)} className="min-w-0 break-words space-y-5 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
     {!canEditFinancials && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Hóa đơn đã có thanh toán. Bạn chỉ có thể cập nhật ngày đến hạn hoặc ghi chú.</p>}
     <div><label className="text-sm font-medium">Hợp đồng</label><select disabled={!canEditFinancials} className={inputClass} {...form.register('contract_id')}><option value="">Không chọn hợp đồng</option>{options.map(contract => <option key={contract.id} value={String(contract.id)}>{contract.contract_code} · {contract.tenant?.full_name}</option>)}</select>{form.formState.errors.contract_id && <p className="mt-1 text-sm text-red-600">{form.formState.errors.contract_id.message}</p>}</div>
     <div><label className="text-sm font-medium">Mã hóa đơn</label>{!initialValues.id && <label className="my-2 flex items-center gap-2 text-sm"><input type="checkbox" {...form.register('auto_code')} />Tự động tạo mã</label>}<input readOnly={autoCode || codeLocked} placeholder={autoCode ? 'Tự động tạo khi lưu' : 'VD: INV-CUSTOM'} className={inputClass} {...form.register('invoice_code', { validate: value => autoCode || Boolean(value?.trim()) || 'Vui lòng nhập mã hóa đơn.' })}/>{form.formState.errors.invoice_code && <p className="mt-1 text-sm text-red-600">{form.formState.errors.invoice_code.message}</p>}</div>

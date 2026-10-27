@@ -1,3 +1,4 @@
+import { handleFormSubmit } from '../../notifications/formFeedback'
 import { useEffect, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
@@ -37,7 +38,7 @@ export default function RoomTenantForm({ initialValues = defaults, onSubmit, sub
   const { errors, isSubmitting } = form.formState
   const tenants = tenantsQuery.data?.data?.data || []
   const beds = bedsQuery.data?.data?.data || []
-  return <form onSubmit={form.handleSubmit(submit)} className="min-w-0 space-y-4 break-words">
+  return <form noValidate onSubmit={handleFormSubmit(form, submit)} className="min-w-0 space-y-4 break-words">
     <div><label className="block text-sm font-medium">Người thuê</label><select className="mt-1 min-h-11 w-full rounded-lg border p-2" {...form.register('tenant_id', { valueAsNumber: true })}><option value="">Chọn người thuê</option>{tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.full_name}{tenant.phone ? ` · ${tenant.phone}` : ''}</option>)}</select>{errors.tenant_id && <p className="text-sm text-red-600">{errors.tenant_id.message}</p>}</div>
     {room?.room_type === 'DORMITORY' && <div><label className="block text-sm font-medium">Giường / Chỗ ở *</label><select className="mt-1 min-h-11 w-full rounded-lg border p-2" {...form.register('bed_id')}><option value="">Chọn giường</option>{beds.filter((bed) => bed.id === Number(form.watch('bed_id')) || (bed.status === 'AVAILABLE' && !bed.room_tenants?.some((membership) => membership.status === 'ACTIVE'))).map((bed) => <option key={bed.id} value={String(bed.id)}>{bed.bed_code}</option>)}</select>{errors.bed_id && <p className="text-sm text-red-600">{errors.bed_id.message}</p>}{bedsQuery.isError && <p className="text-sm text-red-600">{getApiErrorMessage(bedsQuery.error)}</p>}</div>}
     <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" {...form.register('is_primary')} /> Người chính</label>{errors.is_primary && <p className="text-sm text-red-600">{errors.is_primary.message}</p>}

@@ -1,3 +1,4 @@
+import { handleFormSubmit, notifyInvalidSubmit } from '../../notifications/formFeedback.js'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
@@ -9,10 +10,12 @@ import { transformWithOxc } from 'vite'
 import { roomKeys } from '../../api/roomKeys.js'
 import { boardingHouseKeys } from '../../api/boardingHouseKeys.js'
 import { numberInput } from '../../utils/formValidation.js'
+import { ROOM_TYPES, privateRoomTypeOptions, roomTypeOptions } from '../../utils/roomTypes.js'
 
 // Exercise the real component handlers and RHF/Zod resolver without a browser
 // dependency. Query/router hooks are isolated; no API or production DB is used.
 async function loadComponent(path, bindings) {
+  bindings = { handleFormSubmit, notifyInvalidSubmit, ROOM_TYPES, privateRoomTypeOptions, roomTypeOptions, ...bindings }
   const source = (await readFile(new URL(path, import.meta.url), 'utf8'))
     .replace(/^import .*$/gm, '')
     .replace('export default function ', 'function ')

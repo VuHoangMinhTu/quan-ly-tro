@@ -1,3 +1,4 @@
+import { handleFormSubmit } from '../../notifications/formFeedback'
 import { useState } from 'react'
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -16,7 +17,7 @@ export default function BulkRoomForm({ initialRooms, onBack, onSubmit, submitLab
   const [submitError, setSubmitError] = useState('')
   const [defaultRoomType, setDefaultRoomType] = useState(ROOM_TYPES.PRIVATE_ROOM)
   const [defaultPrivateRoomType, setDefaultPrivateRoomType] = useState(PRIVATE_ROOM_TYPES.NO_LOFT)
-  const form = useForm({ resolver: zodResolver(bulkRoomsSchema), defaultValues: { rooms: initialRooms }, mode: 'onTouched' })
+  const form = useForm({ resolver: zodResolver(bulkRoomsSchema), defaultValues: { rooms: initialRooms }, mode: 'onSubmit' })
   const { fields, append, remove } = useFieldArray({ control: form.control, name: 'rooms' })
   const draftRooms = useWatch({ control: form.control, name: 'rooms' })
   const { errors, isSubmitting } = form.formState
@@ -54,7 +55,7 @@ export default function BulkRoomForm({ initialRooms, onBack, onSubmit, submitLab
     }
   }
 
-  return <form noValidate onSubmit={form.handleSubmit(submit)} className="space-y-5 rounded-xl bg-white p-4 shadow-sm sm:p-6">
+  return <form noValidate onSubmit={handleFormSubmit(form, submit)} className="space-y-5 rounded-xl bg-white p-4 shadow-sm sm:p-6">
     <div><h3 className="text-lg font-semibold">Tạo phòng</h3><p className="mt-1 text-sm text-slate-600">Chỉ cần mã phòng. Diện tích, giá thuê và số người tối đa có thể bổ sung sau. Để trống giá thuê là chưa thiết lập, không phải giá 0.</p></div>
     <fieldset disabled={isSubmitting} className="min-w-0 space-y-5">
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">

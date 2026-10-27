@@ -97,7 +97,7 @@ export async function startSyntheticServer(dist, { apiDelayMs = 0 } = {}) {
       if (path === '/tenants') return json(res, 200, [who.tenant])
       if (path === `/boarding-houses/${who.house.id}`) return json(res, 200, who.house)
       if (path === `/boarding-houses/${who.house.id}/rooms`) return json(res, 200, [who.room])
-      if (path === `/rooms/${who.room.id}/invoices`) return json(res, 200, [who.invoice])
+      if (path === `/rooms/${who.room.id}/invoices`) return json(res, 200, { items: [who.invoice], pagination: { current_page: 1, last_page: 1, per_page: 20, total: 1 } })
       if (/^\/(boarding-houses|rooms|invoices|tenants)\/\d+(\/rooms|\/invoices)?$/.test(path)) return json(res, 404, null, 'Không tìm thấy dữ liệu test.')
       unexpected.push({ method: req.method, path })
       return json(res, 404, null, 'Endpoint chưa được định nghĩa trong fixture E2E.')

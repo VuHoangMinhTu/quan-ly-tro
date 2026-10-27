@@ -1,3 +1,4 @@
+import { handleFormSubmit } from '../../notifications/formFeedback'
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useEffect, useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
@@ -6,7 +7,7 @@ import { numberFieldError } from '../../utils/formValidation'
 import { formatDateForApi, formatDateForDisplay, getTodayForDisplay, isValidDisplayDate } from '../../utils/date'
 
 export default function UtilityReadingForm({ initialValues = {}, onSubmit, label, readingContext }) {
-  const form = useForm({ defaultValues: { reading_date: getTodayForDisplay(), reading_value: '', note: '' }, mode: 'onTouched' })
+  const form = useForm({ defaultValues: { reading_date: getTodayForDisplay(), reading_value: '', note: '' }, mode: 'onSubmit' })
   const [error, setError] = useState('')
 
   useEffect(() => form.reset({
@@ -41,7 +42,7 @@ export default function UtilityReadingForm({ initialValues = {}, onSubmit, label
     }
   }
 
-  return <form noValidate onSubmit={form.handleSubmit(submit)} className="min-w-0 break-words space-y-4">
+  return <form noValidate onSubmit={handleFormSubmit(form, submit)} className="min-w-0 break-words space-y-4">
     <div>
       <label className="block text-sm font-medium">Ngày ghi *</label>
       <Controller name="reading_date" control={form.control} rules={{ required: 'Vui lòng nhập ngày ghi.', validate: value => isValidDisplayDate(value) || 'Ngày ghi phải theo định dạng dd/mm/yyyy và hợp lệ.' }} render={({ field }) => <DateInput {...field} placeholder="dd/mm/yyyy" invalid={Boolean(form.formState.errors.reading_date)} />} />

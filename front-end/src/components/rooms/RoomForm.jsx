@@ -1,3 +1,4 @@
+import { handleFormSubmit } from '../../notifications/formFeedback'
 import { useEffect, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
@@ -33,7 +34,7 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
   const [submitError, setSubmitError] = useState('')
   const amenitiesQuery = useQuery({ queryKey: roomKeys.amenities, queryFn: getAmenities })
   const floorsQuery = useQuery({ queryKey: ['floors', initialValues.boarding_house_id], queryFn: () => getFloors(initialValues.boarding_house_id), enabled: Boolean(initialValues.boarding_house_id) })
-  const form = useForm({ resolver: zodResolver(schema), defaultValues: emptyValues, mode: 'onTouched' })
+  const form = useForm({ resolver: zodResolver(schema), defaultValues: emptyValues, mode: 'onSubmit' })
 
   useEffect(() => {
     form.reset({
@@ -72,7 +73,7 @@ export default function RoomForm({ initialValues = emptyValues, onSubmit, submit
   const amenities = amenitiesQuery.data?.data?.data || []
 
   return (
-    <form noValidate onSubmit={form.handleSubmit(handleSubmit)} className="min-w-0 break-words space-y-4 sm:space-y-6 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
+    <form noValidate onSubmit={handleFormSubmit(form, handleSubmit)} className="min-w-0 break-words space-y-4 sm:space-y-6 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
       <div className="grid gap-4 sm:gap-5 md:grid-cols-2">
         <div>
           <label htmlFor="room-code" className="block text-sm font-medium text-slate-700">Mã phòng</label>

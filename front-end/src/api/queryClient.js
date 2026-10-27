@@ -4,7 +4,12 @@ import { DASHBOARD_REFRESH_MS } from './dashboardPolicy.js'
 export function createAppQueryClient() {
   const invoiceVersions = new WeakMap()
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+    // These HTTP actions are never an offline queue. Let Axios fail visibly even
+    // when the browser's online hint is stale; bound requests also release refetches.
+    defaultOptions: {
+      queries: { retry: false, refetchOnWindowFocus: false, networkMode: 'always' },
+      mutations: { retry: false, networkMode: 'always' },
+    },
     // One central hook covers existing and future room/contract/invoice/payment
     // mutations, including manager assignment, without overriding page callbacks.
     mutationCache: new MutationCache({ onSuccess: () => { void client.invalidateQueries({ queryKey: ['dashboard'] }) } }),

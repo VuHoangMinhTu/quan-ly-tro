@@ -64,6 +64,7 @@ export function applyApiFieldErrors(error, setError, mapField = (field) => field
 }
 
 export function getApiErrorMessage(error) {
+  if (['ECONNABORTED', 'ETIMEDOUT'].includes(error?.code) && !error.response) return 'Máy chủ phản hồi quá lâu. Chưa xác định thao tác đã hoàn tất hay chưa; vui lòng kiểm tra dữ liệu trước khi thử lại.'
   if (!error?.response) return NETWORK_ERROR
   const status = error.response.status
   // Even a verbose development response must never leak a server exception.

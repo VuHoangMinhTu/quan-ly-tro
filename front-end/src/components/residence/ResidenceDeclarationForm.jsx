@@ -1,3 +1,4 @@
+import { handleFormSubmit } from '../../notifications/formFeedback'
 import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -80,7 +81,7 @@ export default function ResidenceDeclarationForm({ context, initial, initialPeop
     const selected = members.some(member => member.tenant_id === Number(tenant.id))
     form.setValue('members', selected ? members.filter(member => member.tenant_id !== Number(tenant.id)) : [...members, { tenant_id: Number(tenant.id), relationship_to_household_head: '' }], { shouldDirty: true })
   }
-  return <form onSubmit={form.handleSubmit(submit)} className="min-w-0 space-y-5 rounded-xl bg-white p-4 shadow-sm sm:p-6">
+  return <form noValidate onSubmit={handleFormSubmit(form, submit)} className="min-w-0 space-y-5 rounded-xl bg-white p-4 shadow-sm sm:p-6">
     <p className="text-sm text-slate-500">Có thể lưu nháp khi thiếu thông tin. Chọn rõ chủ hộ của hồ sơ này; khi nộp, BeeHouse chốt một bản snapshot.</p>
     <section className={sectionClass}><h3 className="font-semibold">1. Cơ quan tiếp nhận</h3>
       <label htmlFor="ct01-authority" className="block text-sm">Kính gửi / cơ quan tiếp nhận<input id="ct01-authority" className={inputClass} {...form.register('authority_name')} /></label><p className="text-xs text-slate-500">Đã lấy từ cấu hình của nhà trọ. Có thể thay đổi cho hồ sơ này.</p>{errors.authority_name && <p className="text-sm text-red-700">{errors.authority_name.message}</p>}

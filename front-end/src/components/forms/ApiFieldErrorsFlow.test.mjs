@@ -1,3 +1,4 @@
+import { handleFormSubmit, notifyInvalidSubmit } from '../../notifications/formFeedback.js'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
@@ -36,7 +37,7 @@ async function harness(path, props = {}, extraBindings = {}) {
   const states = []
   let previousDependencies
   const input = (inputProps) => React.createElement('input', inputProps)
-  const bindings = {
+  const bindings = { handleFormSubmit, notifyInvalidSubmit,
     ...dates, ...serviceHelpers, ...validation, toFormString, applyApiFieldErrors, getApiErrorMessage, z, zodResolver, contractKeys, tenantKeys, invoiceStatusLabels,
     useRef: (initial) => ({ current: initial }),
     useState: (initial) => {
@@ -218,7 +219,7 @@ test('invoice nullable note is an empty input and retains the null API conventio
 for (const field of ['name', 'email', 'phone', 'password']) {
   test(`register ${field} validation displays only the matching field, never Laravel generic text`, async () => {
     const form = await harness('../../pages/auth/RegisterPage.jsx')
-    const message = `Lỗi dữ liệu ${field}.`
+    const message = 'Thông tin này chưa hợp lệ.'
     form.fail(apiError(422, 'The given data was invalid.', { [field]: [message] }))
     assert.deepEqual(Object.keys(form.form.formState.errors), [field])
     const rendered = form.render()

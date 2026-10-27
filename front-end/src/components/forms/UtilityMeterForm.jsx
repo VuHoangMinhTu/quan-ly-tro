@@ -1,3 +1,4 @@
+import { handleFormSubmit } from '../../notifications/formFeedback'
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -15,7 +16,7 @@ export default function UtilityMeterForm({ roomId, initialValues = emptyValues, 
     queryKey: roomKeys.services(roomId),
     queryFn: () => getRoomServices(roomId),
   })
-  const form = useForm({ defaultValues: { service_id: '', meter_code: '', initial_reading: '', is_active: true }, mode: 'onTouched' })
+  const form = useForm({ defaultValues: { service_id: '', meter_code: '', initial_reading: '', is_active: true }, mode: 'onSubmit' })
   const [error, setError] = useState('')
   useEffect(() => form.reset({
     service_id: initialValues.service_id != null ? String(initialValues.service_id) : '',
@@ -50,7 +51,7 @@ export default function UtilityMeterForm({ roomId, initialValues = emptyValues, 
   }
 
   return (
-    <form noValidate onSubmit={form.handleSubmit(submit)} className="min-w-0 break-words space-y-4">
+    <form noValidate onSubmit={handleFormSubmit(form, submit)} className="min-w-0 break-words space-y-4">
       <div>
         <label htmlFor="meter-service" className="block text-sm font-medium">Dịch vụ *</label>
         <select id="meter-service" disabled={servicesQuery.isPending || servicesQuery.isError || form.formState.isSubmitting} className="min-h-11 sm:min-h-0 mt-1 w-full min-w-0 rounded border p-2 disabled:bg-slate-50" {...form.register('service_id', { required: 'Vui lòng chọn dịch vụ.' })}>

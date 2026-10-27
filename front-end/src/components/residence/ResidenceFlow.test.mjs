@@ -1,3 +1,4 @@
+import { handleFormSubmit, notifyInvalidSubmit } from '../../notifications/formFeedback.js'
 import assert from 'node:assert/strict'
 import { invoicePayosQr } from '../../utils/invoicePayment.js'
 import { readFile } from 'node:fs/promises'
@@ -17,6 +18,7 @@ const formatterSource = (await readFile(new URL('../../utils/formatters.js', imp
 const { formatCurrency, formatUtilityValue, genderLabels } = new Function('formatDateForDisplay', `${formatterSource}\nreturn { formatCurrency, formatUtilityValue, genderLabels }`)(formatDateForDisplay)
 
 async function load(path, name, bindings = {}) {
+  bindings = { handleFormSubmit, notifyInvalidSubmit, ...bindings }
   const source = (await readFile(new URL(path, import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ').replaceAll('export function ', 'function ')
   const { code } = await transformWithOxc(source, `${name}.jsx`, { jsx: { runtime: 'classic' } })
   return new Function('React', ...Object.keys(bindings), `${code}\nreturn ${name}`)(React, ...Object.values(bindings))
