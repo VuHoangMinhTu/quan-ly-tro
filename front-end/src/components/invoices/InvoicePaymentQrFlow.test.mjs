@@ -90,3 +90,9 @@ test('bill shows base charges without source badges and keeps historical VAT tra
   assert.match(historical, /3\.426\.720/)
   assert.match(historical, /không tự điều chỉnh dữ liệu lịch sử/)
 })
+
+test('per-person water uses the stored person unit instead of cubic metres', async () => {
+  const markup = await render({ ...invoice, items: [{ id: 1, type: 'WATER', description: 'Nước theo người', unit: 'người', quantity: 1, unit_price: 150000, amount: 150000 }] })
+  assert.match(markup, /1 người/)
+  assert.doesNotMatch(markup, /m³/)
+})

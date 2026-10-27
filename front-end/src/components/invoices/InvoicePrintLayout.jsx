@@ -15,7 +15,7 @@ function displayDate(value) {
 
 function itemQuantity(item) {
   const value = formatUtilityValue(item.quantity)
-  const unit = utilityUnits[item.type] || item.unit || (item.type === 'RENT' ? 'tháng' : '')
+  const unit = item.unit || utilityUnits[item.type] || (item.type === 'RENT' ? 'tháng' : '')
   return unit ? `${value} ${unit}` : value
 }
 

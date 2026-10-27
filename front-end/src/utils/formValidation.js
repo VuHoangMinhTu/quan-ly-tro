@@ -53,10 +53,10 @@ export const contractFormSchema = z.object({
   when: ({ value }) => isValidDisplayDate(value?.start_date) && isValidDisplayDate(value?.end_date),
 })
 
-export function invoiceFormSchema(canEditFinancials = true) {
+export function invoiceFormSchema(canEditFinancials = true, requireContract = false) {
   return z.object({
     ...(canEditFinancials ? {
-      contract_id: z.union([z.literal(''), selectedId('Hợp đồng')], { error: 'Vui lòng chọn hợp đồng hợp lệ.' }),
+      contract_id: requireContract ? selectedId('Hợp đồng') : z.union([z.literal(''), selectedId('Hợp đồng')], { error: 'Vui lòng chọn hợp đồng hợp lệ.' }),
       auto_code: z.boolean(),
       invoice_code: z.string().trim().max(100, 'Mã hóa đơn tối đa 100 ký tự.').nullable().optional(),
       billing_period: z.string().refine(isValidBillingPeriod, 'Vui lòng nhập kỳ hóa đơn theo định dạng mm/yyyy.'),

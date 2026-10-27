@@ -21,8 +21,10 @@ class InvoiceApiTest extends TestCase
         $l = Landlord::create(['user_id' => $u->id, 'full_name' => $u->name, 'phone' => '1']);
         $b = BoardingHouse::create(['landlord_id' => $l->id, 'name' => 'H', 'address' => 'A']);
         $r = Room::create(['boarding_house_id' => $b->id, 'room_code' => 'P', 'monthly_rent' => 1, 'status' => 'AVAILABLE']);
+        $contract = Contract::factory()->create(['room_id' => $r->id, 'status' => 'ACTIVE']);
+        $contract->occupants()->create(['room_id' => $r->id, 'tenant_id' => $contract->tenant_id, 'is_primary' => true, 'status' => 'ACTIVE', 'move_in_date' => '2026-10-01']);
         $token = $u->createToken('t')->plainTextToken;
-        $this->withToken($token)->postJson("/api/rooms/{$r->id}/invoices", ['invoice_code' => 'INV-1', 'billing_period' => '2026-10-15', 'discount_amount' => 0, 'status' => 'DRAFT', 'issued_at' => '2026-10-31', 'due_date' => '2026-11-05', 'subtotal' => 999])->assertCreated()->assertJsonPath('data', null);
+        $this->withToken($token)->postJson("/api/rooms/{$r->id}/invoices", ['contract_id' => $contract->id, 'invoice_code' => 'INV-1', 'billing_period' => '2026-10-15', 'discount_amount' => 0, 'status' => 'DRAFT', 'issued_at' => '2026-10-31', 'due_date' => '2026-11-05', 'subtotal' => 999])->assertCreated()->assertJsonPath('data', null);
 
         $this->assertDatabaseHas('invoices', ['room_id' => $r->id, 'invoice_code' => 'INV-1', 'subtotal' => 0, 'total_amount' => 0, 'paid_amount' => 0, 'billing_period' => '2026-10-01']);
 

@@ -138,6 +138,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/rooms/{roomId}/services', [RoomServiceController::class, 'index']);
     Route::put('/rooms/{roomId}/services', [RoomServiceController::class, 'update']);
     Route::get('/rooms/{roomId}/invoices', [InvoiceController::class, 'index']);
+    Route::get('/rooms/{roomId}/invoice-contracts', [InvoiceController::class, 'eligibleContracts']);
     Route::post('/rooms/{roomId}/invoices', [InvoiceController::class, 'store']);
     Route::get('/invoices/{id}', [InvoiceController::class, 'show']);
     Route::get('/invoices/{id}/payment-qr', [InvoiceController::class, 'paymentQr']);

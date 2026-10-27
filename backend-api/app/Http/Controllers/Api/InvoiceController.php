@@ -13,10 +13,12 @@ use App\Models\Room;
 use App\Services\BillingService;
 use App\Services\BoardingHouseAccessService;
 use App\Services\ContractService;
+use App\Services\InvoiceContractEligibility;
 use App\Services\InvoicePaymentInfoService;
 use App\Services\PayOSService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -51,16 +53,50 @@ class InvoiceController extends Controller
     {
         $room = $this->room($r, $roomId);
         $d = $r->validated();
-        $contract = $this->contract($room, $d['contract_id'] ?? null);
         $d['billing_period'] = date('Y-m-01', strtotime($d['billing_period']));
-        // Explicit invoice dates win; the contract supplies only a creation default.
-        if (($d['due_date'] ?? null) === null && $contract !== null) {
-            $d['due_date'] = $contracts->scheduleDate($d['billing_period'], $contract->payment_due_day);
-        }
-        $this->period($room, $d['billing_period']);
-        $room->invoices()->create([...$d, 'subtotal' => 0, 'total_amount' => 0, 'paid_amount' => 0]);
 
-        return ApiResponse::success(null, 'Tạo hóa đơn thành công.', 201);
+        return DB::transaction(function () use ($room, $d, $contracts): JsonResponse {
+            Room::query()->whereKey($room->id)->lockForUpdate()->firstOrFail();
+            $contract = isset($d['contract_id']) ? app(InvoiceContractEligibility::class)->assertEligible($room, $d['contract_id'], $d['billing_period']) : null;
+            // Explicit invoice dates win; the contract supplies only a creation default.
+            if (($d['due_date'] ?? null) === null && $contract !== null) {
+                $d['due_date'] = $contracts->scheduleDate($d['billing_period'], $contract->payment_due_day);
+            }
+            $this->period($room, $d['billing_period'], null, $contract?->id);
+            $room->invoices()->create([...$d, 'subtotal' => 0, 'total_amount' => 0, 'paid_amount' => 0]);
+
+            return ApiResponse::success(null, 'Tạo hóa đơn thành công.', 201);
+        });
+    }
+
+    public function eligibleContracts(Request $request, int $roomId, BoardingHouseAccessService $access, InvoiceContractEligibility $eligibility): JsonResponse
+    {
+        $period = $request->validate(['billing_period' => ['required', 'date']])['billing_period'];
+        $room = $access->room($request->user(), $roomId);
+        if (($warning = $eligibility->roomWarning($room)) !== null) {
+            return ApiResponse::success(['room' => $room->only(['id', 'room_code', 'room_type']), 'contracts' => [], 'warnings' => [['contract_id' => null, 'contract_code' => $room->room_code, 'message' => $warning]]]);
+        }
+        $owner = $room->boardingHouse->landlord_id;
+        $contracts = $room->contracts()->where('landlord_id', $owner)->where('status', 'ACTIVE')
+            ->whereHas('tenant', fn ($query) => $query->where('landlord_id', $owner))
+            ->with(['tenant:id,full_name', 'occupants', 'bed.roomTenants', 'room'])->latest('id')->get();
+        $options = [];
+        $warnings = [];
+        foreach ($contracts as $contract) {
+            if (($warning = $eligibility->warning($contract)) !== null) {
+                $warnings[] = ['contract_id' => $contract->id, 'contract_code' => $contract->contract_code, 'message' => $warning];
+            }
+            $reason = $eligibility->reason($contract, $period);
+            if ($reason !== null) {
+                continue;
+            }
+            $options[] = [...$contract->only(['id', 'room_id', 'contract_code', 'status', 'start_date', 'end_date']),
+                'start_date' => $contract->start_date?->toDateString(), 'end_date' => $contract->end_date?->toDateString(),
+                'room_code' => $room->room_code, 'bed' => $contract->bed?->only(['id', 'bed_code']),
+                'tenant' => ['full_name' => $contract->tenant?->full_name]];
+        }
+
+        return ApiResponse::success(['room' => $room->only(['id', 'room_code', 'room_type']), 'contracts' => $options, 'warnings' => $warnings]);
     }
 
     public function show(Request $r, int $id, BoardingHouseAccessService $access): JsonResponse
@@ -96,8 +132,15 @@ class InvoiceController extends Controller
         }
 
         $oldRemaining = (float) $i->total_amount - (float) $i->paid_amount;
-        $this->contract($i->room, $d['contract_id'] ?? null);
-        $this->period($i->room, $d['billing_period'], $i->id);
+        if ($i->status === 'DRAFT' && $i->contract_id !== null && ! isset($d['contract_id'])) {
+            throw ValidationException::withMessages(['contract_id' => 'Vui lòng chọn hợp đồng của người thuê hiện tại cho hóa đơn định kỳ.']);
+        }
+        if (isset($d['contract_id']) && ((int) $d['contract_id'] !== (int) $i->contract_id || $d['billing_period'] !== $i->billing_period->toDateString())) {
+            app(InvoiceContractEligibility::class)->assertEligible($i->room, $d['contract_id'], $d['billing_period']);
+        } else {
+            $this->contract($i->room, $d['contract_id'] ?? null);
+        }
+        $this->period($i->room, $d['billing_period'], $i->id, $d['contract_id'] ?? null);
         if (($d['discount_amount'] ?? 0) > $i->subtotal) {
             throw ValidationException::withMessages(['discount_amount' => 'Số tiền giảm giá không được vượt quá tạm tính.']);
         }
@@ -158,10 +201,11 @@ class InvoiceController extends Controller
         return $contract;
     }
 
-    private function period(Room $room, string $date, ?int $ignore = null): void
+    private function period(Room $room, string $date, ?int $ignore = null, ?int $contractId = null): void
     {
-        if (Invoice::where('room_id', $room->id)->whereDate('billing_period', $date)->where('status', '!=', 'CANCELLED')->when($ignore, fn ($q) => $q->whereKeyNot($ignore))->exists()) {
-            throw ValidationException::withMessages(['billing_period' => 'Phòng đã có hóa đơn cho kỳ này. Vui lòng chọn kỳ khác.']);
+        if (Invoice::where('room_id', $room->id)->whereDate('billing_period', $date)->where('status', '!=', 'CANCELLED')->when($ignore, fn ($q) => $q->whereKeyNot($ignore))
+            ->when($room->room_type === 'DORMITORY' && $contractId !== null, fn ($query) => $query->where(fn ($scope) => $scope->where('contract_id', $contractId)->orWhereNull('contract_id')))->exists()) {
+            throw ValidationException::withMessages(['billing_period' => $room->room_type === 'DORMITORY' ? 'Hợp đồng/giường đã có hóa đơn cho kỳ này. Vui lòng chọn kỳ khác.' : 'Phòng đã có hóa đơn cho kỳ này. Vui lòng chọn kỳ khác.']);
         }
     }
 

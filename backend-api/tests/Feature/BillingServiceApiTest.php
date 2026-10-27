@@ -106,6 +106,46 @@ class BillingServiceApiTest extends TestCase
         $this->assertDatabaseCount('utility_meters', 0);
     }
 
+    public function test_live_per_person_service_counts_only_the_invoiced_contract_not_previous_room_contracts(): void
+    {
+        [$user, $room] = $this->ownerAndRoom();
+        $current = Contract::factory()->create(['room_id' => $room->id, 'status' => 'ACTIVE', 'start_date' => '2026-10-23']);
+        $current->forceFill(['service_terms_version' => 1, 'signing_snapshot' => ['services' => []]])->save();
+        $old = Contract::factory()->create(['room_id' => $room->id, 'status' => 'TERMINATED', 'start_date' => '2026-09-01', 'end_date' => '2026-10-22']);
+        $this->occupant($room, ['contract_id' => $old->id, 'status' => 'MOVED_OUT', 'move_out_date' => '2026-10-22']);
+        $current->occupants()->create(['room_id' => $room->id, 'tenant_id' => $current->tenant_id, 'is_primary' => true, 'status' => 'ACTIVE', 'move_in_date' => '2026-10-23']);
+        $water = $this->service($room, 'WATER', 'PER_PERSON', 150000);
+        $this->assign($room, $water);
+        $invoice = $this->invoice($room);
+        $invoice->update(['contract_id' => $current->id]);
+
+        $this->generate($user, $invoice)->assertOk();
+
+        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'WATER', 'quantity' => 1, 'unit' => 'người', 'amount' => 150000]);
+        $this->assertDatabaseHas('room_tenants', ['contract_id' => $old->id, 'status' => 'MOVED_OUT']);
+    }
+
+    public function test_per_person_rejects_unlinked_legacy_occupancy_instead_of_guessing_and_preserves_existing_items(): void
+    {
+        [$user, $room] = $this->ownerAndRoom();
+        $contract = Contract::factory()->create(['room_id' => $room->id, 'status' => 'ACTIVE']);
+        $contract->occupants()->create(['room_id' => $room->id, 'tenant_id' => $contract->tenant_id, 'is_primary' => true, 'status' => 'ACTIVE', 'move_in_date' => '2026-10-01']);
+        $this->occupant($room);
+        $water = $this->service($room, 'WATER', 'PER_PERSON', 150000);
+        $this->assign($room, $water);
+        $invoice = $this->invoice($room);
+        $invoice->update(['contract_id' => $contract->id]);
+        $item = $invoice->items()->create(['type' => 'WATER', 'description' => 'Khoản đã ghi nhận', 'quantity' => 2, 'unit_price' => 150000, 'amount' => 300000, 'source' => 'AUTO']);
+        $invoice->recalculateTotals();
+        $before = $invoice->fresh()->getAttributes();
+
+        $this->generate($user, $invoice)->assertUnprocessable()->assertJsonValidationErrors('contract_id');
+
+        $this->assertModelExists($item);
+        $this->assertSame($before, $invoice->fresh()->getAttributes());
+        $this->assertDatabaseCount('invoice_items', 1);
+    }
+
     public function test_per_unit_electricity_and_water_each_require_a_real_active_meter_and_roll_back_on_422(): void
     {
         [$user, $room] = $this->ownerAndRoom();
@@ -193,12 +233,13 @@ class BillingServiceApiTest extends TestCase
         $contract = Contract::create(['room_id' => $room->id, 'tenant_id' => $tenant->id, 'contract_code' => 'HD-FULL',
             'start_date' => '2026-10-01', 'end_date' => '2027-09-30', 'monthly_rent' => 3_000_000,
             'deposit_amount' => 0, 'status' => 'ACTIVE', 'service_terms_version' => 1]);
-        $this->occupant($room, ['move_in_date' => '2026-10-01']);
+        RoomTenant::create(['room_id' => $room->id, 'tenant_id' => $contract->tenant_id, 'is_primary' => true, 'status' => 'ACTIVE', 'move_in_date' => '2026-10-01', 'contract_id' => $contract->id]);
         $electricity = $this->service($room, 'ELECTRICITY', 'PER_UNIT', 3_800);
         $water = $this->service($room, 'WATER', 'PER_PERSON', 150_000);
         $fixed = $this->service($room, 'OTHER', 'FIXED', 150_000);
         $this->assign($room, $electricity, $water, $fixed);
         $meter = $this->meter($room, $electricity);
+        $contract->utilityOpenings()->create(['utility_meter_id' => $meter->id, 'service_id' => $electricity->id, 'service_name' => $electricity->name, 'opening_reading' => 0, 'reading_date' => '2026-10-01']);
         $this->reading($meter, '2026-10-25', 171);
         $this->reading($meter, '2026-11-25', 173);
         $invoice = $this->invoice($room, '2026-11-01');
@@ -314,6 +355,7 @@ class BillingServiceApiTest extends TestCase
             'start_date' => '2026-09-01', 'end_date' => '2027-08-31',
             'monthly_rent' => 3_000_000, 'deposit_amount' => 0, 'status' => 'ACTIVE',
         ]);
+        RoomTenant::create(['room_id' => $room->id, 'tenant_id' => $tenant->id, 'contract_id' => $contract->id, 'is_primary' => true, 'status' => 'ACTIVE', 'move_in_date' => '2026-09-01']);
         $invoice = $this->invoice($room);
         $invoice->update(['contract_id' => $contract->id]);
 

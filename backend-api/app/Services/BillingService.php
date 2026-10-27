@@ -10,6 +10,7 @@ use App\Models\Service;
 use App\Models\UtilityMeter;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -26,6 +27,9 @@ class BillingService
             $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
             if (! $invoice->canEditFinancials()) {
                 throw new InvoiceFinancialEditException('Hóa đơn đã có thanh toán nên không thể chỉnh sửa các khoản thu.');
+            }
+            if ($invoice->status === 'DRAFT' && $invoice->contract_id !== null) {
+                app(InvoiceContractEligibility::class)->assertEligible($invoice->room, $invoice->contract_id, $invoice->billing_period->toDateString());
             }
             $oldRemaining = (float) $invoice->total_amount - (float) $invoice->paid_amount;
             $invoice->items()->where('source', 'AUTO')->delete();
@@ -54,8 +58,13 @@ class BillingService
                     $this->item($invoice, $type, $name, 1, $service->base_price, $service->base_price, $service);
                 }
                 if ($service->billing_method === 'PER_PERSON') {
+                    if ($invoice->contract_id !== null && $invoice->room->roomTenants()->whereNull('contract_id')
+                        ->whereIn('status', ['ACTIVE', 'MOVED_OUT'])->whereDate('move_in_date', '<=', $end)
+                        ->where(fn ($query) => $query->whereNull('move_out_date')->orWhereDate('move_out_date', '>=', $start))->exists()) {
+                        throw ValidationException::withMessages(['contract_id' => 'Lịch sử cư trú trong kỳ chưa liên kết hợp đồng. Vui lòng kiểm tra trước khi tính phí theo người; hệ thống không tự gán người ở cho hợp đồng.']);
+                    }
                     $count = $invoice->room->roomTenants()->whereIn('status', ['ACTIVE', 'MOVED_OUT'])
-                        ->when($contractTerm, fn ($query) => $query->where('contract_id', $invoice->contract_id))
+                        ->when($invoice->contract_id !== null, fn ($query) => $query->where('contract_id', $invoice->contract_id))
                         ->whereDate('move_in_date', '<=', $end)->where(fn ($q) => $q->whereNull('move_out_date')->orWhereDate('move_out_date', '>=', $start))->distinct()->count('tenant_id');
                     if ($count) {
                         $this->item($invoice, $type, $name, $count, $service->base_price, BigDecimal::of($service->base_price)->multipliedBy($count), $service);
@@ -65,8 +74,23 @@ class BillingService
                     if ($serviceId === null) {
                         throw ValidationException::withMessages(['service_id' => 'Không xác định được dịch vụ nguồn của đồng hồ. Vui lòng kiểm tra thỏa thuận dịch vụ, không thể tự dùng đồng hồ khác.']);
                     }
-                    $opening = $contractTerm ? $invoice->contract->utilityOpenings()->where('service_id', $serviceId)->first() : null;
-                    $meter = $opening?->utility_meter_id
+                    $usageStart = max($start->format('Y-m-d'), $invoice->contract?->start_date?->format('Y-m-d') ?? $start->format('Y-m-d'));
+                    $usageEnd = min($end->format('Y-m-d'), $invoice->contract?->end_date?->format('Y-m-d') ?? $end->format('Y-m-d'));
+                    $stay = $invoice->contract?->occupants()->where('room_id', $invoice->room_id)->where('tenant_id', $invoice->contract->tenant_id)->where('is_primary', true)
+                        ->whereDate('move_in_date', '<=', $usageEnd)->where(fn ($query) => $query->whereNull('move_out_date')->orWhereDate('move_out_date', '>=', $usageStart))
+                        ->orderByDesc('move_in_date')->first();
+                    if ($stay) {
+                        $usageStart = max($usageStart, $stay->move_in_date->format('Y-m-d'));
+                        $usageEnd = min($usageEnd, $stay->move_out_date?->format('Y-m-d') ?? $usageEnd);
+                    }
+                    $opening = $invoice->contract?->utilityOpenings()->where('service_id', $serviceId)->first();
+                    if ($invoice->contract_id !== null && (! $opening || $opening->reading_date->format('Y-m-d') < $invoice->contract->start_date->format('Y-m-d'))) {
+                        throw ValidationException::withMessages(['utility_openings' => "Dịch vụ {$name} chưa có chỉ số bàn giao hợp lệ cho lần thuê này. Vui lòng xác nhận chỉ số thực tế; không sử dụng chỉ số của người thuê trước."]);
+                    }
+                    if ($opening && $opening->reading_date->format('Y-m-d') > $usageEnd) {
+                        throw ValidationException::withMessages(['utility_openings' => "Mốc bàn giao của {$name} nằm sau khoảng chịu phí của kỳ hóa đơn."]);
+                    }
+                    $meter = $opening
                         ? UtilityMeter::withTrashed()->where('room_id', $invoice->room_id)->where('service_id', $serviceId)->find($opening->utility_meter_id)
                         : $invoice->room->utilityMeters()->where('service_id', $serviceId)->where('is_active', true)->first();
                     if (! $meter) {
@@ -77,22 +101,22 @@ class BillingService
                     }
                     // readings() defaults to ascending order for history views;
                     // replace it here rather than appending a conflicting order.
-                    $previous = $meter->readings()->whereDate('reading_date', '<=', $start)
+                    $previous = $meter->readings()->whereDate('reading_date', '<=', $usageStart)
+                        ->when($opening, fn ($query) => $query->whereDate('reading_date', '>=', $opening->reading_date))
                         ->reorder('reading_date', 'desc')->orderByDesc('id')->first();
                     $openingDate = $previous?->reading_date?->format('Y-m-d');
                     $openingValue = $previous?->reading_value;
-                    if ($opening && $opening->reading_date->format('Y-m-d') <= $start->format('Y-m-d')
-                        && ($openingDate === null || $opening->reading_date->format('Y-m-d') > $openingDate)) {
+                    if ($opening && ($openingDate === null || $opening->reading_date->format('Y-m-d') >= $openingDate)) {
                         $openingValue = $opening->opening_reading;
                         $openingDate = $opening->reading_date->format('Y-m-d');
                     }
                     $openingValue ??= $meter->initial_reading;
-                    $current = $meter->readings()->whereDate('reading_date', '<=', $end)
-                        ->whereDate('reading_date', $openingDate === null ? '>=' : '>', $openingDate ?? $start)
+                    $current = $meter->readings()->whereDate('reading_date', '<=', $usageEnd)->whereDate('reading_date', '>=', $usageStart)
+                        ->whereDate('reading_date', $openingDate === null ? '>=' : '>', $openingDate ?? $usageStart)
                         ->reorder('reading_date', 'desc')->orderByDesc('id')->first();
                     if (! $current) {
                         throw ValidationException::withMessages(['reading_date' => __('services.missing_closing_reading', [
-                            'type' => $name, 'date' => $end->format('d/m/Y'),
+                            'type' => $name, 'date' => Carbon::parse($usageEnd)->format('d/m/Y'),
                         ])]);
                     }
                     $consumption = BigDecimal::of($current->reading_value)->minus($openingValue)->strippedOfTrailingZeros();

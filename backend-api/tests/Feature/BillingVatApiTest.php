@@ -126,10 +126,12 @@ class BillingVatApiTest extends TestCase
 
     public function test_new_invoice_keeps_rent_water_services_manual_charges_and_discount_without_vat(): void
     {
-        [$user, $invoice] = $this->fixture('PER_UNIT');
+        [$user, $invoice, $electricity] = $this->fixture('PER_UNIT');
         $contract = Contract::factory()->create(['room_id' => $invoice->room_id, 'tenant_id' => Tenant::create(['landlord_id' => $user->landlord->id, 'full_name' => 'Người thuê'])->id,
             'start_date' => '2026-10-01', 'end_date' => '2027-09-30', 'monthly_rent' => 3000000]);
         $invoice->update(['contract_id' => $contract->id]);
+        $meter = $invoice->room->utilityMeters()->where('service_id', $electricity->id)->firstOrFail();
+        $contract->utilityOpenings()->create(['utility_meter_id' => $meter->id, 'service_id' => $electricity->id, 'service_name' => $electricity->name, 'opening_reading' => 0, 'reading_date' => '2026-10-01']);
         $house = $invoice->room->boardingHouse;
         $water = $house->services()->create(['name' => 'Nước', 'type' => 'WATER', 'billing_method' => 'FIXED', 'base_price' => 20000, 'vat_rate' => 8]);
         $internet = $house->services()->create(['name' => 'Internet', 'type' => 'INTERNET', 'billing_method' => 'FIXED', 'base_price' => 100000, 'vat_rate' => 10]);

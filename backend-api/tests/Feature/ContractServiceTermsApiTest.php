@@ -46,6 +46,7 @@ class ContractServiceTermsApiTest extends TestCase
         $this->putJson("/api/contracts/{$contract->id}", [
             'status' => 'ACTIVE', 'lessor_representative_user_id' => $owner->id,
             'services' => [['service_id' => $service->id]],
+            'utility_openings' => $contract->room->utilityMeters()->get()->map(fn ($meter) => ['utility_meter_id' => $meter->id, 'opening_reading' => $meter->initial_reading, 'reading_date' => $contract->start_date->format('Y-m-d')])->all(),
         ])->assertOk();
     }
 

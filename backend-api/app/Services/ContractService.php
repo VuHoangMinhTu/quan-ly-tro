@@ -200,6 +200,14 @@ class ContractService
             if (! $meter) {
                 throw ValidationException::withMessages(["utility_openings.{$index}.utility_meter_id" => 'Đồng hồ phải đang hoạt động và thuộc dịch vụ áp dụng cho phòng này.']);
             }
+            $previous = $meter->readings()->whereDate('reading_date', '<=', $opening['reading_date'])->reorder('reading_date', 'desc')->orderByDesc('id')->first();
+            $next = $meter->readings()->whereDate('reading_date', '>=', $opening['reading_date'])->reorder('reading_date')->orderBy('id')->first();
+            if (BigDecimal::of((string) $opening['opening_reading'])->isLessThan((string) ($previous?->reading_value ?? $meter->initial_reading))) {
+                throw ValidationException::withMessages(["utility_openings.{$index}.opening_reading" => 'Chỉ số bàn giao không được nhỏ hơn chỉ số trước đó. Nếu thay/đặt lại công tơ, vui lòng ghi nhận đúng đồng hồ mới.']);
+            }
+            if ($next && BigDecimal::of((string) $opening['opening_reading'])->isGreaterThan((string) $next->reading_value)) {
+                throw ValidationException::withMessages(["utility_openings.{$index}.opening_reading" => 'Chỉ số bàn giao không được lớn hơn chỉ số đã ghi nhận kế tiếp.']);
+            }
             $contract->utilityOpenings()->create([
                 'utility_meter_id' => $meter->id, 'service_id' => $meter->service_id, 'service_name' => $meter->service->name,
                 'unit' => $meter->service->unit, 'opening_reading' => $opening['opening_reading'], 'reading_date' => $opening['reading_date'],
@@ -259,6 +267,15 @@ class ContractService
             throw ValidationException::withMessages(['occupant_tenant_ids' => 'Số người đăng ký vượt quá số người tối đa của phòng.']);
         }
         $this->terms->finalize($contract, $room);
+        $requiredMeters = $room->utilityMeters()->where('is_active', true)
+            ->whereIn('service_id', $this->eligibleServices($room)->whereIn('billing_method', ['PER_UNIT', 'TIERED'])->whereIn('type', ['ELECTRICITY', 'WATER'])->pluck('id'))->get();
+        $openings = $contract->utilityOpenings()->get()->keyBy('utility_meter_id');
+        foreach ($requiredMeters as $meter) {
+            $opening = $openings->get($meter->id);
+            if (! $opening || $opening->reading_date < $contract->start_date || ($contract->end_date && $opening->reading_date > $contract->end_date)) {
+                throw ValidationException::withMessages(['utility_openings' => 'Vui lòng xác nhận chỉ số công tơ thực tế và ngày bàn giao trong thời hạn của lần thuê mới trước khi kích hoạt hợp đồng.']);
+            }
+        }
         $this->saveOpenings($contract, $room, $contract->utilityOpenings()->get()->map(fn ($opening) => [
             'utility_meter_id' => $opening->utility_meter_id, 'opening_reading' => $opening->opening_reading,
             'reading_date' => $opening->reading_date->format('Y-m-d'),

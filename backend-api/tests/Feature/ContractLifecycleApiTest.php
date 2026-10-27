@@ -533,7 +533,8 @@ class ContractLifecycleApiTest extends TestCase
     public function test_invoice_creation_uses_contract_due_day_with_month_end_clamp_and_preserves_explicit_date(string $period, ?int $day, ?string $explicitDate, ?string $expected): void
     {
         [$contract, $owner] = $this->fixture();
-        $contract->update(['payment_due_day' => $day]);
+        $contract->update(['payment_due_day' => $day, 'status' => 'ACTIVE', 'start_date' => '2026-01-01', 'end_date' => '2028-12-31', 'monthly_rent' => 3800000]);
+        $contract->occupants()->create(['room_id' => $contract->room_id, 'tenant_id' => $contract->tenant_id, 'is_primary' => true, 'status' => 'ACTIVE', 'move_in_date' => '2026-01-01']);
 
         $this->login($owner)->postJson("/api/rooms/{$contract->room_id}/invoices", [
             'contract_id' => $contract->id, 'invoice_code' => 'DUE-DAY', 'billing_period' => $period,

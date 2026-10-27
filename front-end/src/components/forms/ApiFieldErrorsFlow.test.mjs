@@ -83,7 +83,7 @@ const validContract = { tenant_id: 2, contract_code: 'HD001', start_date: '2026-
 
 test('invalid invoice blocks the API call and renders separate field errors, then accepts corrected input', async () => {
   const payloads = []
-  const page = await harness('./InvoiceForm.jsx', { roomId: 1, initialValues: { billing_period: '2026-10-01', discount_amount: -1, due_date: '2026-02-31' }, onSubmit: async payload => payloads.push(payload) })
+  const page = await harness('./InvoiceForm.jsx', { roomId: 1, initialValues: { contract_id: 1, billing_period: '2026-10-01', discount_amount: -1, due_date: '2026-02-31' }, onSubmit: async payload => payloads.push(payload) })
   await page.submit()
   assert.equal(payloads.length, 0)
   assert.ok(page.form.formState.errors.discount_amount)
@@ -131,7 +131,7 @@ test('payment displays overpayment at the amount field, rejects NaN and submits 
 
 for (const [path, field, initial] of [
   ['./ContractForm.jsx', 'contract_code', { ...validContract, contract_code: '', status: 'DRAFT' }],
-  ['./InvoiceForm.jsx', 'invoice_code', { billing_period: '2026-10-01', invoice_code: '', status: 'DRAFT' }],
+  ['./InvoiceForm.jsx', 'invoice_code', { contract_id: 1, billing_period: '2026-10-01', invoice_code: '', status: 'DRAFT' }],
 ]) {
   test(`${field} defaults to auto and validates a manual code separately`, async () => {
     const payloads = []
@@ -210,7 +210,7 @@ test('service nullable unit remains optional without changing pricing payload', 
 
 test('invoice nullable note is an empty input and retains the null API convention', async () => {
   let payload
-  const page = await harness('./InvoiceForm.jsx', { roomId: 1, initialValues: { invoice_code: 'HD001', billing_period: '2026-10-01', note: null }, onSubmit: async values => { payload = values } })
+  const page = await harness('./InvoiceForm.jsx', { roomId: 1, initialValues: { id: 1, invoice_code: 'HD001', billing_period: '2026-10-01', note: null }, onSubmit: async values => { payload = values } })
   assert.equal(page.form.getValues('note'), '')
   await page.submit()
   assert.equal(payload.note, null)
