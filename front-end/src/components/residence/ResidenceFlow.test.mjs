@@ -92,6 +92,7 @@ async function formHarness(initial, formContext = context) {
   let form
   const submitted = []
   const Component = await load('./ResidenceDeclarationForm.jsx', 'ResidenceDeclarationForm', {
+    TenantPicker: props => React.createElement("tenant-picker", props),
     useState: () => ['', () => {}], useWatch: ({ name }) => form.getValues(name),
     useForm: options => {
       if (!form) {
@@ -155,7 +156,7 @@ test('draft can save without legal details and selecting roommate sends numeric 
   await harness.submit()
   assert.equal(harness.submitted[0].declarant_tenant_id, null)
   harness.form.setValue('declarant_tenant_id', '1')
-  harness.render().find(node => node.type === 'input' && node.props.type === 'checkbox').props.onChange()
+  harness.render().find(node => node.type === 'tenant-picker' && node.props.multiple).props.onChange([2])
   harness.form.setValue('members.0.relationship_to_household_head', 'Người thuê')
   await harness.submit()
   assert.equal(harness.submitted[1].declarant_tenant_id, 1)
@@ -165,7 +166,7 @@ test('draft can save without legal details and selecting roommate sends numeric 
 
 test('changing declarant removes that person from member selection and allows removing all members', async () => {
   const harness = await formHarness({ declarant_tenant_id: 1, members: [{ tenant_id: 2, relationship_to_household_head: '' }] })
-  harness.render().find(node => node.type === 'select' && node.props.id === 'ct01-declarant').props.onChange({ target: { name: 'declarant_tenant_id', value: '2' }, type: 'change' })
+  harness.render().find(node => node.type === 'tenant-picker' && !node.props.multiple).props.onChange(2)
   await harness.submit()
   assert.deepEqual(harness.submitted[0].members, [])
   assert.equal(harness.submitted[0].declarant_tenant_id, 2)

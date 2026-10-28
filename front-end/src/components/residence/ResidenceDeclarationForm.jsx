@@ -1,3 +1,4 @@
+import TenantPicker from '../tenants/TenantPicker'
 import { handleFormSubmit } from '../../notifications/formFeedback'
 import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
@@ -64,7 +65,6 @@ export default function ResidenceDeclarationForm({ context, initial, initialPeop
       setError(getApiErrorMessage(requestError))
     }
   }
-  const selectDeclarant = form.register('declarant_tenant_id')
   const selectContract = form.register('contract_id')
   const chooseContract = event => {
     const previous = context.contracts.find(contract => String(contract.id) === form.getValues('contract_id'))
@@ -77,10 +77,6 @@ export default function ResidenceDeclarationForm({ context, initial, initialPeop
     }
     selectContract.onChange(event)
   }
-  const toggleMember = tenant => {
-    const selected = members.some(member => member.tenant_id === Number(tenant.id))
-    form.setValue('members', selected ? members.filter(member => member.tenant_id !== Number(tenant.id)) : [...members, { tenant_id: Number(tenant.id), relationship_to_household_head: '' }], { shouldDirty: true })
-  }
   return <form noValidate onSubmit={handleFormSubmit(form, submit)} className="min-w-0 space-y-5 rounded-xl bg-white p-4 shadow-sm sm:p-6">
     <p className="text-sm text-slate-500">Có thể lưu nháp khi thiếu thông tin. Chọn rõ chủ hộ của hồ sơ này; khi nộp, BeeHouse chốt một bản snapshot.</p>
     {!profile && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Nhà trọ chưa có cấu hình cư trú. Vui lòng bổ sung cơ quan tiếp nhận và thông tin chủ sở hữu đã được xác nhận; BeeHouse không tự lấy thông tin OWNER/MANAGER làm chủ hộ hoặc chủ sở hữu. <Link to={`/boarding-houses/${context.room.boarding_house_id}`} className="underline">Cập nhật cấu hình nhà trọ</Link>.</p>}
@@ -89,7 +85,7 @@ export default function ResidenceDeclarationForm({ context, initial, initialPeop
       <label htmlFor="ct01-contract" className="block text-sm">Hợp đồng liên quan<select id="ct01-contract" className={inputClass} {...selectContract} onChange={chooseContract}><option value="">Không liên kết hợp đồng</option>{context.contracts.map(contract => <option key={contract.id} value={String(contract.id)}>{contract.contract_code}</option>)}</select></label>{errors.contract_id && <p className="text-sm text-red-700">{errors.contract_id.message}</p>}
     </section>
     <section className={sectionClass}><h3 className="font-semibold">2. Người kê khai</h3>
-      <label htmlFor="ct01-declarant" className="block text-sm">Chọn người kê khai<select id="ct01-declarant" className={inputClass} {...selectDeclarant} onChange={event => { selectDeclarant.onChange(event); form.setValue('members', members.filter(member => String(member.tenant_id) !== event.target.value), { shouldDirty: true }) }}><option value="">Chưa chọn người kê khai</option>{tenants.map(tenant => <option key={tenant.id} value={String(tenant.id)}>{tenant.full_name}</option>)}</select></label>{errors.declarant_tenant_id && <p className="text-sm text-red-700">{errors.declarant_tenant_id.message}</p>}
+      <TenantPicker label="Chọn người kê khai" value={declarantId} initialTenants={tenants} contextRoomId={context.room.id} scope="ACTIVE_ROOM" allowClear invalid={Boolean(errors.declarant_tenant_id)} onChange={id => { form.setValue('declarant_tenant_id', id ? String(id) : '', { shouldDirty: true }); form.setValue('members', members.filter(member => member.tenant_id !== Number(id)), { shouldDirty: true }) }} />{errors.declarant_tenant_id && <p className="text-sm text-red-700">{errors.declarant_tenant_id.message}</p>}
       <TenantAutofill tenant={declarant} role={context.operational_role} />
     </section>
     <section className={sectionClass}><h3 className="font-semibold">3. Thông tin chủ hộ</h3><p className="text-sm">Ai là chủ hộ của hồ sơ tạm trú này?</p>
@@ -101,7 +97,7 @@ export default function ResidenceDeclarationForm({ context, initial, initialPeop
     </section>
     <section className={sectionClass}><h3 className="font-semibold">4. Nội dung đề nghị</h3><label htmlFor="ct01-request" className="block text-sm">10. Nội dung đề nghị<textarea id="ct01-request" rows={3} className={inputClass} {...form.register('request_content')} /></label>{errors.request_content && <p className="text-sm text-red-700">{errors.request_content.message}</p>}</section>
     <fieldset className={sectionClass}><legend className="px-1 font-semibold">5. Thành viên cùng thay đổi</legend><p className="text-sm text-slate-500">11. Chỉ chọn những người đang ở cùng phòng; người đã chuyển đi không xuất hiện.</p>
-      {tenants.filter(tenant => String(tenant.id) !== declarantId).length === 0 ? <p className="text-sm text-slate-500">Không có thành viên khác đang ở cùng phòng.</p> : <div className="grid gap-2 sm:grid-cols-2">{tenants.filter(tenant => String(tenant.id) !== declarantId).map(tenant => <label key={tenant.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm"><input type="checkbox" className="size-5 shrink-0" checked={members.some(member => member.tenant_id === Number(tenant.id))} onChange={() => toggleMember(tenant)} /><span className="min-w-0 break-words">{tenant.full_name}</span></label>)}</div>}
+      <TenantPicker label="Thành viên cùng thay đổi" multiple allowClear value={members.map(member => member.tenant_id)} initialTenants={tenants} contextRoomId={context.room.id} scope="ACTIVE_ROOM" excludeIds={declarantId ? [Number(declarantId)] : []} onChange={ids => form.setValue('members', ids.map(id => members.find(member => member.tenant_id === id) ?? { tenant_id: id, relationship_to_household_head: '' }), { shouldDirty: true })} />
       {members.length > 0 && <div className="min-w-0 overflow-x-auto"><table className="w-full min-w-[760px] border-collapse text-left text-sm"><thead><tr>{['STT', 'Họ, chữ đệm và tên', 'Ngày sinh', 'Giới tính', 'Số định danh cá nhân', 'Mối quan hệ với chủ hộ', ''].map(label => <th key={label} className="border-b p-2">{label}</th>)}</tr></thead><tbody>{members.map((member, index) => {
         const tenant = tenants.find(person => Number(person.id) === member.tenant_id) || initialPeople.find(person => Number(person.tenant_id) === member.tenant_id)
         return <tr key={member.tenant_id}><td className="border-b p-2">{index + 1}</td><td className="border-b p-2">{tenant?.full_name || 'Chưa cập nhật'}</td><td className="border-b p-2">{formatDateForDisplay(tenant?.date_of_birth) || 'Chưa cập nhật'}</td><td className="border-b p-2">{genderLabels[tenant?.gender] || 'Chưa cập nhật'}</td><td className="border-b p-2">{tenant?.identity_number || 'Chưa cập nhật'}</td><td className="border-b p-2"><input aria-label={`Quan hệ với chủ hộ của ${tenant?.full_name || 'thành viên'}`} list="ct01-relationships" className={inputClass} {...form.register(`members.${index}.relationship_to_household_head`)} />{errors.members?.[index] && <p className="text-red-700">{errors.members[index].relationship_to_household_head?.message || errors.members[index].tenant_id?.message}</p>}</td><td className="border-b p-2"><button type="button" className="min-h-11 text-red-700" onClick={() => form.setValue('members', members.filter((_, current) => current !== index), { shouldDirty: true })}>Bỏ</button></td></tr>

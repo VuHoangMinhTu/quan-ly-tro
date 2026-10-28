@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\ServicePriceTierController;
 use App\Http\Controllers\Api\TenantController;
 use App\Http\Controllers\Api\TenantImportController;
+use App\Http\Controllers\Api\TenantLookupController;
 use App\Http\Controllers\Api\UtilityMeterController;
 use App\Http\Controllers\Api\UtilityReadingController;
 use App\Http\Middleware\SigningPrivacy;
@@ -205,6 +206,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/amenities', [AmenityController::class, 'index']);
     Route::post('/amenities', [AmenityController::class, 'store']);
 
+    Route::get('/tenant-lookup', [TenantLookupController::class, 'index']);
+    Route::get('/tenant-lookup/options', [TenantLookupController::class, 'options']);
     Route::get('/tenants', [TenantController::class, 'index']);
     Route::get('/tenants/import/template', [TenantImportController::class, 'template']);
     Route::post('/tenants/import/preview', [TenantImportController::class, 'preview'])->middleware('throttle:10,1');

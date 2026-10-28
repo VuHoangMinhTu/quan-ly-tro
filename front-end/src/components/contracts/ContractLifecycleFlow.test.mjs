@@ -36,7 +36,7 @@ async function wizard(initial) {
   const state = []
   const payloads = []
   const source = (await readFile(new URL('./ContractWizard.jsx', import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
-  const bindings = { ...dates, ContractForm: CoreForm, DateInput: Input, BILLING_METHOD_LABELS, getApiErrorMessage, getApiFieldErrors,
+  const bindings = { ...dates, TenantPicker: Input, ContractForm: CoreForm, DateInput: Input, BILLING_METHOD_LABELS, getApiErrorMessage, getApiFieldErrors,
     ContractDraftServicesEditor: DraftServices, editableContractService, contractServicesPayload, contractServicePricingError,
     getContractContext: async () => ({ data: { data: context } }),
     formatCurrency: value => `${value} đ`, formatUtilityValue: String,
@@ -55,12 +55,12 @@ test('wizard prefill uses latest meter reading and submitting is delayed until f
   const page = await wizard()
   const core = nodes(page.render()).find(node => node.type === CoreForm)
   assert.equal(core.props.initialValues.monthly_rent, '')
-  assert.deepEqual(core.props.tenantOptions, context.tenants)
+  assert.equal(core.props.contextRoomId, context.room.id)
+  assert.equal(core.props.tenantOptions, undefined)
   await page.core(coreValues)
   assert.match(text(page.render()), /1800.00/)
   assert.equal(page.payloads.length, 0)
-  const roommate = nodes(page.render()).find(node => node.type === 'label' && text(node).trim() === 'Trần Thị B')
-  nodes(roommate).find(node => node.type === 'input').props.onChange()
+  nodes(page.render()).find(node => node.type === Input && node.props.multiple).props.onChange([2])
   page.button('Tiếp tục').props.onClick()
   nodes(page.render()).find(node => node.props.id === 'contract-representative').props.onChange({ target: { value: '9' } })
   page.button('Tiếp tục').props.onClick()
@@ -161,12 +161,11 @@ test('draft with null rent can be saved but cannot be activated without mandator
 test('edit wizard preselects numeric IDs consistently and does not reset user selections on rerender', async () => {
   const page = await wizard({ ...coreValues, lessor_representative_user_id: 9, occupant_tenant_ids: [2], agreed_services: [{ ...context.services[0], service_id: 3 }], utility_openings: context.utility_openings })
   await page.core(coreValues)
-  const checked = nodes(page.render()).filter(node => node.type === 'input' && node.props.type === 'checkbox')
-  assert.equal(checked.length, 1)
-  assert.ok(checked.every(node => node.props.checked))
+  const picker = nodes(page.render()).find(node => node.type === Input && node.props.multiple)
+  assert.deepEqual(picker.props.value, ['2'])
   assert.equal(nodes(page.render()).find(node => node.type === DraftServices).props.value[0].service_id, 3)
-  checked[0].props.onChange()
-  assert.equal(nodes(page.render()).filter(node => node.type === 'input' && node.props.type === 'checkbox')[0].props.checked, false)
+  picker.props.onChange([])
+  assert.deepEqual(nodes(page.render()).find(node => node.type === Input && node.props.multiple).props.value, [])
   page.button('Tiếp tục').props.onClick()
   assert.equal(nodes(page.render()).find(node => node.props.id === 'contract-representative').props.value, '9')
   page.button('Tiếp tục').props.onClick()
@@ -178,7 +177,7 @@ test('edit wizard preselects numeric IDs consistently and does not reset user se
 test('invalid schedule or opening date cannot submit a malformed payload', async () => {
   const page = await wizard()
   await page.core(coreValues)
-  const dateField = nodes(page.render()).find(node => node.type === Input)
+  const dateField = nodes(page.render()).find(node => node.type === Input && !node.props.multiple)
   dateField.props.onChange('31/02/2026')
   page.button('Tiếp tục').props.onClick()
   assert.equal(page.button('Lưu nháp'), undefined)

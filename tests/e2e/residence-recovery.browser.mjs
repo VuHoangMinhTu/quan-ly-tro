@@ -42,6 +42,7 @@ try {
     if (method === 'GET' && path === '/residence/boarding-houses') return ok([{ ...house, operational_role: 'OWNER' }])
     if (method === 'GET' && path === '/residence/boarding-houses/3/rooms') return ok([{ id: 11, room_code: '101' }])
     if (method === 'GET' && path === '/residence/rooms/11/context') return ok(context)
+    if (method === 'GET' && path === '/tenant-lookup') return ok({ tenants: [{ id: tenant.id, full_name: tenant.full_name, phone: tenant.phone, occupancy_status: 'ACTIVE', current_residence: null }], total: 1, current_page: 1, last_page: 1, per_page: 20, can_search_identity: true })
     if (method === 'GET' && path === '/residence-declarations/1') return ok(preview())
     if (['POST', 'PUT'].includes(method)) {
       mutations.push({ method, path, payload: request.postDataJSON() })
@@ -57,7 +58,9 @@ try {
   await page.locator('#ct01-room').selectOption('11')
   await page.getByRole('status').getByText('Nhà trọ chưa có cấu hình cư trú.', { exact: false }).waitFor()
   assert.equal(await page.locator('[name="household_head_name"]').count(), 0)
-  await page.locator('#ct01-declarant').selectOption('1')
+  await page.getByRole('button', { name: 'Chọn người kê khai', exact: true }).click()
+  await page.getByRole('dialog').getByRole('radio', { name: /Người kê khai kiểm thử/ }).check()
+  await page.getByRole('dialog').getByRole('button', { name: 'Xác nhận chọn', exact: true }).click()
   await page.getByRole('radio', { name: 'Một người khác', exact: true }).check()
   await page.locator('[name="household_head_name"]').fill('Chủ hộ kiểm thử')
   await page.getByRole('radio', { name: 'Người kê khai', exact: true }).check()

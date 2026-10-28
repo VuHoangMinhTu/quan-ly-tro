@@ -37,7 +37,7 @@ class ContractService
 
         return [
             'room' => $room, 'beds' => $room->beds()->orderBy('bed_code')->get(), 'operational_role' => $this->access->role($user, $room->boardingHouse),
-            'tenants' => Tenant::query()->where('landlord_id', $room->boardingHouse->landlord_id)->orderBy('full_name')->get(['id', 'full_name', 'phone']),
+            'tenants' => [],
             'representatives' => $this->representatives($room->boardingHouse),
             'services' => $services,
             'templates' => $this->templates->available($room->boardingHouse->landlord_id)->get(['id', 'name', 'version', 'template_key', 'landlord_id', 'is_active']),

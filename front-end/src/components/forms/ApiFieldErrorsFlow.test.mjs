@@ -37,7 +37,7 @@ async function harness(path, props = {}, extraBindings = {}) {
   const states = []
   let previousDependencies
   const input = (inputProps) => React.createElement('input', inputProps)
-  const bindings = { handleFormSubmit, notifyInvalidSubmit,
+  const bindings = { handleFormSubmit, notifyInvalidSubmit, TenantPicker: props => React.createElement("tenant-picker", props),
     ...dates, ...serviceHelpers, ...validation, toFormString, applyApiFieldErrors, getApiErrorMessage, z, zodResolver, contractKeys, tenantKeys, invoiceStatusLabels,
     useRef: (initial) => ({ current: initial }),
     useState: (initial) => {
