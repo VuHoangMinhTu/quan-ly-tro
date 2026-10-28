@@ -8,6 +8,7 @@ use App\Http\Requests\Contract\ContractTemplateStatusRequest;
 use App\Http\Requests\Contract\PreviewContractTemplateRequest;
 use App\Http\Requests\Contract\SaveContractTemplateRequest;
 use App\Services\BoardingHouseAccessService;
+use App\Services\ContractTemplateDemo;
 use App\Services\ContractTemplateRenderer;
 use App\Services\ContractTemplateService;
 use App\Services\ContractTemplateVariableRegistry;
@@ -29,6 +30,11 @@ class ContractTemplateController extends Controller
     public function show(Request $request, int $id): JsonResponse
     {
         return ApiResponse::success($this->templates->visible($request->user())->withCount(['documents' => fn ($query) => $this->scopedDocuments($query, $request)])->findOrFail($id), 'Lấy nội dung mẫu hợp đồng thành công.');
+    }
+
+    public function demo(string $type, ContractTemplateDemo $demo): JsonResponse
+    {
+        return ApiResponse::success($demo->document($type), 'Lấy mẫu hợp đồng minh họa thành công.');
     }
 
     public function store(SaveContractTemplateRequest $request): JsonResponse

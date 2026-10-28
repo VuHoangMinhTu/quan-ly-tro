@@ -16,9 +16,10 @@
 .invoice-sheet *, .invoice-sheet *::before, .invoice-sheet *::after { box-sizing: border-box; }
 .invoice-sheet p, .invoice-sheet dl, .invoice-sheet dd { margin: 0; }
 .invoice-document-header { display: flex; align-items: center; justify-content: space-between; gap: 22px; padding-bottom: 19px; border-bottom: 1px solid #cdd8d4; }
-.invoice-brand { display: flex; align-items: center; gap: 12px; color: #17483e; }
+.invoice-brand { display: flex; flex: 1; min-width: 0; align-items: center; gap: 12px; color: #17483e; }
+.invoice-brand > div { min-width: 0; }
 .invoice-brand-mark { width: 60px; height: 60px; flex-shrink: 0; object-fit: contain; }
-.invoice-brand-name { font-size: 27pt; font-weight: 800; line-height: 1.1; letter-spacing: -.035em; text-transform: uppercase; }
+.invoice-brand-name { font-size: 27pt; font-weight: 800; line-height: 1.1; letter-spacing: -.035em; text-transform: uppercase; overflow-wrap: anywhere; }
 .invoice-brand-tagline { margin-top: 4px !important; font-size: 8.5pt; }
 .invoice-document-meta { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 5px 28px; width: 260px; flex-shrink: 0; font-size: 8.5pt; }
 .invoice-document-meta::after { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: #cdd8d4; content: ''; }

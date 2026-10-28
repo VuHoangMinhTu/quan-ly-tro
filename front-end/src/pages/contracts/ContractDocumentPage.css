@@ -1,10 +1,16 @@
 @page contract-document { size: A4 portrait; margin: 20mm 23mm; }
+@page contract-demo {
+  size: A4 portrait;
+  margin: 20mm 23mm;
+  @bottom-center { content: "BẢN MẪU – DỮ LIỆU MINH HỌA"; font: 700 9pt 'Times New Roman', Times, serif; color: #64748b; }
+}
 .contract-document-page { min-height: 100dvh; padding: 20px; color: #0f172a; background: #e2e8f0; font-family: 'Be Vietnam Pro', Arial, sans-serif; }
 .contract-document-actions { display: flex; flex-wrap: wrap; gap: 12px; width: min(210mm, 100%); margin: 0 auto 16px; }
 .contract-document-actions > a, .contract-document-actions > button { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px; border: 1px solid #cbd5e1; border-radius: 8px; background: white; font-size: 14px; }
 .contract-document-actions > button { background: #0f172a; color: white; }
 .contract-document-sheet { box-sizing: border-box; width: min(210mm, 100%); height: auto; margin: 0 auto; padding: 20mm 23mm; background: white; box-shadow: 0 2px 12px #0f172a1a; }
 .contract-document-html { font-size: 10.5pt; line-height: 1.7; overflow-wrap: anywhere; }
+.contract-demo-watermark { margin: 0 0 4mm; text-align: center; font: 700 10pt/1.4 'Times New Roman', Times, serif; color: #64748b; }
 .contract-document-html h1 { margin: 0 0 18px; font-size: 19pt; font-weight: 700; line-height: 1.4; }
 .contract-document-html h2 { margin: 18px 0 8px; font-size: 13pt; font-weight: 700; }
 .contract-document-html h3, .contract-document-html h4 { margin: 14px 0 6px; font-size: 11pt; font-weight: 600; }
@@ -28,8 +34,8 @@
 .contract-document-html .word-contract p { margin: 1.5mm 0; }
 .contract-document-html .word-contract > p:not(.text-center) { text-indent: 7mm; }
 .contract-document-html .word-contract > p:has(> strong:first-child) { text-indent: 0; margin-top: 2.5mm; }
-.contract-document-html .word-contract .contract-info-line { display: grid; grid-template-columns: 37mm minmax(0, 1fr); column-gap: 2mm; text-indent: 0; margin: 1mm 0; text-align: left; }
-.contract-document-html .word-contract .contract-info-label { display: block; }
+.contract-document-html .word-contract > p.contract-info-line { display: grid; grid-template-columns: 42mm minmax(0, 1fr); column-gap: 2mm; text-indent: 0; margin: 1mm 0; text-align: left; }
+.contract-document-html .word-contract .contract-info-label { display: block; text-indent: 0; white-space: nowrap; }
 .contract-document-html .word-contract ol,
 .contract-document-html .word-contract ul { margin: 2mm 0 2mm 10mm; padding-left: 8mm; list-style-position: outside; }
 .contract-document-html .word-contract ol { list-style-type: decimal; }
@@ -85,6 +91,9 @@
   .contract-document-html th, .contract-document-html td { padding: 5px; }
 }
 @media print {
+  body:has(.contract-demo-page) { background: white; }
+  .contract-document-page.contract-demo-page { page: contract-demo; }
+  .contract-demo-watermark { display: none; }
   .contract-signing-page { min-height: 0; padding: 0 !important; background: white; }
   .contract-signing-shell { max-width: none; }
   .contract-signing-shell > * { margin: 0 !important; }

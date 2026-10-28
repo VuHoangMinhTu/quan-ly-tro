@@ -2,6 +2,7 @@ import client from './axiosClient'
 
 export { contractDocumentKeys, contractTemplateKeys } from './contractTemplateKeys'
 export const getContractTemplates = () => client.get('/contract-templates')
+export const getContractDemo = type => client.get(`/contract-templates/demos/${type}`)
 export const getContractTemplate = id => client.get(`/contract-templates/${id}`)
 export const createContractTemplate = payload => client.post('/contract-templates', payload)
 export const updateContractTemplate = (id, payload) => client.put(`/contract-templates/${id}`, payload)

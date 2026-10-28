@@ -94,7 +94,7 @@ try {
     await load()
     assert.doesNotMatch(await page.locator('.invoice-sheet').innerText(), /Tự động|Thủ công|VAT/)
     assert.doesNotMatch(await page.locator('.invoice-totals').innerText(), /Chưa thanh toán/)
-    assert.equal(await page.locator('.invoice-brand-name').innerText(), 'NHÀ TRỌ 115M')
+    assert.equal(await page.locator('.invoice-brand-name').textContent(), invoice.room?.boarding_house?.name?.trim() || 'Nhà trọ')
     assert.ok(await page.locator('.invoice-brand-mark').evaluate(image => image.complete && image.naturalWidth > 0))
     const metaAlignment = await page.locator('.invoice-document-meta').evaluate(element => {
       const values = [...element.querySelectorAll('dd')].map(value => value.getBoundingClientRect())
@@ -211,6 +211,26 @@ try {
   await page.getByText('Vietcombank', { exact: true }).waitFor()
   await page.getByText('Ảnh QR đã lưu không còn khả dụng. Vui lòng liên hệ chủ trọ để đối chiếu thông tin thanh toán.', { exact: true }).waitFor()
 
+  for (const [type, name] of [['PRIVATE_ROOM', 'SUDO SOLAR'], ['DORMITORY', 'Ký túc xá Bình Minh và Khu nhà ở Sinh viên An Tâm']]) {
+    invoice = { ...invoice, room: { ...invoice.room, room_type: type, boarding_house: { ...invoice.room.boarding_house, name } } }
+    await load()
+    assert.equal(await page.locator('.invoice-brand-name').textContent(), name)
+    for (const width of [320, 390, 1365]) {
+      await page.setViewportSize({ width, height: 1000 })
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
+    }
+    await page.emulateMedia({ media: 'print' })
+    const bounds = await page.locator('.invoice-document-header').evaluate(header => {
+      const brand = header.querySelector('.invoice-brand').getBoundingClientRect()
+      const meta = header.querySelector('.invoice-document-meta').getBoundingClientRect()
+      return { separated: brand.right <= meta.left, contained: header.scrollWidth <= header.clientWidth }
+    })
+    assert.deepEqual(bounds, { separated: true, contained: true })
+    await page.emulateMedia({ media: 'screen' })
+  }
+  invoice = { ...invoice, room: { ...invoice.room, boarding_house: null } }
+  await load()
+  assert.equal(await page.locator('.invoice-brand-name').textContent(), 'Nhà trọ')
   assert.deepEqual(errors, [])
   assert.ok(requests.every(request => request.method === 'GET'))
   await writeFile(resolve(output, 'results.json'), JSON.stringify({ ...metrics, requests, errors }, null, 2))

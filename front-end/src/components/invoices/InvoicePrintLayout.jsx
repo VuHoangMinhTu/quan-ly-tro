@@ -30,11 +30,12 @@ function SectionHeading({ children }) {
 
 function InvoicePrintHeader({ invoice }) {
   const house = invoice.room?.boarding_house
+  const houseName = house?.name?.trim() || 'Nhà trọ'
   return <>
     <header className="invoice-document-header">
       <div className="invoice-brand">
-        <img className="invoice-brand-mark" src="/images/bill-landlord-logo.svg" alt="Logo Nhà trọ 115M" />
-        <div><p className="invoice-brand-name">NHÀ TRỌ 115M</p><p className="invoice-brand-tagline">Quản lý và vận hành nhà trọ</p></div>
+        <img className="invoice-brand-mark" src="/images/bill-landlord-logo.svg" alt={`Logo ${houseName}`} />
+        <div><p className="invoice-brand-name">{houseName}</p><p className="invoice-brand-tagline">Quản lý và vận hành nhà trọ</p></div>
       </div>
       <dl className="invoice-document-meta">
         <div><dt>Mã hóa đơn</dt><dd>{invoice.invoice_code}</dd></div>

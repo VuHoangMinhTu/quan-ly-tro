@@ -72,10 +72,12 @@ test('document section supports draft finalization, invalidates dependent data a
 })
 
 test('document page reads the finalized HTML endpoint; only drafts use preview and only final documents offer print', async () => {
+  const ContractDocumentSheet = await load('./ContractDocumentSheet.jsx', 'ContractDocumentSheet', { normalizeHandoverPrint })
+  const documentNodes = page => nodes(ContractDocumentSheet(nodes(page).find(node => node.type === ContractDocumentSheet).props))
   let preview = false; let printed = 0; const calls = []
   const data = { rendered_html: '<p>Văn bản đã chốt</p>', template_name: 'Mẫu riêng', template_version: 1, finalized_at: '2026-11-01T03:00:00Z', is_preview: false }
   const Page = await load('../../pages/contracts/ContractDocumentPage.jsx', 'ContractDocumentPage', {
-    ...helpers, Link, contractDocumentKeys, getApiErrorMessage, normalizeHandoverPrint,
+    ...helpers, Link, contractDocumentKeys, getApiErrorMessage, ContractDocumentSheet,
     useParams: () => ({ id: '7' }), useSearchParams: () => [new URLSearchParams(preview ? 'preview=1' : '')],
     useQuery: options => { options.queryFn(); return { data: { data: { data: { ...data, is_preview: preview } } } } },
     getContractDocument: id => calls.push(['final', id]), previewContractDocument: id => calls.push(['preview', id]),
@@ -83,9 +85,9 @@ test('document page reads the finalized HTML endpoint; only drafts use preview a
   })
   const final = Page()
   assert.deepEqual(calls[0], ['final', '7'])
-  assert.equal(nodes(final).find(node => node.props.dangerouslySetInnerHTML).props.dangerouslySetInnerHTML.__html, data.rendered_html)
+  assert.equal(documentNodes(final).find(node => node.props.dangerouslySetInnerHTML).props.dangerouslySetInnerHTML.__html, data.rendered_html)
   data.rendered_html = '<div class="document-signatures"><div><p>Chưa ký</p></div></div>'
-  assert.equal(nodes(Page()).find(node => node.props.dangerouslySetInnerHTML).props.dangerouslySetInnerHTML.__html,
+  assert.equal(documentNodes(Page()).find(node => node.props.dangerouslySetInnerHTML).props.dangerouslySetInnerHTML.__html,
     '<div class="document-signatures"><div><div class="signature-handwritten-space"></div></div></div>')
   await nodes(final).find(node => node.type === 'button').props.onClick()
   assert.equal(printed, 1)
@@ -129,7 +131,7 @@ test('global BeeHouse template is shown for viewing and owner clone opens an edi
     createContractTemplateVersion: async () => ({ data: { data: { id: 9 } } }),
     deleteContractTemplate: async () => {},
     setContractTemplateStatus: async () => {},
-    Link, getApiErrorMessage, formatDate: () => '19/10/2026',
+    Link, ContractDemoCards: () => null, getApiErrorMessage, formatDate: () => '19/10/2026',
   })
   const list = List()
   assert.match(text(list), /Hợp đồng cho thuê phòng tiêu chuẩn/)
@@ -142,6 +144,7 @@ test('global BeeHouse template is shown for viewing and owner clone opens an edi
 test('A4 document route is outside MainLayout and print styles do not scale the document', async () => {
   const routes = await readFile(new URL('../../routes/AppRoutes.jsx', import.meta.url), 'utf8')
   assert.ok(routes.indexOf('path="/contracts/:id/document"') < routes.indexOf('<Route element={<MainLayout />}'))
+  assert.ok(routes.indexOf('path="/contract-templates/demos/:type"') < routes.indexOf('<Route element={<MainLayout />}'))
   const css = await readFile(new URL('../../pages/contracts/ContractDocumentPage.css', import.meta.url), 'utf8')
   assert.match(css, /@page contract-document.*A4 portrait/)
   assert.doesNotMatch(css, /scale\(|zoom\s*:/)

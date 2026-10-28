@@ -36,6 +36,16 @@ test('invoice without PayOS displays private bank QR and bank details', async ()
   assert.doesNotMatch(markup, /data-payos-qr/)
 })
 
+test('bill header uses only the boarding house of its invoice room, including dormitory rooms', async () => {
+  for (const [type, name] of [['PRIVATE_ROOM', 'SUDO SOLAR'], ['DORMITORY', 'KTX Bình Minh & An Tâm']]) {
+    const markup = await render({ ...invoice, room: { room_type: type, boarding_house: { name } } })
+    assert.match(markup, new RegExp(`class="invoice-brand-name">${name.replace('&', '&amp;')}</p>`))
+    assert.doesNotMatch(markup, /NHÀ TRỌ 115M|Logo Nhà trọ 115M/)
+  }
+  const missing = await render({ ...invoice, room: { boarding_house: { name: '   ' } } })
+  assert.match(missing, /class="invoice-brand-name">Nhà trọ<\/p>/)
+})
+
 test('static landlord QR and bank details stay visible independently of an existing PayOS QR', async () => {
   const request = { qr_code: 'dynamic-payos-value', amount: 150000, status: 'PENDING', order_code: 123456, payment_link_id: 'link-123', checkout_url: 'https://pay.payos.vn/link-123' }
   const dynamic = await render({ ...invoice, payos_payment_request: request })

@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { contractTemplateKeys, createContractTemplateVersion, deleteContractTemplate, getContractTemplates, setContractTemplateStatus } from '../../api/contractTemplateApi'
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { formatDate } from '../../utils/formatters'
+import ContractDemoCards from '../../components/contracts/ContractDemoCards'
 
 export default function ContractTemplateListPage() {
   const navigate = useNavigate()
@@ -29,6 +30,7 @@ export default function ContractTemplateListPage() {
   const visibleTemplates = showInactive ? templates : templates.filter(template => template.is_active)
   return <section className="min-w-0 space-y-5"><header className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-bold sm:text-2xl">Mẫu hợp đồng</h2>{canManage && <Link to="/contract-templates/new" className="inline-flex min-h-11 items-center rounded-lg bg-slate-900 px-4 text-sm text-white">+ Tạo mẫu riêng</Link>}</header>
     <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">BeeHouse cung cấp mẫu cho thuê phòng tiêu chuẩn để tham khảo và tùy chỉnh. Chủ trọ hãy kiểm tra nội dung trước khi chốt hợp đồng.</p>
+    <ContractDemoCards />
     {!canManage && <p className="text-sm text-slate-500">Chỉ chủ trọ được quản lý nội dung mẫu. Quản lý có thể chọn mẫu đang hoạt động khi lập hợp đồng được phân công.</p>}
     {inactiveCount > 0 && <div className="flex flex-wrap items-center gap-3"><button type="button" aria-expanded={showInactive} aria-controls="contract-template-list" onClick={() => setShowInactive(value => !value)} className="min-h-11 rounded-lg border px-3 text-sm text-slate-700">{showInactive ? 'Ẩn phiên bản cũ và mẫu ngừng sử dụng' : `Xem phiên bản cũ và mẫu ngừng sử dụng (${inactiveCount})`}</button><span className="text-sm text-slate-500">Mẫu BeeHouse dùng chung được giữ để bảo toàn lịch sử; mẫu riêng chưa sử dụng có thể xóa.</span></div>}
     {message && <p role="status" className="text-sm text-green-700">{message}</p>}{mutation.isError && <p role="alert" className="text-sm text-red-700">{getApiErrorMessage(mutation.error)}</p>}{remove.isError && <p role="alert" className="text-sm text-red-700">{getApiErrorMessage(remove.error)}</p>}

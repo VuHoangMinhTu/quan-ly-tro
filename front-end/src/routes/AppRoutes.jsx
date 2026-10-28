@@ -28,6 +28,7 @@ import ContractNavigationPage from '../pages/contracts/ContractNavigationPage'
 import ContractTemplateListPage from '../pages/contracts/ContractTemplateListPage'
 import ContractTemplateEditorPage from '../pages/contracts/ContractTemplateEditorPage'
 import ContractDocumentPage from '../pages/contracts/ContractDocumentPage'
+import ContractDemoPage from '../pages/contracts/ContractDemoPage'
 import ContractSigningPage from '../pages/contracts/ContractSigningPage'
 import SignedContractDocumentPage from '../pages/contracts/SignedContractDocumentPage'
 import ServiceListPage from '../pages/services/ServiceListPage'
@@ -65,6 +66,7 @@ export default function AppRoutes() {
           <Route path="/contracts/:id/sign" element={<ContractSigningPage />} />
           <Route path="/contracts/:id/document/signed" element={<SignedContractDocumentPage />} />
           <Route path="/contracts/:id/document" element={<ContractDocumentPage />} />
+          <Route path="/contract-templates/demos/:type" element={<ContractDemoPage />} />
           <Route path="/invoices/:id/print" element={<InvoicePrintPage />} />
           <Route path="/residence-declarations/:id/print" element={<ResidenceCt01PrintPage />} />
           <Route path="/residence-declarations/:id/stay-consent/print" element={<ResidenceStayConsentPrintPage />} />
