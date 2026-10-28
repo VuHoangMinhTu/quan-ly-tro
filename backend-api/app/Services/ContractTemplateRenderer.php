@@ -239,11 +239,15 @@ class ContractTemplateRenderer
     {
         $checkIn = $this->handoverItemsByName($snapshot['handover_checkin'] ?? []);
         $checkOut = $this->handoverItemsByName($snapshot['handover_checkout'] ?? []);
-        $names = ContractHandoverService::ROOM_RENTAL_ITEMS;
-        foreach (array_keys($checkIn + $checkOut) as $name) {
+        $explicit = array_key_exists('handover_item_names', $snapshot);
+        $names = $explicit ? array_keys($this->handoverItemsByName(array_map(fn ($name) => ['name' => $name], $snapshot['handover_item_names']))) : ContractHandoverService::ROOM_RENTAL_ITEMS;
+        foreach ($explicit ? [] : array_keys($checkIn + $checkOut) as $name) {
             if (! in_array($name, $names, true)) {
                 $names[] = $name;
             }
+        }
+        if ($names === []) {
+            return '<p>Không có hạng mục bàn giao.</p>';
         }
 
         $rows = [];
@@ -334,15 +338,18 @@ class ContractTemplateRenderer
         foreach ($snapshot['handover_checkin'] ?? [] as $item) {
             $items[trim($item['name'])] = $item;
         }
-        $names = array_values(array_unique([...ContractHandoverService::DORM_BED_ITEMS, ...array_keys($items)]));
-        $units = ['bộ', 'bộ', 'tủ', 'bộ', 'cái', 'Bộ'];
+        $names = array_key_exists('handover_item_names', $snapshot) ? $snapshot['handover_item_names'] : array_values(array_unique([...ContractHandoverService::DORM_BED_ITEMS, ...array_keys($items)]));
+        if ($names === []) {
+            return '<p>Không có hạng mục bàn giao.</p>';
+        }
+        $units = array_combine(ContractHandoverService::DORM_BED_ITEMS, ['bộ', 'bộ', 'tủ', 'bộ', 'cái', 'Bộ']);
         $rows = [];
         foreach ($names as $index => $name) {
             $item = $items[$name] ?? [];
             $quantity = isset($item['quantity']) ? str_pad((string) $item['quantity'], 2, '0', STR_PAD_LEFT) : '……';
             $condition = $item['condition'] ?? null;
             $detail = ($condition === 'OTHER' ? 'Khác: ' : '').trim((string) ($item['note'] ?? ''));
-            $rows[] = [$this->escape($index + 1), $this->escape($name), $this->escape($quantity.' '.($units[$index] ?? '')),
+            $rows[] = [$this->escape($index + 1), $this->escape($name), $this->escape($quantity.' '.($units[$name] ?? '')),
                 ($condition === 'GOOD' ? '☑' : '☐').' Tốt &nbsp; '.($condition === 'DAMAGED' ? '☑' : '☐').' Hư hỏng &nbsp; '.($condition === 'MISSING' ? '☑' : '☐').' Thiếu'
                     .($detail !== '' ? '<br>'.$this->escape($detail) : '')];
         }

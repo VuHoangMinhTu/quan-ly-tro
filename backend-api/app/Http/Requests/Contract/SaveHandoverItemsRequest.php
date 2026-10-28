@@ -23,7 +23,7 @@ class SaveHandoverItemsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'items' => ['required', 'array', 'min:1', 'max:100'],
+            'items' => ['present', 'array', 'max:100'],
             'items.*.name' => ['required', 'string', 'max:255'],
             'items.*.quantity' => ['sometimes', 'integer', 'min:0', 'max:100000'],
             'items.*.condition' => ['nullable', 'in:GOOD,DAMAGED,MISSING,OTHER'],

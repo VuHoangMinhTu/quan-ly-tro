@@ -324,6 +324,8 @@ class ContractService
             $core[$key] = $contract->{$key}?->format('Y-m-d');
         }
 
+        $handover = $contract->handoverReports()->where('type', 'CHECK_IN')->first();
+
         return [
             'schema_version' => 2, 'finalized_at' => $contract->finalized_at?->toIso8601String(),
             'lessor' => $representative ? [...$representative, ...$payment] : $payment,
@@ -334,7 +336,8 @@ class ContractService
             'occupants' => Tenant::query()->where('landlord_id', $house->landlord_id)->whereIn('id', $ids)->get()->map(fn (Tenant $person) => ['tenant_id' => $person->id, 'is_primary' => (int) $person->id === (int) $contract->tenant_id, ...$this->person($person)])->all(),
             'utility_openings' => $contract->utilityOpenings()->get()->toArray(),
             'electricity_opening' => $contract->utilityOpenings()->whereIn('service_id', Service::query()->where('type', 'ELECTRICITY')->select('id'))->value('opening_reading'),
-            'handover_checkin' => $contract->handoverReports()->where('type', 'CHECK_IN')->where('status', 'CONFIRMED')->first()?->items ?? [],
+            'handover_checkin' => $handover?->status === 'CONFIRMED' ? $handover->items : [],
+            ...($handover === null ? [] : ['handover_item_names' => array_column($handover->items ?? [], 'name')]),
         ];
     }
 

@@ -6,6 +6,7 @@ use App\Models\Amenity;
 use App\Models\Contract;
 use App\Models\ContractDocument;
 use App\Models\ContractHandoverReport;
+use App\Models\ContractTemplate;
 use App\Services\ContractHandoverService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -109,6 +110,69 @@ class ContractHandoverApiTest extends TestCase
         $document = $contract->document()->sole();
         $this->assertStringContainsString('Tivi mới', $document->rendered_html);
         $this->assertSame('Tivi mới', $document->source_snapshot['handover_checkin'][0]['name']);
+        $this->assertStringNotContainsString('<td>Tivi</td>', $document->rendered_html);
+        $this->assertStringNotContainsString('Ballet, nệm.', $document->rendered_html);
+        $this->assertSame(['Tivi mới'], $document->source_snapshot['handover_item_names']);
+    }
+
+    public function test_removed_default_items_stay_removed_after_reload_preview_and_confirmation(): void
+    {
+        $contract = $this->contract();
+        $this->postJson("/api/contracts/{$contract->id}/handover-check-in")->assertCreated();
+        $items = [['name' => 'Khóa cửa', 'quantity' => 1, 'key_count' => 2, 'condition' => 'GOOD']];
+        $this->putJson("/api/contracts/{$contract->id}/handover-check-in", ['items' => $items])->assertOk();
+        $this->getJson("/api/contracts/{$contract->id}/handover-check-in")->assertOk()->assertJsonCount(1, 'data.items')->assertJsonPath('data.items.0.name', 'Khóa cửa');
+        foreach ([false, true] as $confirmed) {
+            if ($confirmed) {
+                $this->postJson("/api/contracts/{$contract->id}/handover-check-in/confirm")->assertOk();
+            }
+            $html = $this->getJson("/api/contracts/{$contract->id}/document/preview")->assertOk()->json('data.rendered_html');
+            $this->assertStringContainsString('Số lượng chìa:', $html);
+            $this->assertStringNotContainsString('Ballet, nệm.', $html);
+            $this->assertStringNotContainsString('<td>Tivi</td>', $html);
+            $this->assertSame(2, substr_count($html, '<tr>'));
+        }
+        $this->putJson("/api/contracts/{$contract->id}/handover-check-in", ['items' => []])->assertUnprocessable();
+    }
+
+    public function test_all_items_can_be_removed_without_reintroducing_defaults_into_final_document(): void
+    {
+        $contract = $this->contract();
+        $owner = $contract->room->boardingHouse->landlord->user;
+        $this->putJson("/api/contracts/{$contract->id}", ['lessor_representative_user_id' => $owner->id])->assertOk();
+        $this->postJson("/api/contracts/{$contract->id}/handover-check-in")->assertCreated();
+        $this->putJson("/api/contracts/{$contract->id}/handover-check-in", ['items' => []])->assertOk();
+        $this->getJson("/api/contracts/{$contract->id}/handover-check-in")->assertOk()->assertJsonPath('data.items', []);
+        $this->postJson("/api/contracts/{$contract->id}/handover-check-in/confirm")->assertOk();
+        $this->postJson("/api/contracts/{$contract->id}/finalize")->assertOk();
+        $document = $contract->document()->sole();
+        $this->assertStringContainsString('Không có hạng mục bàn giao.', $document->rendered_html);
+        $this->assertStringNotContainsString('Ballet, nệm.', $document->rendered_html);
+        $this->assertSame([], $document->source_snapshot['handover_checkin']);
+    }
+
+    public function test_dorm_deleted_items_do_not_reappear_and_remaining_units_follow_item_names(): void
+    {
+        $contract = $this->contract();
+        $contract->update(['contract_type' => 'DORM_BED', 'contract_template_id' => ContractTemplate::query()->where('template_key', 'DORM_BED_STANDARD')->where('is_active', true)->firstOrFail()->id]);
+        $this->postJson("/api/contracts/{$contract->id}/handover-check-in")->assertCreated();
+        $name = ContractHandoverService::DORM_BED_ITEMS[2];
+        $this->putJson("/api/contracts/{$contract->id}/handover-check-in", ['items' => [['name' => $name, 'quantity' => 1, 'condition' => 'GOOD']]])->assertOk();
+        $this->postJson("/api/contracts/{$contract->id}/handover-check-in/confirm")->assertOk();
+        $html = $this->getJson("/api/contracts/{$contract->id}/document/preview")->assertOk()->json('data.rendered_html');
+        $this->assertStringContainsString('01 tủ', $html);
+        $this->assertStringNotContainsString(ContractHandoverService::DORM_BED_ITEMS[0], $html);
+        $this->assertSame(2, substr_count($html, '<tr>'));
+    }
+
+    public function test_deletion_is_rejected_after_contract_finalization_even_if_report_is_still_draft(): void
+    {
+        $contract = $this->contract();
+        $this->postJson("/api/contracts/{$contract->id}/handover-check-in")->assertCreated();
+        $before = ContractHandoverReport::query()->sole()->items;
+        $contract->update(['status' => 'ACTIVE', 'finalized_at' => now()]);
+        $this->putJson("/api/contracts/{$contract->id}/handover-check-in", ['items' => []])->assertUnprocessable()->assertJsonValidationErrors('items');
+        $this->assertSame($before, ContractHandoverReport::query()->sole()->items);
     }
 
     public function test_draft_cannot_be_finalized_until_check_in_is_confirmed(): void

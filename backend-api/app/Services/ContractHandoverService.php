@@ -66,6 +66,13 @@ class ContractHandoverService
         DB::transaction(function () use ($user, $contractId, $items): void {
             $report = $this->lockedReport($user, $contractId);
             $this->ensureDraft($report);
+            $removed = array_diff(array_column($report->items ?? [], 'name'), array_column($items, 'name'));
+            if ($removed !== [] || count($items) < count($report->items ?? [])) {
+                $contract = $report->contract()->lockForUpdate()->firstOrFail();
+                if ($contract->status !== 'DRAFT' || $contract->finalized_at !== null || $contract->signing_snapshot !== null || $contract->document()->exists()) {
+                    throw ValidationException::withMessages(['items' => 'Chỉ được xóa hạng mục bàn giao khi đang tạo hợp đồng, trước khi chốt hoặc ký.']);
+                }
+            }
             $report->update(['items' => array_map(fn (array $item) => [
                 'name' => trim($item['name']), 'quantity' => $item['quantity'] ?? 1, 'condition' => $item['condition'] ?? null,
                 'note' => $item['note'] ?? null, 'key_count' => $item['key_count'] ?? null, 'remote_count' => $item['remote_count'] ?? null,
@@ -84,7 +91,10 @@ class ContractHandoverService
 
     private function lockedReport(User $user, int $contractId): ContractHandoverReport
     {
-        return $this->contracts->find($user, $contractId)->handoverReports()->where('type', 'CHECK_IN')->lockForUpdate()->firstOrFail();
+        $contract = $this->contracts->find($user, $contractId);
+        $contract = $contract->newQuery()->lockForUpdate()->findOrFail($contractId);
+
+        return $contract->handoverReports()->where('type', 'CHECK_IN')->lockForUpdate()->firstOrFail();
     }
 
     private function ensureDraft(ContractHandoverReport $report): void
