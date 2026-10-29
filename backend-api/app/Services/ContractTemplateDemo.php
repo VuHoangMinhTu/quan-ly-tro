@@ -23,7 +23,7 @@ class ContractTemplateDemo
             }
         }
 
-        return ['is_demo' => true, 'name' => $demo['name'], 'filename' => $demo['filename'], 'summary' => $demo['summary'],
+        return ['is_demo' => true, 'name' => $demo['name'], 'filename' => $demo['filename'], 'summary' => $demo['summary'], 'source_snapshot' => $demo['snapshot'],
             'rendered_html' => $this->renderer->render($this->fillPaperFields($content, $demo['paper_fields']), $demo['snapshot'])];
     }
 

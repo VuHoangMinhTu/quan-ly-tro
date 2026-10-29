@@ -1,13 +1,23 @@
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import { getResidenceDeclaration } from '../../api/residenceApi'
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import Ct01Document from '../../components/residence/Ct01Document'
+import { ct01PrintTitle } from '../../utils/printDocument'
 
 export default function ResidenceCt01PrintPage() {
   const { id } = useParams()
   const query = useQuery({ queryKey: ['residence-print-preview', String(id)], queryFn: () => getResidenceDeclaration(id), retry: false, staleTime: 0 })
+  const ct01 = query.data?.data?.data?.ct01
+  const printTitle = ct01 ? ct01PrintTitle(ct01) : ''
+  useEffect(() => {
+    if (!printTitle) return undefined
+    const previous = document.title
+    document.title = printTitle
+    return () => { document.title = previous }
+  }, [printTitle])
   if (query.isPending) return <p className="p-4">Đang kiểm tra dữ liệu CT01...</p>
   if (query.isError) return <div className="space-y-3 p-4"><p role="alert" className="text-red-700">{getApiErrorMessage(query.error)}</p><Link to={`/residence-declarations/${id}`} className="inline-flex min-h-11 items-center underline">Quay lại hồ sơ để bổ sung dữ liệu</Link></div>
-  return <main className="ct01-print-page min-h-dvh overflow-x-auto bg-slate-100 p-3 sm:p-6"><div className="ct01-print-actions mx-auto mb-4 flex max-w-3xl flex-wrap gap-3"><Link to={`/residence-declarations/${id}`} className="inline-flex min-h-11 items-center rounded-lg border bg-white px-4">Quay lại hồ sơ</Link><button type="button" className="min-h-11 rounded-lg bg-slate-900 px-4 text-white" onClick={async () => { await document.fonts.ready; window.print() }}>In CT01 / Lưu PDF</button><p className="w-full text-sm text-slate-500">Bố cục theo mẫu Word (khổ Letter). Ô chưa có dữ liệu để trống; kiểm tra nội dung và bổ sung chữ ký trước khi nộp.</p></div><Ct01Document data={query.data.data.data.ct01} /></main>
+  return <main className="ct01-print-page min-h-dvh overflow-x-auto bg-slate-100 p-3 sm:p-6"><div className="ct01-print-actions mx-auto mb-4 flex max-w-3xl flex-wrap gap-3"><Link to={`/residence-declarations/${id}`} className="inline-flex min-h-11 items-center rounded-lg border bg-white px-4">Quay lại hồ sơ</Link><button type="button" className="min-h-11 rounded-lg bg-slate-900 px-4 text-white" onClick={async () => { await document.fonts.ready; window.print() }}>In CT01 / Lưu PDF</button><p className="w-full text-sm text-slate-500">Bố cục theo mẫu Word (khổ A4). Ô chưa có dữ liệu để trống; kiểm tra nội dung và bổ sung chữ ký trước khi nộp.</p></div><Ct01Document data={ct01} /></main>
 }

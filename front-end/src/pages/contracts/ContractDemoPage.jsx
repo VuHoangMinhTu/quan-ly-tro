@@ -4,6 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { getContractDemo } from '../../api/contractTemplateApi'
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import ContractDocumentSheet from '../../components/contracts/ContractDocumentSheet'
+import { contractPrintTitle } from '../../utils/printDocument'
 import './ContractDocumentPage.css'
 
 export default function ContractDemoPage() {
@@ -17,7 +18,7 @@ export default function ContractDemoPage() {
     if (!demo || !validType) return
     let active = true
     const previous = document.title
-    document.title = demo.filename.replace(/\.pdf$/i, '')
+    document.title = contractPrintTitle(demo.source_snapshot, true)
     if (printRequested) document.fonts.ready.then(() => { if (active) window.print() })
     return () => { active = false; document.title = previous }
   }, [demo, validType, printRequested])

@@ -1,4 +1,4 @@
-.stay-consent-document { box-sizing: border-box; width: 216mm; min-height: 279mm; margin: 0 auto; padding: 5mm 30mm 9mm; background: #fff; color: #000; font: 13pt/1.18 'Times New Roman', Times, serif; overflow-wrap: normal; }
+.stay-consent-document { box-sizing: border-box; width: 210mm; min-height: 297mm; margin: 0 auto; padding: 5mm 30mm 9mm; background: #fff; color: #000; font: 13pt/1.18 'Times New Roman', Times, serif; overflow-wrap: normal; }
 .stay-consent-document * { box-sizing: border-box; }
 .stay-consent-document p { margin: 0; }
 .stay-consent-heading { text-align: center; }
@@ -27,4 +27,4 @@
   .stay-consent-document { width: 100%; min-height: 0; padding: 0; box-shadow: none; }
   .stay-consent-signatures { break-inside: avoid; }
 }
-@page residence-stay-consent { size: letter portrait; margin: 5mm 30mm 9mm; }
+@page residence-stay-consent { size: A4 portrait; margin: 5mm 30mm 9mm; }

@@ -507,7 +507,7 @@ class ContractSigningService
         }
         $this->audit->record($document, 'DOCUMENT_VIEWED', $http);
 
-        return ['rendered_html' => $workflow->signed_rendered_html, 'signed_document_hash' => $workflow->signed_document_hash,
+        return ['rendered_html' => $workflow->signed_rendered_html, 'source_snapshot' => $document->source_snapshot, 'signed_document_hash' => $workflow->signed_document_hash,
             'status' => $workflow->status, 'signature_ids' => $document->signatures()->pluck('id'), 'completed_at' => $workflow->signatures_completed_at];
     }
 }

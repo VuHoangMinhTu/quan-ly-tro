@@ -111,7 +111,7 @@
   .contract-document-html thead { display: table-header-group; }
   .contract-document-html tr, .contract-document-html .document-signatures { break-inside: avoid; }
   .contract-document-html .page-break { display: block; height: 0; break-before: page; page-break-before: always; }
-  .contract-document-html .contract-handover-section { break-before: page; page-break-before: always; break-inside: avoid; page-break-inside: avoid; }
+  .contract-document-html .contract-handover-section { break-before: page; page-break-before: always; }
   .contract-document-html .contract-handover-section .handover-heading { break-after: avoid; }
   .contract-document-html .contract-handover-section .contract-handover-table { break-inside: avoid; page-break-inside: avoid; }
 }

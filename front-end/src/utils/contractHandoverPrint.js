@@ -7,6 +7,15 @@ export const dormHandoverItems = [
   ['Máy lạnh phòng + Remote điều hòa', 'Bộ'],
 ]
 
+function removeTrailingPageBreaks(document) {
+  for (const pageBreak of [...document.querySelectorAll('.page-break')]) {
+    const laterContent = [...pageBreak.parentElement.children]
+      .slice([...pageBreak.parentElement.children].indexOf(pageBreak) + 1)
+      .some(node => node.textContent.trim() || node.querySelector('img, table, hr'))
+    if (!laterContent) pageBreak.remove()
+  }
+}
+
 function dormTable(document, table) {
   const headers = [...(table.rows[0]?.cells ?? [])].map(cell => cell.textContent.trim())
   const generic = headers.length === 3 && headers[0] === 'Tài sản'
@@ -42,6 +51,7 @@ function dormTable(document, table) {
 export function normalizeHandoverPrint(html) {
   if (!html?.includes('BIÊN BẢN BÀN GIAO HIỆN TRẠNG') || typeof DOMParser === 'undefined') return html
   const document = new DOMParser().parseFromString(html, 'text/html')
+  removeTrailingPageBreaks(document)
   const title = [...document.querySelectorAll('p,h1,h2,h3,h4')].find(node => /BIÊN BẢN BÀN GIAO HIỆN TRẠNG (PHÒNG|TRANG THIẾT BỊ)/.test(node.textContent))
   if (!title) return html
   const dorm = title.textContent.includes('TRANG THIẾT BỊ')

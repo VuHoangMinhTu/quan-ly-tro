@@ -1,4 +1,4 @@
-.ct01-document { box-sizing: border-box; width: 216mm; min-height: 279mm; margin: 0 auto; padding: 5mm 25mm 8mm; background: #fff; color: #000; font: 12pt/1.2 'Times New Roman', Times, serif; overflow-wrap: normal; }
+.ct01-document { box-sizing: border-box; width: 210mm; min-height: 297mm; margin: 0 auto; padding: 5mm 25mm 8mm; background: #fff; color: #000; font: 12pt/1.2 'Times New Roman', Times, serif; overflow-wrap: normal; }
 .ct01-document * { box-sizing: border-box; }
 .ct01-document p { margin: 0; }
 .ct01-template { text-align: center; font-size: 11pt; line-height: 1.12; }
@@ -45,4 +45,4 @@
   .ct01-member-table thead { display: table-header-group; }
   .ct01-member-table tr, .ct01-signatures { break-inside: avoid; }
 }
-@page residence-ct01 { size: letter portrait; margin: 5mm 5mm 8mm; }
+@page residence-ct01 { size: A4 portrait; margin: 5mm 5mm 8mm; }

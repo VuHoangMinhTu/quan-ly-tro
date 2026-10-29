@@ -54,7 +54,7 @@ class ContractDocumentService
         $template = $this->templates->select($contract->room->boardingHouse->landlord_id, $contract->contract_template_id);
         $snapshot = app(ContractService::class)->previewSnapshot($user, $id);
 
-        return ['rendered_html' => $this->renderer->render($template->content_html, $snapshot),
+        return ['rendered_html' => $this->renderer->render($template->content_html, $snapshot), 'source_snapshot' => $snapshot,
             'template_name' => $template->name, 'template_version' => $template->version,
             'is_preview' => true, 'finalized_at' => null];
     }
