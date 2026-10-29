@@ -115,6 +115,53 @@ class TenantImportApiTest extends TestCase
         $this->assertSame(1, $result['duplicates']);
     }
 
+    public function test_preview_and_confirm_only_detect_identity_duplicates_within_the_authenticated_landlord(): void
+    {
+        [$ownerUser, $owner] = $this->owner();
+        [$otherUser, $other] = $this->owner();
+        Tenant::create([
+            'landlord_id' => $owner->id,
+            'full_name' => 'Hồ sơ riêng của chủ trọ A',
+            'identity_number' => '001000000000',
+        ]);
+
+        $otherFile = $this->workbook([['Người thuê của chủ trọ B', '0900000000', '001000000000', null, null, null, null, null, null]]);
+        $preview = $this->actingAs($otherUser, 'sanctum')->postJson('/api/tenants/import/preview', ['file' => $otherFile])
+            ->assertOk()
+            ->assertJsonPath('data.summary.valid', 1)
+            ->assertJsonPath('data.summary.duplicate', 0)
+            ->assertJsonPath('data.rows.0.status', 'valid')
+            ->assertJsonMissingExact(['full_name' => 'Hồ sơ riêng của chủ trọ A'])
+            ->json('data');
+        $this->postJson('/api/tenants/import/confirm', ['token' => $preview['token'], 'selected_rows' => [2]])
+            ->assertOk()
+            ->assertJsonPath('data.created', 1)
+            ->assertJsonPath('data.duplicates', 0);
+        $this->assertDatabaseHas('tenants', ['landlord_id' => $other->id, 'identity_number' => '001000000000']);
+
+        $sameOwner = $this->actingAs($ownerUser, 'sanctum')->postJson('/api/tenants/import/preview', ['file' => $this->workbook($this->people(1))])
+            ->assertOk()
+            ->assertJsonPath('data.summary.duplicate', 1)
+            ->assertJsonPath('data.rows.0.status', 'duplicate')
+            ->json('data');
+        $this->postJson('/api/tenants/import/confirm', ['token' => $sameOwner['token'], 'selected_rows' => [2]])
+            ->assertOk()
+            ->assertJsonPath('data.created', 0)
+            ->assertJsonPath('data.duplicates', 1);
+
+        $withoutIdentity = $this->actingAs($otherUser, 'sanctum')->postJson('/api/tenants/import/preview', ['file' => $this->workbook([
+            ['Không CCCD 1', null, null, null, null, null, null, null, null],
+            ['Không CCCD 2', null, null, null, null, null, null, null, null],
+        ])])
+            ->assertOk()
+            ->assertJsonPath('data.summary.valid', 2)
+            ->assertJsonPath('data.summary.duplicate', 0)
+            ->json('data');
+        $this->postJson('/api/tenants/import/confirm', ['token' => $withoutIdentity['token'], 'selected_rows' => [2, 3]])
+            ->assertOk()
+            ->assertJsonPath('data.created', 2);
+    }
+
     public function test_dates_accept_explicit_vietnamese_text_and_excel_serial_and_reject_invalid_values(): void
     {
         [$user] = $this->owner();
