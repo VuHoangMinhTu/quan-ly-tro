@@ -19,6 +19,22 @@ class DocumentCodesApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function documentContext(string $type, array $attributes = []): Contract
+    {
+        $contract = Contract::factory()->create($type === 'INVOICE'
+            ? ['status' => 'ACTIVE', 'start_date' => '2026-01-01', 'end_date' => null, ...$attributes]
+            : $attributes);
+        if ($type === 'INVOICE') {
+            $contract->room->update(['status' => 'RENTED']);
+            $contract->occupants()->create([
+                'room_id' => $contract->room_id, 'tenant_id' => $contract->tenant_id,
+                'is_primary' => true, 'status' => 'ACTIVE', 'move_in_date' => '2026-01-01',
+            ]);
+        }
+
+        return $contract;
+    }
+
     private function createDocument(Contract $context, string $type, ?string $code, string $period = '2026-01-01'): TestResponse
     {
         $this->app['auth']->forgetGuards();
@@ -27,7 +43,7 @@ class DocumentCodesApiTest extends TestCase
 
         return $type === 'CONTRACT'
             ? $this->postJson("/api/rooms/{$context->room_id}/contracts", ['tenant_id' => $context->tenant_id, 'contract_code' => $code, 'status' => 'DRAFT', 'landlord_id' => 99999])
-            : $this->postJson("/api/rooms/{$context->room_id}/invoices", ['invoice_code' => $code, 'billing_period' => $period, 'status' => 'DRAFT', 'landlord_id' => 99999]);
+            : $this->postJson("/api/rooms/{$context->room_id}/invoices", ['contract_id' => $context->id, 'invoice_code' => $code, 'billing_period' => $period, 'status' => 'DRAFT', 'landlord_id' => 99999]);
     }
 
     #[TestWith(['CONTRACT', 'HD-2026-0001', 'HD-2026-0002'])]
@@ -35,8 +51,8 @@ class DocumentCodesApiTest extends TestCase
     public function test_auto_and_manual_codes_are_scoped_to_landlord(string $type, string $first, string $second): void
     {
         $this->travelTo(now()->setDate(2026, 10, 24));
-        $a = Contract::factory()->create();
-        $b = Contract::factory()->create();
+        $a = $this->documentContext($type);
+        $b = $this->documentContext($type);
         $table = $type === 'CONTRACT' ? 'contracts' : 'invoices';
         $field = $type === 'CONTRACT' ? 'contract_code' : 'invoice_code';
 
@@ -60,7 +76,7 @@ class DocumentCodesApiTest extends TestCase
     public function test_auto_skips_manual_collision_and_sequence_rolls_back_atomically(string $type, string $manual, string $expected): void
     {
         $this->travelTo(now()->setDate(2026, 10, 24));
-        $context = Contract::factory()->create();
+        $context = $this->documentContext($type);
         $landlord = $context->room->boardingHouse->landlord_id;
         DB::table('document_sequences')->insert(['landlord_id' => $landlord, 'document_type' => $type, 'year' => 2026, 'last_number' => 4]);
         $this->createDocument($context, $type, $manual)->assertCreated();
@@ -89,10 +105,11 @@ class DocumentCodesApiTest extends TestCase
 
     public function test_invoice_code_can_change_only_in_unissued_unpaid_draft(): void
     {
-        $context = Contract::factory()->create();
+        $this->travelTo(now()->setDate(2026, 10, 24)->startOfDay());
+        $context = $this->documentContext('INVOICE');
         $this->createDocument($context, 'INVOICE', 'OLD')->assertCreated();
         $invoice = Invoice::where('room_id', $context->room_id)->sole();
-        $payload = ['invoice_code' => 'NEW', 'billing_period' => '2026-01-01', 'status' => 'DRAFT'];
+        $payload = ['contract_id' => $context->id, 'invoice_code' => 'NEW', 'billing_period' => '2026-01-01', 'status' => 'DRAFT'];
         $this->putJson("/api/invoices/{$invoice->id}", $payload)->assertOk();
         $invoice->refresh()->update(['status' => 'UNPAID']);
         $this->putJson("/api/invoices/{$invoice->id}", [...$payload, 'invoice_code' => 'OTHER', 'status' => 'UNPAID'])
@@ -105,12 +122,16 @@ class DocumentCodesApiTest extends TestCase
     #[TestWith(['invoices', 'invoice_code'])]
     public function test_database_rejects_duplicate_code_even_when_model_validation_is_bypassed(string $table, string $field): void
     {
-        $context = Contract::factory()->create();
+        $this->travelTo(now()->setDate(2026, 10, 24)->startOfDay());
+        $context = $this->documentContext($table === 'invoices' ? 'INVOICE' : 'CONTRACT');
         if ($table === 'invoices') {
             $this->createDocument($context, 'INVOICE', 'EXISTING')->assertCreated();
         }
         $row = (array) DB::table($table)->where('room_id', $context->room_id)->first();
         unset($row['id']);
+        if ($table === 'invoices') {
+            $row['billing_period'] = '2026-02-01';
+        }
 
         $this->expectException(UniqueConstraintViolationException::class);
         DB::table($table)->insert($row);
@@ -121,7 +142,7 @@ class DocumentCodesApiTest extends TestCase
         $this->travelTo(now()->setDate(2026, 10, 24));
         $first = Contract::factory()->create();
         $room = Room::create(['boarding_house_id' => $first->room->boarding_house_id, 'room_code' => 'SECOND', 'status' => 'AVAILABLE']);
-        $second = Contract::factory()->create(['room_id' => $room->id, 'tenant_id' => $first->tenant_id]);
+        $second = $this->documentContext('INVOICE', ['room_id' => $room->id, 'tenant_id' => $first->tenant_id]);
         $this->createDocument($first, 'CONTRACT', null)->assertCreated();
         $this->createDocument($second, 'CONTRACT', null)->assertCreated();
         $this->createDocument($second, 'INVOICE', null)->assertCreated();

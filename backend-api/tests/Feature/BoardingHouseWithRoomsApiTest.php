@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\BoardingHouse;
-use App\Models\Invoice;
 use App\Models\Landlord;
 use App\Models\Room;
 use App\Models\Tenant;
@@ -209,22 +208,28 @@ class BoardingHouseWithRoomsApiTest extends TestCase
         $room = $this->house($landlord)->rooms()->create(['room_code' => '101', 'status' => 'AVAILABLE']);
         $this->actingAsOwner($landlord)->postJson("/api/rooms/{$room->id}/invoices", [
             'invoice_code' => 'INV-101', 'billing_period' => '2026-10-01', 'status' => 'DRAFT',
-        ])->assertCreated();
-        $invoice = Invoice::query()->sole();
-        $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
-        $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'RENT']);
+        ])->assertUnprocessable()->assertJsonValidationErrors('contract_id');
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertDatabaseCount('invoice_items', 0);
         $this->assertDatabaseHas('rooms', ['id' => $room->id, 'monthly_rent' => null]);
-        $this->getJson("/api/invoices/{$invoice->id}")->assertOk()->assertJsonPath('data.room.monthly_rent', null);
+        $this->getJson("/api/rooms/{$room->id}")->assertOk()->assertJsonPath('data.monthly_rent', null);
     }
 
     public function test_existing_contract_snapshot_still_updates_and_bills_if_room_rent_is_cleared(): void
     {
+        $this->travelTo(now()->setDate(2026, 10, 24)->startOfDay());
         $landlord = $this->owner();
-        $room = $this->house($landlord)->rooms()->create(['room_code' => '101', 'status' => 'AVAILABLE']);
+        $room = $this->house($landlord)->rooms()->create(['room_code' => '101', 'monthly_rent' => 3000000, 'status' => 'AVAILABLE']);
         $tenant = Tenant::create(['landlord_id' => $landlord->id, 'full_name' => 'Nguyễn Văn A']);
-        $payload = $this->contractPayload($tenant);
+        $payload = [...$this->contractPayload($tenant), 'lessor_representative_user_id' => $landlord->user_id];
         $contract = $room->contracts()->create($payload);
         $this->actingAsOwner($landlord)->putJson("/api/contracts/{$contract->id}", $payload)->assertOk();
+        $contract->handoverReports()->create([
+            'type' => 'CHECK_IN', 'status' => 'CONFIRMED', 'items' => [['name' => 'Phòng', 'quantity' => 1, 'condition' => 'GOOD']], 'confirmed_at' => now(),
+        ]);
+        $this->putJson("/api/contracts/{$contract->id}/status", ['status' => 'ACTIVE'])->assertOk();
+        $this->assertSame('2500000.00', $contract->fresh()->signing_snapshot['contract']['monthly_rent']);
+        $room->update(['monthly_rent' => null]);
         $invoice = $room->invoices()->create([
             'contract_id' => $contract->id, 'invoice_code' => 'INV-101', 'billing_period' => '2026-10-01',
             'subtotal' => 0, 'discount_amount' => 0, 'total_amount' => 0, 'paid_amount' => 0, 'status' => 'DRAFT',

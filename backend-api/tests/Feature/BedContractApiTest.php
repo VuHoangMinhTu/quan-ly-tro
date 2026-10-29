@@ -54,6 +54,7 @@ class BedContractApiTest extends TestCase
     {
         $first = Contract::factory()->create(['contract_code' => 'BED-FIRST']);
         $room = $first->room;
+        $room->update(['room_type' => 'DORMITORY']);
         $owner = $room->boardingHouse->landlord->user;
         $bedOne = $room->beds()->create(['bed_code' => 'G01']);
         $bedTwo = $room->beds()->create(['bed_code' => 'G02']);

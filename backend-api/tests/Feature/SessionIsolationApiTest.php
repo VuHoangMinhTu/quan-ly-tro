@@ -27,7 +27,8 @@ class SessionIsolationApiTest extends TestCase
         $this->asToken($tokenA)->getJson("/api/boarding-houses/{$roomA->boarding_house_id}/rooms")
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $roomA->id);
         $this->asToken($tokenA)->getJson("/api/rooms/{$roomA->id}/invoices")
-            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $invoiceA->id);
+            ->assertOk()->assertJsonCount(1, 'data.items')->assertJsonPath('data.items.0.id', $invoiceA->id)
+            ->assertJsonPath('data.pagination.total', 1);
         $this->asToken($tokenA)->getJson('/api/tenants')
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $contractA->tenant_id);
 
@@ -39,7 +40,8 @@ class SessionIsolationApiTest extends TestCase
         $this->asToken($tokenB)->getJson("/api/boarding-houses/{$roomB->boarding_house_id}/rooms")
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $roomB->id);
         $this->asToken($tokenB)->getJson("/api/rooms/{$roomB->id}/invoices")
-            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $invoiceB->id);
+            ->assertOk()->assertJsonCount(1, 'data.items')->assertJsonPath('data.items.0.id', $invoiceB->id)
+            ->assertJsonPath('data.pagination.total', 1);
         $this->asToken($tokenB)->getJson('/api/tenants')
             ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $contractB->tenant_id);
 
