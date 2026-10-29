@@ -158,6 +158,35 @@ class TenantImportApiTest extends TestCase
         $this->assertDatabaseCount('tenants', 0);
     }
 
+    public function test_single_sheet_workbook_with_vietnamese_headers_is_imported_regardless_of_sheet_name(): void
+    {
+        [$user] = $this->owner();
+        $book = new Spreadsheet;
+        $sheet = $book->getActiveSheet()->setTitle('Trang tính');
+        $headers = array_keys(TenantImportService::HEADERS);
+        $headers[0] = "\xEF\xBB\xBF{$headers[0]} ";
+        $sheet->fromArray($headers);
+        $sheet->setCellValueExplicit('A2', 'Người thuê thử nghiệm', DataType::TYPE_STRING);
+        $sheet->setCellValueExplicit('B2', '0900000000', DataType::TYPE_STRING);
+        $sheet->setCellValueExplicit('C2', '001000000000', DataType::TYPE_STRING);
+        $sheet->setCellValue('D2', Date::PHPToExcel(new \DateTimeImmutable('1995-04-23')));
+        $sheet->getCell('D2')->getStyle()->getNumberFormat()->setFormatCode('dd/mm/yyyy');
+
+        $preview = $this->actingAs($user, 'sanctum')->postJson('/api/tenants/import/preview', ['file' => $this->upload($book)])
+            ->assertOk()
+            ->assertJsonPath('data.summary.total', 1)
+            ->assertJsonPath('data.summary.valid', 1)
+            ->assertJsonPath('data.rows.0.data.phone', '0900000000')
+            ->assertJsonPath('data.rows.0.data.identity_number', '001000000000')
+            ->assertJsonPath('data.rows.0.data.date_of_birth', '1995-04-23')
+            ->json('data');
+
+        $this->postJson('/api/tenants/import/confirm', ['token' => $preview['token'], 'selected_rows' => [2]])
+            ->assertOk()
+            ->assertJsonPath('data.created', 1);
+        $this->assertDatabaseHas('tenants', ['full_name' => 'Người thuê thử nghiệm']);
+    }
+
     public function test_manager_without_owner_workspace_cannot_import_and_tokens_are_user_bound(): void
     {
         [$owner, $landlord] = $this->owner();
@@ -195,6 +224,49 @@ class TenantImportApiTest extends TestCase
         $this->assertSame('001000000001', $book->getSheetByName('Huong dan')->getCell('C15')->getValue());
         $this->assertSame('@', $book->getSheetByName('Nguoi thue')->getCell('C2')->getStyle()->getNumberFormat()->getFormatCode());
         $book->disconnectWorksheets();
+    }
+
+    public function test_downloaded_template_round_trips_through_preview_and_confirm(): void
+    {
+        [$user, $owner] = $this->owner();
+        $this->actingAs($user, 'sanctum')->get('/api/tenants/import/template')
+            ->assertOk()
+            ->assertDownload('BeeHouse-mau-nguoi-thue.xlsx');
+
+        $this->postJson('/api/tenants/import/preview', ['file' => $this->templateWorkbook([])])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.file.0', 'File không có dữ liệu người thuê. Hãy điền sheet "Nguoi thue".');
+
+        $start = 0;
+        foreach ([1, 10, 100] as $count) {
+            $preview = $this->postJson('/api/tenants/import/preview', ['file' => $this->templateWorkbook($this->people($count, $start))])
+                ->assertOk()
+                ->assertJsonPath('data.summary.total', $count)
+                ->assertJsonPath('data.summary.valid', $count)
+                ->assertJsonPath('data.rows.0.data.phone', '09'.str_pad((string) $start, 8, '0', STR_PAD_LEFT))
+                ->assertJsonPath('data.rows.0.data.identity_number', '001'.str_pad((string) $start, 9, '0', STR_PAD_LEFT))
+                ->assertJsonPath('data.rows.0.data.date_of_birth', '1995-04-23')
+                ->json('data');
+
+            $this->postJson('/api/tenants/import/confirm', ['token' => $preview['token'], 'selected_rows' => range(2, $count + 1)])
+                ->assertOk()
+                ->assertJsonPath('data.created', $count);
+            $start += $count;
+        }
+
+        $repeat = $this->postJson('/api/tenants/import/preview', ['file' => $this->templateWorkbook($this->people(1))])
+            ->assertOk()
+            ->assertJsonPath('data.summary.duplicate', 1)
+            ->json('data');
+        $this->postJson('/api/tenants/import/confirm', ['token' => $repeat['token'], 'selected_rows' => [2]])
+            ->assertOk()
+            ->assertJsonPath('data.created', 0)
+            ->assertJsonPath('data.duplicates', 1);
+
+        $this->assertDatabaseCount('tenants', 111);
+        $this->assertSame(111, Tenant::where('landlord_id', $owner->id)->count());
+        $this->assertDatabaseCount('contracts', 0);
+        $this->assertDatabaseCount('room_tenants', 0);
     }
 
     public function test_only_name_is_required_and_unselected_rows_are_not_inserted(): void
@@ -239,9 +311,36 @@ class TenantImportApiTest extends TestCase
         return [$user, Landlord::create(['user_id' => $user->id, 'full_name' => $user->name, 'phone' => '0900000000'])];
     }
 
-    private function people(int $count): array
+    private function people(int $count, int $start = 0): array
     {
-        return array_map(fn (int $index): array => ['Người thuê '.($index + 1), '09'.str_pad((string) $index, 8, '0', STR_PAD_LEFT), '001'.str_pad((string) $index, 9, '0', STR_PAD_LEFT), '23/04/1995', 'Nam', 'Địa chỉ thử nghiệm', null, null, null], range(0, $count - 1));
+        return array_map(fn (int $index): array => ['Người thuê '.($index + 1), '09'.str_pad((string) $index, 8, '0', STR_PAD_LEFT), '001'.str_pad((string) $index, 9, '0', STR_PAD_LEFT), '23/04/1995', 'Nam', 'Địa chỉ thử nghiệm', null, null, null], range($start, $start + $count - 1));
+    }
+
+    private function templateWorkbook(array $people): UploadedFile
+    {
+        $book = (new XlsxReader)->load(resource_path('templates/tenant-import.xlsx'));
+        $sheet = $book->getSheetByName('Nguoi thue');
+        foreach ($people as $index => $person) {
+            foreach ($person as $column => $value) {
+                if ($value === null) {
+                    continue;
+                }
+                $cell = $sheet->getCell([$column + 1, $index + 2]);
+                if (in_array($column, [1, 2], true)) {
+                    $cell->setValueExplicit($value, DataType::TYPE_STRING);
+
+                    continue;
+                }
+                if (in_array($column, [3, 8], true)) {
+                    $cell->setValue(Date::PHPToExcel(\DateTimeImmutable::createFromFormat('!d/m/Y', $value)));
+
+                    continue;
+                }
+                $cell->setValueExplicit($value, DataType::TYPE_STRING);
+            }
+        }
+
+        return $this->upload($book);
     }
 
     private function workbook(array $people): UploadedFile

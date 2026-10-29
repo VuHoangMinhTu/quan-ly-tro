@@ -117,9 +117,13 @@ class TenantImportService
             if (! $reader->canRead($file->getPathname())) {
                 $this->fileError('File không phải định dạng Excel .xlsx hợp lệ.');
             }
-            $info = collect($reader->listWorksheetInfo($file->getPathname()))->firstWhere('worksheetName', 'Nguoi thue');
+            $worksheets = $reader->listWorksheetInfo($file->getPathname());
+            $info = collect($worksheets)->firstWhere('worksheetName', 'Nguoi thue');
+            if (! $info && count($worksheets) === 1) {
+                $info = $worksheets[0];
+            }
             if (! $info) {
-                $this->fileError('Thiếu sheet "Nguoi thue". Vui lòng sử dụng file mẫu BeeHouse.');
+                $this->fileError('Không xác định được sheet dữ liệu. Hãy giữ sheet "Nguoi thue" hoặc chỉ để một sheet có đúng header mẫu BeeHouse.');
             }
             if ($info['totalRows'] > 1001) {
                 $this->fileError('File chỉ được chứa tối đa 1.000 người thuê. Hãy xóa các dòng dư khỏi sheet dữ liệu.');
@@ -127,7 +131,7 @@ class TenantImportService
             if ($info['totalColumns'] > count(self::HEADERS)) {
                 $this->fileError('Header không khớp file mẫu BeeHouse.');
             }
-            $reader->setLoadSheetsOnly(['Nguoi thue']);
+            $reader->setLoadSheetsOnly([$info['worksheetName']]);
             $reader->setReadEmptyCells(false);
             $reader->setReadFilter(new class implements IReadFilter
             {
@@ -137,10 +141,10 @@ class TenantImportService
                 }
             });
             $book = $reader->load($file->getPathname());
-            $sheet = $book->getSheetByName('Nguoi thue');
+            $sheet = $book->getSheetByName($info['worksheetName']);
             $columns = [];
             foreach (range('A', 'I') as $column) {
-                $header = trim((string) $sheet->getCell($column.'1')->getValue());
+                $header = $this->normalizeHeader($sheet->getCell($column.'1')->getValue());
                 if ($header === '') {
                     continue;
                 }
@@ -301,6 +305,15 @@ class TenantImportService
         } finally {
             $zip->close();
         }
+    }
+
+    private function normalizeHeader(mixed $value): string
+    {
+        if ($value instanceof RichText) {
+            $value = $value->getPlainText();
+        }
+
+        return trim((string) $value, " \t\n\r\0\x0B\xEF\xBB\xBF");
     }
 
     private function fileError(string $message): never
