@@ -1,5 +1,5 @@
 export const IMPORT_PAGE_SIZE = 20
-export const importStatusLabels = { valid: 'Hợp lệ', warning: 'Nghi trùng SĐT', duplicate: 'Đã tồn tại', invalid: 'Dòng lỗi' }
+export const importStatusLabels = { valid: 'Hợp lệ', warning: 'Cần xem xét', duplicate: 'Trùng CCCD', invalid: 'Dòng lỗi' }
 
 export function validateTenantImportFile(file) {
   if (!file) return 'Vui lòng chọn file Excel.'

@@ -9,6 +9,7 @@ use App\Models\TenantImport;
 use App\Models\User;
 use DateTimeImmutable;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -88,7 +89,7 @@ class TenantImportService
                     continue;
                 }
                 if ($row['status'] === 'warning' && ! $acceptWarnings) {
-                    throw ValidationException::withMessages(['accept_phone_warnings' => 'Vui lòng xác nhận các dòng có số điện thoại nghi trùng hoặc bỏ chọn các dòng đó.']);
+                    throw ValidationException::withMessages(['accept_phone_warnings' => 'Vui lòng xác nhận các dòng cần xem xét hoặc bỏ chọn các dòng đó.']);
                 }
                 $created++;
             }
@@ -240,9 +241,24 @@ class TenantImportService
         $identities = array_filter(array_column(array_column($rows, 'data'), 'identity_number'));
         $phones = array_filter(array_column(array_column($rows, 'data'), 'phone'));
         $existingIds = Tenant::withTrashed()->where('landlord_id', $landlordId)->whereIn('identity_number', $identities)->pluck('identity_number')->flip();
-        $existingPhones = Tenant::query()->where('landlord_id', $landlordId)->whereIn('phone', $phones)->pluck('phone')->flip();
+        $existingTenants = Tenant::query()->where('landlord_id', $landlordId)
+            ->get(['full_name', 'phone', 'date_of_birth']);
+        $existingTenantsByName = $existingTenants
+            ->filter(fn (Tenant $tenant) => $this->normalizeName($tenant->full_name) !== '')
+            ->groupBy(fn (Tenant $tenant) => $this->normalizeName($tenant->full_name));
+        $existingPhones = $existingTenants
+            ->map(fn (Tenant $tenant) => $this->normalizePhone($tenant->phone))
+            ->filter()
+            ->flip();
         $seenIds = [];
         $phoneCounts = array_count_values($phones);
+        $fileTenantsByName = collect($rows)->map(fn (array $row) => [
+            'row' => $row['row'],
+            'name' => $this->normalizeName($row['data']['full_name']),
+            'phone' => $row['data']['phone'],
+            'date_of_birth' => $row['data']['date_of_birth'],
+        ])->filter(fn (array $row) => $row['name'] !== '')
+            ->groupBy('name');
         $rules = (new StoreTenantRequest)->rules();
         foreach ($rows as &$row) {
             $errors = $row['parse_errors'];
@@ -261,10 +277,15 @@ class TenantImportService
                 $errors[] = 'Số điện thoại không hợp lệ (9–15 chữ số, có thể có dấu + ở đầu).';
             }
             $duplicate = $identity && ($existingIds->has($identity) || isset($seenIds[$identity]));
-            $warning = $phone && ($existingPhones->has($phone) || ($phoneCounts[$phone] ?? 0) > 1);
-            $row['status'] = $errors !== [] ? 'invalid' : ($duplicate ? 'duplicate' : ($warning ? 'warning' : 'valid'));
+            $warnings = $this->possibleDuplicateWarnings($row, $existingTenantsByName, $fileTenantsByName);
+            if ($phone && ($existingPhones->has($phone) || ($phoneCounts[$phone] ?? 0) > 1)) {
+                $warnings[] = 'Số điện thoại trùng trong workspace hoặc file: hãy kiểm tra trước khi chọn nhập.';
+            }
+            $row['status'] = $errors !== [] ? 'invalid' : ($duplicate ? 'duplicate' : ($warnings !== [] ? 'warning' : 'valid'));
             $row['errors'] = array_values(array_unique($errors));
-            $row['warnings'] = $duplicate ? ['CCCD/CMND đã tồn tại trong workspace hoặc dòng trước của file.'] : ($warning ? ['Số điện thoại trùng: hãy kiểm tra trước khi chọn nhập.'] : []);
+            $row['warnings'] = $duplicate
+                ? ['CCCD/CMND đã tồn tại trong workspace hoặc dòng trước của file.']
+                : array_values(array_unique($warnings));
             if ($errors === [] && $identity) {
                 $seenIds[$identity] = true;
             }
@@ -278,6 +299,73 @@ class TenantImportService
         $counts = array_count_values(array_column($rows, 'status'));
 
         return ['total' => count($rows), 'valid' => $counts['valid'] ?? 0, 'warning' => $counts['warning'] ?? 0, 'duplicate' => $counts['duplicate'] ?? 0, 'invalid' => $counts['invalid'] ?? 0];
+    }
+
+    /**
+     * @param  Collection<string, Collection<int, Tenant>>  $existingTenantsByName
+     * @param  Collection<string, Collection<int, array{row: int, phone: ?string, date_of_birth: ?string}>>  $fileTenantsByName
+     * @return array<int, string>
+     */
+    private function possibleDuplicateWarnings(array $row, $existingTenantsByName, $fileTenantsByName): array
+    {
+        $name = $this->normalizeName($row['data']['full_name']);
+        if ($name === '') {
+            return [];
+        }
+
+        $phone = $row['data']['phone'];
+        $dateOfBirth = $row['data']['date_of_birth'];
+        $warnings = [];
+        $existingMatches = $existingTenantsByName->get($name, collect());
+        if ($existingMatches->isNotEmpty()) {
+            $samePhone = $phone !== null && $existingMatches->contains(fn (Tenant $tenant) => $this->normalizePhone($tenant->phone) === $phone);
+            $sameDateOfBirth = $dateOfBirth !== null && $existingMatches->contains(fn (Tenant $tenant) => optional($tenant->date_of_birth)->format('Y-m-d') === $dateOfBirth);
+            $warnings[] = $this->nameWarning('workspace', $samePhone, $sameDateOfBirth);
+        }
+
+        $fileMatches = $fileTenantsByName->get($name, collect())->where('row', '!=', $row['row']);
+        if ($fileMatches->isNotEmpty()) {
+            $samePhone = $phone !== null && $fileMatches->contains(fn (array $tenant) => $tenant['phone'] === $phone);
+            $sameDateOfBirth = $dateOfBirth !== null && $fileMatches->contains(fn (array $tenant) => $tenant['date_of_birth'] === $dateOfBirth);
+            $warnings[] = $this->nameWarning('file', $samePhone, $sameDateOfBirth);
+        }
+
+        return $warnings;
+    }
+
+    private function nameWarning(string $source, bool $samePhone, bool $sameDateOfBirth): string
+    {
+        $scope = $source === 'workspace' ? 'hồ sơ trong workspace' : 'dòng khác trong file';
+        if ($samePhone && $sameDateOfBirth) {
+            return "Họ tên, số điện thoại và ngày sinh trùng với {$scope}: hãy kiểm tra trước khi chọn nhập.";
+        }
+        if ($samePhone) {
+            return "Họ tên và số điện thoại trùng với {$scope}: hãy kiểm tra trước khi chọn nhập.";
+        }
+        if ($sameDateOfBirth) {
+            return "Họ tên và ngày sinh trùng với {$scope}: hãy kiểm tra trước khi chọn nhập.";
+        }
+
+        return "Họ tên trùng với {$scope}: hãy kiểm tra trước khi chọn nhập.";
+    }
+
+    private function normalizeName(?string $value): string
+    {
+        $value = preg_replace('/\s+/u', ' ', trim((string) $value)) ?? '';
+        if (class_exists(\Normalizer::class)) {
+            $value = \Normalizer::normalize($value, \Normalizer::FORM_C) ?: $value;
+        }
+
+        return mb_strtolower($value);
+    }
+
+    private function normalizePhone(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return preg_replace('/[\s().-]/u', '', $value);
     }
 
     private function checkArchive(string $path): void

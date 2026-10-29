@@ -102,6 +102,64 @@ class TenantImportApiTest extends TestCase
         $this->assertDatabaseCount('tenants', 4);
     }
 
+    public function test_exact_name_matches_are_warnings_that_can_be_deselected_or_confirmed(): void
+    {
+        [$user, $owner] = $this->owner();
+        Tenant::create([
+            'landlord_id' => $owner->id,
+            'full_name' => 'Nguyễn Văn An',
+            'phone' => '0900011111',
+            'identity_number' => '001000000001',
+            'date_of_birth' => '1995-04-23',
+        ]);
+        Tenant::create([
+            'landlord_id' => $owner->id,
+            'full_name' => 'Phạm Vũ Thiên Kim',
+            'identity_number' => '001000000007',
+        ]);
+
+        $people = [
+            ['  NGUYỄN   VĂN AN  ', '0900099999', '001000000002', '24/04/1996', null, null, null, null, null],
+            ['Nguyễn Văn An', '0900011111', '001000000003', '24/04/1996', null, null, null, null, null],
+            ['Nguyễn Văn An', '0900088888', '001000000004', '23/04/1995', null, null, null, null, null],
+            ['Phạm Kim Ngân', null, '001000000005', null, null, null, null, null, null],
+            ['Trùng trong file', '0900077771', '001000000008', null, null, null, null, null, null],
+            ['Trùng   trong file', '0900077772', '001000000009', null, null, null, null, null, null],
+        ];
+
+        $preview = $this->actingAs($user, 'sanctum')->postJson('/api/tenants/import/preview', ['file' => $this->workbook($people)])
+            ->assertOk()
+            ->assertJsonPath('data.summary.warning', 5)
+            ->assertJsonPath('data.summary.valid', 1)
+            ->assertJsonPath('data.rows.3.status', 'valid')
+            ->json('data');
+        $this->assertStringContainsString('Họ tên trùng với hồ sơ trong workspace', implode(' ', $preview['rows'][0]['warnings']));
+        $this->assertStringContainsString('Họ tên và số điện thoại trùng với hồ sơ trong workspace', implode(' ', $preview['rows'][1]['warnings']));
+        $this->assertStringContainsString('Họ tên và ngày sinh trùng với hồ sơ trong workspace', implode(' ', $preview['rows'][2]['warnings']));
+        $this->assertStringContainsString('Họ tên trùng với dòng khác trong file', implode(' ', $preview['rows'][4]['warnings']));
+
+        $this->postJson('/api/tenants/import/confirm', ['token' => $preview['token'], 'selected_rows' => [5]])
+            ->assertOk()
+            ->assertJsonPath('data.created', 1)
+            ->assertJsonPath('data.unselected', 5);
+        $this->assertDatabaseMissing('tenants', ['identity_number' => '001000000002']);
+        $this->assertDatabaseHas('tenants', ['identity_number' => '001000000005']);
+
+        $warningPreview = $this->postJson('/api/tenants/import/preview', ['file' => $this->workbook([$people[0]])])
+            ->assertOk()
+            ->assertJsonPath('data.rows.0.status', 'warning')
+            ->json('data');
+        $this->postJson('/api/tenants/import/confirm', ['token' => $warningPreview['token'], 'selected_rows' => [2]])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('accept_phone_warnings');
+        $this->postJson('/api/tenants/import/confirm', [
+            'token' => $warningPreview['token'],
+            'selected_rows' => [2],
+            'accept_phone_warnings' => true,
+        ])->assertOk()->assertJsonPath('data.created', 1);
+        $this->assertDatabaseHas('tenants', ['identity_number' => '001000000002']);
+    }
+
     public function test_identity_duplicate_check_is_scoped_and_confirm_rechecks_current_database(): void
     {
         [$user, $owner] = $this->owner();
@@ -125,13 +183,13 @@ class TenantImportApiTest extends TestCase
             'identity_number' => '001000000000',
         ]);
 
-        $otherFile = $this->workbook([['Người thuê của chủ trọ B', '0900000000', '001000000000', null, null, null, null, null, null]]);
+        $otherFile = $this->workbook([['Hồ sơ riêng của chủ trọ A', '0900000000', '001000000000', null, null, null, null, null, null]]);
         $preview = $this->actingAs($otherUser, 'sanctum')->postJson('/api/tenants/import/preview', ['file' => $otherFile])
             ->assertOk()
             ->assertJsonPath('data.summary.valid', 1)
+            ->assertJsonPath('data.summary.warning', 0)
             ->assertJsonPath('data.summary.duplicate', 0)
             ->assertJsonPath('data.rows.0.status', 'valid')
-            ->assertJsonMissingExact(['full_name' => 'Hồ sơ riêng của chủ trọ A'])
             ->json('data');
         $this->postJson('/api/tenants/import/confirm', ['token' => $preview['token'], 'selected_rows' => [2]])
             ->assertOk()
