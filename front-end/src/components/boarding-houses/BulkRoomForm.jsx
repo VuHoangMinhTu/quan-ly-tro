@@ -84,7 +84,7 @@ export default function BulkRoomForm({ initialRooms, initialFloors, onBack, onSu
     try {
       await onSubmit(rooms, floors?.map((floor, sort_order) => ({ ...floor, sort_order })))
     } catch (error) {
-      const applied = applyApiFieldErrors(error, form.setError, (field) => field.startsWith('rooms.') || field.startsWith('floors.') ? field : null)
+      const applied = applyApiFieldErrors(error, form.setError, (field) => field === 'rooms' || field === 'floors' || field.startsWith('rooms.') || field.startsWith('floors.') ? field : null)
       if (!applied) setSubmitError(getApiErrorMessage(error))
       const houseErrors = error.response?.data?.errors
       if (houseErrors && Object.keys(houseErrors).some((field) => field.startsWith('boarding_house.'))) {

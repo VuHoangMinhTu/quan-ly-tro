@@ -11,9 +11,11 @@ use App\Models\BoardingHouse;
 use App\Models\Landlord;
 use App\Models\User;
 use App\Services\RoomOrderingService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class BoardingHouseController extends Controller
 {
@@ -40,30 +42,40 @@ class BoardingHouseController extends Controller
     {
         $data = $request->validated();
 
-        $boardingHouse = DB::transaction(function () use ($request, $data): BoardingHouse {
-            // Both ownership keys are assigned by relations, never by the client.
-            $house = $this->landlordBoardingHouses($request)->create($data['boarding_house']);
-            $floorIds = [];
-            foreach ($data['floors'] ?? [] as $floor) {
-                $floorIds[$floor['client_key']] = $house->floors()->create([
-                    'name' => $floor['name'], 'sort_order' => $floor['sort_order'],
-                ])->id;
-            }
-            foreach ($data['rooms'] as $room) {
-                app(RoomOrderingService::class)->create($house, [
-                    'floor_id' => isset($room['floor_client_key']) ? $floorIds[$room['floor_client_key']] : null,
-                    'room_code' => $room['room_code'],
-                    'room_type' => $room['room_type'] ?? 'PRIVATE_ROOM',
-                    'private_room_type' => $room['private_room_type'] ?? null,
-                    'area' => $room['area'] ?? null,
-                    'monthly_rent' => $room['monthly_rent'] ?? null,
-                    'max_tenants' => $room['max_tenants'] ?? null,
-                    'status' => 'AVAILABLE',
+        try {
+            $boardingHouse = DB::transaction(function () use ($request, $data): BoardingHouse {
+                // Both ownership keys are assigned by relations, never by the client.
+                $house = $this->landlordBoardingHouses($request)->create($data['boarding_house']);
+                $floorIds = [];
+                foreach ($data['floors'] ?? [] as $floor) {
+                    $floorIds[$floor['client_key']] = $house->floors()->create([
+                        'name' => $floor['name'], 'sort_order' => $floor['sort_order'],
+                    ])->id;
+                }
+                foreach ($data['rooms'] as $room) {
+                    app(RoomOrderingService::class)->create($house, [
+                        'floor_id' => isset($room['floor_client_key']) ? $floorIds[$room['floor_client_key']] : null,
+                        'room_code' => $room['room_code'],
+                        'room_type' => $room['room_type'] ?? 'PRIVATE_ROOM',
+                        'private_room_type' => $room['private_room_type'] ?? null,
+                        'area' => $room['area'] ?? null,
+                        'monthly_rent' => $room['monthly_rent'] ?? null,
+                        'max_tenants' => $room['max_tenants'] ?? null,
+                        'status' => 'AVAILABLE',
+                    ]);
+                }
+
+                return $house;
+            });
+        } catch (QueryException $exception) {
+            if ($this->isRoomCodeUniqueConstraint($exception)) {
+                throw ValidationException::withMessages([
+                    'rooms' => 'Có mã phòng bị trùng. Vui lòng kiểm tra lại danh sách phòng.',
                 ]);
             }
 
-            return $house;
-        });
+            throw $exception;
+        }
 
         $count = count($data['rooms']);
 
@@ -114,5 +126,13 @@ class BoardingHouseController extends Controller
     private function findOwnedBoardingHouse(Request $request, int $id): BoardingHouse
     {
         return $this->landlordBoardingHouses($request)->findOrFail($id);
+    }
+
+    private function isRoomCodeUniqueConstraint(QueryException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+
+        return str_contains($message, 'rooms_boarding_house_id_room_code_unique')
+            || str_contains($message, 'rooms.boarding_house_id, rooms.room_code');
     }
 }

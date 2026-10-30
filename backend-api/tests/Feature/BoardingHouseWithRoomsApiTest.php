@@ -116,6 +116,29 @@ class BoardingHouseWithRoomsApiTest extends TestCase
         }
     }
 
+    public function test_database_room_code_conflict_returns_validation_error_and_rolls_back_everything(): void
+    {
+        $this->actingAsOwner($this->owner());
+        Event::listen('eloquent.creating: '.Room::class, function (Room $room): void {
+            if ($room->room_code === '102') {
+                $room->room_code = '101';
+            }
+        });
+
+        try {
+            $this->postJson('/api/boarding-houses/with-rooms', $this->payload())
+                ->assertUnprocessable()
+                ->assertJsonPath('success', false)
+                ->assertJsonPath('message', 'Có mã phòng bị trùng. Vui lòng kiểm tra lại danh sách phòng.')
+                ->assertJsonPath('errors.rooms.0', 'Có mã phòng bị trùng. Vui lòng kiểm tra lại danh sách phòng.');
+            $this->assertDatabaseCount('boarding_houses', 0);
+            $this->assertDatabaseCount('floors', 0);
+            $this->assertDatabaseCount('rooms', 0);
+        } finally {
+            Event::forget('eloquent.creating: '.Room::class);
+        }
+    }
+
     public function test_temporary_floors_map_to_new_house_and_room_list_preserves_floor_groups(): void
     {
         $landlord = $this->owner();
