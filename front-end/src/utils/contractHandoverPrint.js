@@ -49,9 +49,10 @@ function dormTable(document, table) {
 // Presentation-only repair for legacy frozen HTML. Never write the result back
 // to ContractDocument or change its verified hash/signature evidence.
 export function normalizeHandoverPrint(html) {
-  if (!html?.includes('BIÊN BẢN BÀN GIAO HIỆN TRẠNG') || typeof DOMParser === 'undefined') return html
+  if (typeof DOMParser === 'undefined') return html
   const document = new DOMParser().parseFromString(html, 'text/html')
   removeTrailingPageBreaks(document)
+  if (!html?.includes('BIÊN BẢN BÀN GIAO HIỆN TRẠNG')) return document.body.innerHTML
   const title = [...document.querySelectorAll('p,h1,h2,h3,h4')].find(node => /BIÊN BẢN BÀN GIAO HIỆN TRẠNG (PHÒNG|TRANG THIẾT BỊ)/.test(node.textContent))
   if (!title) return html
   const dorm = title.textContent.includes('TRANG THIẾT BỊ')
@@ -81,6 +82,12 @@ export function normalizeHandoverPrint(html) {
   title.replaceChildren(strong)
   for (const node of [section, title]) {
     if (node.previousElementSibling?.classList.contains('page-break')) node.previousElementSibling.remove()
+  }
+  for (const pageBreak of [...document.querySelectorAll('.page-break')]) {
+    const next = pageBreak.nextElementSibling
+    if (next?.classList.contains('contract-handover-section') || /BIÊN BẢN BÀN GIAO HIỆN TRẠNG/u.test(next?.textContent ?? '')) {
+      pageBreak.remove()
+    }
   }
   return document.body.innerHTML
 }
