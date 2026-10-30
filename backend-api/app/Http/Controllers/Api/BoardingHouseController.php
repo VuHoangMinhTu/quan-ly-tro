@@ -32,8 +32,7 @@ class BoardingHouseController extends Controller
     // Tương đương post bên rest api
     public function store(StoreBoardingHouseRequest $request): JsonResponse
     {
-        $boardingHouse = $this->landlordBoardingHouses($request)
-            ->create($request->validated());
+        DB::transaction(fn () => $this->createUncontaminatedHouse($request, $request->validated()));
 
         return ApiResponse::success(null, 'Tạo nhà trọ thành công.', 201);
     }
@@ -41,11 +40,26 @@ class BoardingHouseController extends Controller
     public function storeWithRooms(StoreBoardingHouseWithRoomsRequest $request): JsonResponse
     {
         $data = $request->validated();
+        $key = $data['idempotency_key'];
+        unset($data['idempotency_key']);
+        $hash = hash('sha256', json_encode($this->canonicalPayload($data), JSON_THROW_ON_ERROR));
 
         try {
-            $boardingHouse = DB::transaction(function () use ($request, $data): BoardingHouse {
+            $result = DB::transaction(function () use ($request, $data, $key, $hash): array {
+                DB::table('house_creation_requests')->insertOrIgnore([
+                    'user_id' => $request->user()->id, 'request_key' => $key,
+                    'payload_hash' => $hash, 'created_at' => now(), 'updated_at' => now(),
+                ]);
+                $receipt = DB::table('house_creation_requests')->where('user_id', $request->user()->id)
+                    ->where('request_key', $key)->lockForUpdate()->first();
+                if (! $receipt || ! hash_equals($receipt->payload_hash, $hash)) {
+                    throw ValidationException::withMessages(['idempotency_key' => 'Mã yêu cầu đã dùng cho dữ liệu khác. Vui lòng bắt đầu thao tác mới.']);
+                }
+                if ($receipt->house_id !== null) {
+                    return ['id' => $receipt->house_id, 'rooms_count' => $receipt->rooms_count];
+                }
                 // Both ownership keys are assigned by relations, never by the client.
-                $house = $this->landlordBoardingHouses($request)->create($data['boarding_house']);
+                $house = $this->createUncontaminatedHouse($request, $data['boarding_house']);
                 $floorIds = [];
                 foreach ($data['floors'] ?? [] as $floor) {
                     $floorIds[$floor['client_key']] = $house->floors()->create([
@@ -65,7 +79,12 @@ class BoardingHouseController extends Controller
                     ]);
                 }
 
-                return $house;
+                $result = ['id' => $house->id, 'rooms_count' => count($data['rooms'])];
+                DB::table('house_creation_requests')->where('id', $receipt->id)->update([
+                    'house_id' => $house->id, 'rooms_count' => $result['rooms_count'], 'updated_at' => now(),
+                ]);
+
+                return $result;
             });
         } catch (QueryException $exception) {
             if ($this->isRoomCodeUniqueConstraint($exception)) {
@@ -81,7 +100,7 @@ class BoardingHouseController extends Controller
 
         // Only return the generated ID needed to open the new house detail.
         return ApiResponse::success(
-            ['id' => $boardingHouse->id, 'rooms_count' => $count],
+            $result,
             "Đã tạo nhà trọ và {$count} phòng thành công.",
             201,
         );
@@ -134,5 +153,33 @@ class BoardingHouseController extends Controller
 
         return str_contains($message, 'rooms_boarding_house_id_room_code_unique')
             || str_contains($message, 'rooms.boarding_house_id, rooms.room_code');
+    }
+
+    private function canonicalPayload(array $payload): array
+    {
+        if (! array_is_list($payload)) {
+            ksort($payload);
+        }
+
+        return array_map(fn ($value) => is_array($value) ? $this->canonicalPayload($value) : $value, $payload);
+    }
+
+    /**
+     * Call inside a transaction, before creating any child records.
+     * Raw queries intentionally include soft-deleted legacy rows.
+     */
+    private function createUncontaminatedHouse(Request $request, array $attributes): BoardingHouse
+    {
+        $house = $this->landlordBoardingHouses($request)->create($attributes);
+
+        foreach (['rooms', 'services', 'floors', 'boarding_house_managers', 'boarding_house_residence_profiles', 'residence_declarations'] as $table) {
+            if (DB::table($table)->where('boarding_house_id', $house->id)->exists()) {
+                throw ValidationException::withMessages([
+                    'name' => 'Không thể tạo nhà trọ vì mã nội bộ đang được dữ liệu cũ tham chiếu. Vui lòng liên hệ quản trị viên kiểm tra tính toàn vẹn dữ liệu trước khi thử lại.',
+                ]);
+            }
+        }
+
+        return $house;
     }
 }

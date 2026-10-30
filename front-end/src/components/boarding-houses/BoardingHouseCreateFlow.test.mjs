@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import React from 'react'
+import { webcrypto } from 'node:crypto'
 import { transformWithOxc } from 'vite'
 import { boardingHouseKeys } from '../../api/boardingHouseKeys.js'
 import { roomKeys } from '../../api/roomKeys.js'
@@ -17,9 +18,18 @@ async function wizardHarness() {
   const bindings = {
     useState: (initial) => {
       const index = stateIndex++
-      if (!(index in states)) states[index] = initial
+      if (!(index in states)) states[index] = initial === false ? true : initial
       return [states[index], (value) => { states[index] = value }]
     },
+    // Hydration/reload is covered by the real-browser test; this harness starts hydrated.
+    useEffect: () => {},
+    useRef: (initial) => {
+      const index = stateIndex++
+      if (!(index in states)) states[index] = { current: initial }
+      return states[index]
+    },
+    crypto: webcrypto,
+    sessionStorage: { setItem() {}, removeItem() {} },
     useNavigate: () => (...args) => { navigation = args },
     useQueryClient: () => ({ invalidateQueries: async ({ queryKey }) => { invalidated.push(queryKey) } }),
     useMutation: ({ mutationFn }) => ({ mutateAsync: mutationFn }),
@@ -60,7 +70,10 @@ test('phase transition and back only keep drafts; final submit sends one atomic 
     { room_code: '102', area: null, monthly_rent: null, max_tenants: null },
   ]
   await wizard.roomsForm().onSubmit(rooms, [{ ...floors[0], sort_order: 0 }])
-  assert.deepEqual(wizard.calls, [{ boarding_house: house, rooms, floors: [{ ...floors[0], sort_order: 0 }] }])
+  assert.match(wizard.calls[0].idempotency_key, /^[0-9a-f-]{36}$/)
+  const { idempotency_key, ...sent } = wizard.calls[0]
+  assert.ok(idempotency_key)
+  assert.deepEqual(sent, { boarding_house: house, rooms, floors: [{ ...floors[0], sort_order: 0 }] })
   assert.deepEqual(wizard.invalidated, [boardingHouseKeys.all, roomKeys.byBoardingHouse(77)])
   assert.deepEqual(wizard.navigation(), ['/boarding-houses/77', { replace: true, state: { message: 'Đã tạo nhà trọ và 2 phòng thành công.' } }])
 })

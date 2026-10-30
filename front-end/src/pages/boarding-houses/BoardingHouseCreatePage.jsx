@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { getSession } from '../../api/session.js'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { createBoardingHouseWithRooms } from '../../api/boardingHouseApi'
@@ -15,17 +16,59 @@ export default function BoardingHouseCreatePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const mutation = useMutation({ mutationFn: createBoardingHouseWithRooms })
+  const attempt = useRef(null)
+  const submitting = useRef(false)
+  const [restored, setRestored] = useState(false)
+  const ownerHash = useRef('')
+  useEffect(() => {
+    let active = true
+    const restore = async () => {
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(getSession().token || ''))
+      const owner = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+      if (!active) return
+      ownerHash.current = owner
+      try {
+        const pending = JSON.parse(sessionStorage.getItem('beehouse:pending-house-create'))
+        if (pending?.owner === owner && pending.payload) {
+          attempt.current = pending
+          setHouse(pending.payload.boarding_house)
+          setRooms(pending.payload.rooms)
+          setFloors(pending.payload.floors)
+          setPhase(2)
+        }
+      } catch { /* A malformed or unavailable draft does not block a new form. */ }
+      setRestored(true)
+    }
+    void restore()
+    return () => { active = false }
+  }, [])
 
   const handleSubmit = async (newRooms, newFloors = []) => {
-    const response = await mutation.mutateAsync({ boarding_house: house, floors: newFloors, rooms: newRooms })
-    const id = response.data.data.id
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: boardingHouseKeys.all }),
-      queryClient.invalidateQueries({ queryKey: roomKeys.byBoardingHouse(id) }),
-    ])
-    navigate('/boarding-houses/' + id, { replace: true, state: { message: response.data.message } })
+    if (submitting.current) return
+    submitting.current = true
+    try {
+      const payload = { boarding_house: house, floors: newFloors, rooms: newRooms }
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(payload)))
+      const fingerprint = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+      const storageKey = 'beehouse:pending-house-create'
+      if (!attempt.current || attempt.current.fingerprint !== fingerprint) {
+        attempt.current = { fingerprint, key: crypto.randomUUID(), owner: ownerHash.current, payload }
+      }
+      try { sessionStorage.setItem(storageKey, JSON.stringify(attempt.current)) } catch { /* In-memory retries remain available. */ }
+      const response = await mutation.mutateAsync({ ...payload, idempotency_key: attempt.current.key })
+      const id = response.data.data.id
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: boardingHouseKeys.all }),
+        queryClient.invalidateQueries({ queryKey: roomKeys.byBoardingHouse(id) }),
+      ])
+      navigate('/boarding-houses/' + id, { replace: true, state: { message: response.data.message } })
+      try { sessionStorage.removeItem(storageKey) } catch { /* Storage can be unavailable. */ }
+    } finally {
+      submitting.current = false
+    }
   }
 
+  if (!restored) return <p>Đang khôi phục thao tác...</p>
   return <section className="min-w-0 max-w-5xl">
     <Link to="/boarding-houses" className="inline-flex min-h-11 items-center text-sm text-slate-600 hover:text-slate-950 sm:min-h-0">← Quay lại danh sách</Link>
     <h2 className="mb-4 mt-3 text-xl sm:text-2xl font-bold">Thêm nhà trọ</h2>

@@ -40,6 +40,7 @@ class StoreBoardingHouseWithRoomsRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'idempotency_key' => ['required', 'uuid'],
             'boarding_house' => ['required', 'array:name,address,ward,description'],
             'boarding_house.name' => ['required', 'string', 'max:255'],
             'boarding_house.address' => ['required', 'string', 'max:500'],

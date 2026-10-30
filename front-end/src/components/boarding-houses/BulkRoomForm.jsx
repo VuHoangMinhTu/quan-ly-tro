@@ -85,7 +85,7 @@ export default function BulkRoomForm({ initialRooms, initialFloors, onBack, onSu
       await onSubmit(rooms, floors?.map((floor, sort_order) => ({ ...floor, sort_order })))
     } catch (error) {
       const applied = applyApiFieldErrors(error, form.setError, (field) => field === 'rooms' || field === 'floors' || field.startsWith('rooms.') || field.startsWith('floors.') ? field : null)
-      if (!applied) setSubmitError(getApiErrorMessage(error))
+      if (!applied) setSubmitError(error.creationOutcomeUnknown ? error.message : getApiErrorMessage(error))
       const houseErrors = error.response?.data?.errors
       if (houseErrors && Object.keys(houseErrors).some((field) => field.startsWith('boarding_house.'))) {
         setSubmitError('Thông tin nhà trọ chưa hợp lệ. Vui lòng quay lại bước 1 để kiểm tra.')

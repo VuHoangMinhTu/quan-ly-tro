@@ -8,7 +8,9 @@ use App\Models\Room;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -16,10 +18,112 @@ class BoardingHouseWithRoomsApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_reused_house_id_cannot_adopt_legacy_rooms_in_either_creation_endpoint(): void
+    {
+        $landlord = $this->owner();
+        $original = $this->house($landlord);
+        $candidateId = $original->id + 1;
+        // Reproduce an inconsistent restore without committing invalid data.
+        DB::statement('PRAGMA defer_foreign_keys = ON');
+        $roomId = DB::table('rooms')->insertGetId([
+            'boarding_house_id' => $candidateId, 'room_code' => 'LEGACY',
+            'status' => 'AVAILABLE', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAsOwner($landlord)->postJson('/api/boarding-houses/with-rooms', $this->payload())
+            ->assertUnprocessable()->assertJsonValidationErrors('name');
+        $this->assertDatabaseMissing('boarding_houses', ['id' => $candidateId]);
+        $this->assertDatabaseCount('rooms', 1);
+        $this->assertDatabaseHas('rooms', ['id' => $roomId, 'boarding_house_id' => $candidateId]);
+
+        $this->postJson('/api/boarding-houses', $this->payload()['boarding_house'])
+            ->assertUnprocessable()->assertJsonValidationErrors('name');
+        $this->assertDatabaseMissing('boarding_houses', ['id' => $candidateId]);
+        $this->assertDatabaseCount('rooms', 1);
+    }
+
     public function test_bulk_creation_requires_authentication(): void
     {
         $this->postJson('/api/boarding-houses/with-rooms', $this->payload())->assertUnauthorized();
         $this->assertDatabaseCount('boarding_houses', 0);
+    }
+
+    public function test_fifty_rooms_replay_and_user_scoping(): void
+    {
+        $payload = $this->payload();
+        $payload['floors'] = array_map(fn ($n) => ['client_key' => 'f'.$n, 'name' => 'Floor '.$n, 'sort_order' => $n], range(1, 5));
+        $payload['rooms'] = array_map(fn ($n) => ['room_code' => (string) $n, 'floor_client_key' => 'f'.(int) ceil($n / 10)], range(1, 50));
+        $this->actingAsOwner($this->owner());
+        $first = $this->postJson('/api/boarding-houses/with-rooms', $payload)->assertCreated()->json('data.id');
+        $this->postJson('/api/boarding-houses/with-rooms', $payload)->assertCreated()->assertJsonPath('data.id', $first);
+        $this->assertDatabaseCount('rooms', 50);
+        $this->assertDatabaseCount('floors', 5);
+        $this->actingAsOwner($this->owner())->postJson('/api/boarding-houses/with-rooms', $payload)->assertCreated();
+        $this->assertDatabaseCount('rooms', 100);
+    }
+
+    public function test_failure_before_commit_releases_key_for_retry(): void
+    {
+        $this->actingAsOwner($this->owner());
+        $payload = $this->payload();
+        $event = 'eloquent.creating: '.Room::class;
+        Event::listen($event, function () {
+            throw new RuntimeException('Injected failure');
+        });
+        try {
+            $this->postJson('/api/boarding-houses/with-rooms', $payload)->assertStatus(500);
+        } finally {
+            Event::forget($event);
+        }
+        $this->assertDatabaseCount('house_creation_requests', 0);
+        $this->assertDatabaseCount('boarding_houses', 0);
+        $this->postJson('/api/boarding-houses/with-rooms', $payload)->assertCreated();
+        $this->assertDatabaseCount('rooms', 2);
+    }
+
+    public function test_key_payload_conflict_is_rejected_but_new_key_can_create_same_named_house(): void
+    {
+        $this->actingAsOwner($this->owner());
+        $payload = $this->payload();
+        $this->postJson('/api/boarding-houses/with-rooms', $payload)->assertCreated();
+        $payload['rooms'][0]['room_code'] = 'CHANGED';
+        $this->postJson('/api/boarding-houses/with-rooms', $payload)->assertUnprocessable()
+            ->assertJsonValidationErrors('idempotency_key');
+        $this->assertDatabaseCount('boarding_houses', 1);
+        $payload['idempotency_key'] = (string) Str::uuid();
+        $this->postJson('/api/boarding-houses/with-rooms', $payload)->assertCreated();
+        $this->assertDatabaseCount('boarding_houses', 2);
+    }
+
+    public function test_replaying_a_successful_batch_returns_original_house(): void
+    {
+        $this->actingAsOwner($this->owner());
+        $payload = $this->payload();
+        $first = $this->postJson('/api/boarding-houses/with-rooms', $payload)->assertCreated();
+        $second = $this->postJson('/api/boarding-houses/with-rooms', $payload)->assertCreated();
+
+        $this->assertSame($first->json('data.id'), $second->json('data.id'));
+        $this->assertDatabaseCount('boarding_houses', 1);
+        $this->assertDatabaseCount('rooms', 2);
+    }
+
+    public function test_new_house_cannot_adopt_even_soft_deleted_legacy_services(): void
+    {
+        $landlord = $this->owner();
+        $original = $this->house($landlord);
+        $candidateId = $original->id + 1;
+        DB::statement('PRAGMA defer_foreign_keys = ON');
+        DB::table('services')->insert([
+            'boarding_house_id' => $candidateId, 'name' => 'Legacy electricity',
+            'type' => 'ELECTRICITY', 'billing_method' => 'PER_UNIT',
+            'deleted_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAsOwner($landlord)->postJson('/api/boarding-houses/with-rooms', $this->payload())
+            ->assertUnprocessable()->assertJsonValidationErrors('name');
+        $this->assertDatabaseMissing('boarding_houses', ['id' => $candidateId]);
+        $this->assertDatabaseCount('rooms', 0);
+        $this->assertDatabaseCount('services', 1);
     }
 
     public function test_house_and_rooms_can_be_created_with_unconfigured_optional_fields(): void
@@ -285,6 +389,7 @@ class BoardingHouseWithRoomsApiTest extends TestCase
     private function payload(): array
     {
         return [
+            'idempotency_key' => (string) Str::uuid(),
             'boarding_house' => ['name' => 'BeeHouse', 'address' => 'Dĩ An', 'description' => null],
             'rooms' => [['room_code' => '101'], ['room_code' => '102', 'area' => null, 'monthly_rent' => null, 'max_tenants' => null]],
         ];

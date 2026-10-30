@@ -7,6 +7,7 @@ use App\Models\Landlord;
 use App\Models\Room;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
@@ -79,7 +80,7 @@ class RoomOrderingApiTest extends TestCase
     public function test_house_onboarding_assigns_sequential_order_without_renaming_codes(): void
     {
         $this->house();
-        $response = $this->postJson('/api/boarding-houses/with-rooms', ['boarding_house' => ['name' => 'Nhà mới', 'address' => 'Địa chỉ'],
+        $response = $this->postJson('/api/boarding-houses/with-rooms', ['idempotency_key' => (string) Str::uuid(), 'boarding_house' => ['name' => 'Nhà mới', 'address' => 'Địa chỉ'],
             'rooms' => [['room_code' => 'Tự chọn'], ['room_code' => '10'], ['room_code' => '1']]])->assertCreated();
 
         foreach (['Tự chọn' => 1, '10' => 2, '1' => 3] as $code => $order) {
