@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
-import { Link, useLocation, useParams } from 'react-router-dom'
-import { getBoardingHouse } from '../../api/boardingHouseApi'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { getBoardingHouse, getBoardingHouses } from '../../api/boardingHouseApi'
 import { boardingHouseKeys } from '../../api/boardingHouseKeys'
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { roomKeys } from '../../api/roomKeys'
@@ -12,6 +12,8 @@ import RoomOrderButton from '../../components/rooms/RoomOrderButton'
 export default function RoomListPage() {
   const { boardingHouseId } = useParams()
   const location = useLocation()
+  const navigate = useNavigate()
+  const housesQuery = useQuery({ queryKey: boardingHouseKeys.all, queryFn: getBoardingHouses })
   const boardingHouseQuery = useQuery({ queryKey: boardingHouseKeys.detail(boardingHouseId), queryFn: () => getBoardingHouse(boardingHouseId) })
   const roomsQuery = useQuery({ queryKey: roomKeys.byBoardingHouse(boardingHouseId), queryFn: () => getRoomsByBoardingHouse(boardingHouseId) })
 
@@ -82,7 +84,12 @@ const floorGroups = groupRoomsByFloor(rooms)
       <div className="mb-6 mt-3 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="break-words text-xl font-bold sm:text-2xl">Phòng</h2>
-          <p className="mt-1 break-words text-sm text-slate-600">{boardingHouse.name}</p>
+          <label className="mt-2 block text-sm text-slate-600" htmlFor="room-list-house">Nhà trọ</label>
+          <select id="room-list-house" aria-label="Chọn nhà trọ" value={String(boardingHouseId)} disabled={housesQuery.isPending || housesQuery.isError} onChange={(event) => navigate(`/boarding-houses/${event.target.value}/rooms`)} className="mt-1 min-h-11 max-w-full rounded-lg border bg-white px-3 text-sm text-slate-900">
+            <option value={String(boardingHouseId)}>{boardingHouse.name}</option>
+            {(housesQuery.data?.data?.data ?? []).filter((house) => String(house.id) !== String(boardingHouseId)).map((house) => <option key={house.id} value={house.id}>{house.name}</option>)}
+          </select>
+          {housesQuery.isError && <p className="mt-1 text-sm text-amber-700">Chưa tải được danh sách nhà trọ để chuyển.</p>}
         </div>
         <div className="flex flex-wrap gap-3"><RoomOrderButton rooms={rooms} boardingHouseId={boardingHouseId} /><Link to={`/boarding-houses/${boardingHouseId}/rooms/new`} className="inline-flex min-h-11 sm:min-h-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
           <Plus size={17} /> Thêm phòng
