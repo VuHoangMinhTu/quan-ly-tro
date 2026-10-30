@@ -1,3 +1,4 @@
+import { contractPrintTitle } from '../../utils/printDocument.js'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
@@ -44,13 +45,13 @@ test('demo page loads only its fixture GET, sets PDF title and uses the shared r
   const Page = await load('../../pages/contracts/ContractDemoPage.jsx', 'ContractDemoPage', {
     useParams: () => ({ type }), useSearchParams: () => [new URLSearchParams(printRequested ? 'print=1' : '')], useEffect: callback => effects.push(callback),
     useQuery: options => { if (options.enabled) options.queryFn(); return { data: { data: { data: demo } } } },
-    getContractDemo: key => calls.push(key), getApiErrorMessage: () => '', Link, ContractDocumentSheet: Sheet, document, window: { print: () => printed++ },
+    contractPrintTitle, getContractDemo: key => calls.push(key), getApiErrorMessage: () => '', Link, ContractDocumentSheet: Sheet, document, window: { print: () => printed++ },
   })
   const page = Page()
   assert.deepEqual(calls, ['room'])
   assert.equal(nodes(page).find(node => node.type === Sheet).props.demo, true)
   const cleanup = effects[0]()
-  assert.equal(document.title, 'BeeHouse_HopDong_PhongTro_DEMO')
+  assert.equal(document.title, 'HopDong_Phong_DEMO')
   await nodes(page).find(node => node.type === 'button').props.onClick()
   assert.equal(printed, 1)
   cleanup()

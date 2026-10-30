@@ -31,7 +31,7 @@ const context = {
   representatives: [{ user_id: 9, full_name: 'Ngô Đức Bình', title: 'Quản lý' }],
   templates: [{ id: 1, name: 'Mẫu minh họa', version: 1, is_active: true }],
 }
-async function wizard(initial) {
+async function wizard(initial, contextOverrides = {}) {
   let cursor = 0
   const state = []
   const payloads = []
@@ -44,7 +44,7 @@ async function wizard(initial) {
   }
   const { code } = await transformWithOxc(source, 'ContractWizard.jsx', { jsx: { runtime: 'classic' } })
   const Component = new Function('React', ...Object.keys(bindings), `${code}\nreturn ContractWizard`)(React, ...Object.values(bindings))
-  const render = () => { cursor = 0; return Component({ context, initial, onSubmit: async payload => payloads.push(payload) }) }
+  const render = () => { cursor = 0; return Component({ context: { ...context, ...contextOverrides }, initial, onSubmit: async payload => payloads.push(payload) }) }
   const button = label => nodes(render()).find(node => node.type === 'button' && text(node) === label)
   const core = async values => { const form = nodes(render()).find(node => node.type === CoreForm); await form.props.onSubmit(values) }
   return { render, button, core, payloads }
@@ -234,4 +234,23 @@ test('create saves a draft and opens its handover section before finalization', 
   await wizardNode.props.onSubmit(coreValues)
   assert.deepEqual(destinations, ['/contracts/42#contract-handover'])
   assert.ok(invalidated.some(key => key[0] === 'contracts'))
+})
+
+
+test('DEMO wizard chooses the correct template when type changes and offers draft only', async () => {
+  const page = await wizard(undefined, { demo_contracts_only: true, templates: [
+    { id: 1, template_key: 'ROOM_RENTAL_STANDARD', name: 'Official', version: 1, is_active: true },
+    { id: 44, template_key: 'ROOM_RENTAL_DEMO', name: 'Phòng DEMO', version: 1, is_active: true },
+    { id: 45, template_key: 'DORM_BED_DEMO', name: 'KTX DEMO', version: 1, is_active: true },
+  ] })
+  assert.equal(nodes(page.render()).find(node => node.props.id === 'contract-template').props.value, '44')
+  assert.doesNotMatch(text(page.render()), /Official/)
+  nodes(page.render()).find(node => node.props.id === 'contract-type').props.onChange({ target: { value: 'DORM_BED' } })
+  assert.equal(nodes(page.render()).find(node => node.props.id === 'contract-template').props.value, '45')
+  await page.core(coreValues)
+  page.button('Tiếp tục').props.onClick(); page.button('Tiếp tục').props.onClick()
+  assert.equal(page.button('Kích hoạt hợp đồng'), undefined)
+  await page.button('Lưu nháp').props.onClick()
+  assert.equal(page.payloads[0].status, 'DRAFT')
+  assert.equal(page.payloads[0].contract_template_id, 45)
 })

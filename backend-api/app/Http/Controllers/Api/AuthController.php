@@ -35,6 +35,8 @@ class AuthController extends Controller
                 'password' => Hash::make($data['password']),
             ]);
 
+            $user->forceFill(['contract_access' => 'DEMO'])->save();
+
             $landlord = Landlord::create([
                 'user_id' => $user->id,
                 'full_name' => $data['name'],

@@ -43,6 +43,8 @@ class Contract extends Model
         'deposit_amount' => 'decimal:2',
         'occupant_tenant_ids' => 'array',
         'signing_snapshot' => 'array',
+        'demo_document_snapshot' => 'array',
+        'is_demo' => 'boolean',
         'finalized_at' => 'datetime',
         'service_terms_version' => 'integer',
     ];

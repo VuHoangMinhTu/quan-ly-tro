@@ -25,7 +25,7 @@ class ContractService
 
     public function find(User $user, int $id): Contract
     {
-        return Contract::query()->whereHas('room', fn ($query) => $query->whereIn('boarding_house_id', $this->access->houses($user)->select('boarding_houses.id')))->findOrFail($id);
+        return Contract::query()->when($user->hasDemoContractAccess(), fn ($query) => $query->where('is_demo', true))->whereHas('room', fn ($query) => $query->whereIn('boarding_house_id', $this->access->houses($user)->select('boarding_houses.id')))->findOrFail($id);
     }
 
     public function context(User $user, int $roomId): array
@@ -40,7 +40,8 @@ class ContractService
             'tenants' => [],
             'representatives' => $this->representatives($room->boardingHouse),
             'services' => $services,
-            'templates' => $this->templates->available($room->boardingHouse->landlord_id)->get(['id', 'name', 'version', 'template_key', 'landlord_id', 'is_active']),
+            'demo_contracts_only' => $this->templates->demoOnly($room->boardingHouse->landlord_id, $user),
+            'templates' => $this->templates->available($room->boardingHouse->landlord_id, $user)->get(['id', 'name', 'version', 'template_key', 'landlord_id', 'is_active']),
             'occupants' => $room->roomTenants()->where('status', 'ACTIVE')->with('tenant:id,full_name')->get(),
             'utility_openings' => $meters->map(fn ($meter) => [
                 'utility_meter_id' => $meter->id, 'service_id' => $meter->service_id, 'service_name' => $meter->service->name,
@@ -84,6 +85,7 @@ class ContractService
             // another finalize request commits while this one waits for the room.
             $contract = $id === null ? new Contract(['room_id' => $roomId, 'status' => 'DRAFT', 'deposit_amount' => 0]) : Contract::query()->where('room_id', $roomId)->lockForUpdate()->findOrFail($id);
             abort_unless((int) $contract->room_id === $roomId, 404);
+            abort_if($contract->exists && $user->hasDemoContractAccess() && ! $contract->is_demo, 404);
             if ($contract->exists && $contract->status !== 'DRAFT') {
                 foreach (self::CORE as $key) {
                     if (array_key_exists($key, $data) && ! $this->sameValue($key, $contract, $data[$key])) {
@@ -110,12 +112,12 @@ class ContractService
             $isNew = ! $contract->exists;
             if (array_key_exists('contract_template_id', $data) && $data['contract_template_id'] !== null
                 && (int) $data['contract_template_id'] !== (int) $contract->contract_template_id) {
-                $this->templates->select($house->landlord_id, (int) $data['contract_template_id']);
+                $this->templates->select($house->landlord_id, (int) $data['contract_template_id'], false, $user);
             }
             if (($data['contract_template_id'] ?? $contract->contract_template_id) === null) {
-                $type = $data['contract_type'] ?? 'ROOM_RENTAL';
-                $key = $type === 'DORM_BED' ? 'DORM_BED_STANDARD' : 'ROOM_RENTAL_STANDARD';
-                $data['contract_template_id'] = $this->templates->available($house->landlord_id)->where('template_key', $key)->firstOrFail()->id;
+                $type = $data['contract_type'] ?? $contract->contract_type ?? 'ROOM_RENTAL';
+                $key = $this->templates->defaultKey($house->landlord_id, $type, $user);
+                $data['contract_template_id'] = $this->templates->available($house->landlord_id, $user)->where('template_key', $key)->firstOrFail()->id;
             } elseif (array_key_exists('contract_template_id', $data) && $data['contract_template_id'] === null) {
                 unset($data['contract_template_id']);
             }
@@ -130,8 +132,9 @@ class ContractService
             } elseif ($contract->bed_id !== null) {
                 throw ValidationException::withMessages(['bed_id' => 'Hợp đồng thuê phòng không chọn giường riêng.']);
             }
-            $template = $this->templates->select($house->landlord_id, (int) $contract->contract_template_id);
-            $expectedKey = $contract->contract_type === 'DORM_BED' ? 'DORM_BED_STANDARD' : 'ROOM_RENTAL_STANDARD';
+            $template = $this->templates->select($house->landlord_id, (int) $contract->contract_template_id, false, $user);
+            $contract->is_demo = in_array($template->template_key, ContractTemplateDemo::KEYS, true);
+            $expectedKey = ($contract->contract_type === 'DORM_BED' ? 'DORM_BED_' : 'ROOM_RENTAL_').($contract->is_demo ? 'DEMO' : 'STANDARD');
             if ($template->landlord_id === null && $template->template_key !== $expectedKey) {
                 throw ValidationException::withMessages(['contract_template_id' => 'Mẫu hợp đồng không khớp loại thuê đã chọn.']);
             }
@@ -153,6 +156,9 @@ class ContractService
             if (! in_array($target, ['DRAFT', 'ACTIVE'], true)) {
                 throw ValidationException::withMessages(['status' => 'Hợp đồng nháp chỉ có thể lưu nháp hoặc kích hoạt.']);
             }
+            if ($contract->is_demo && $target !== 'DRAFT') {
+                throw ValidationException::withMessages(['status' => 'Hợp đồng DEMO chỉ được lưu nháp và in/PDF, không thể kích hoạt.']);
+            }
             $contract->status = 'DRAFT';
             $contract->save();
             if ($isNew || array_key_exists('service_ids', $data) || array_key_exists('services', $data)) {
@@ -162,12 +168,31 @@ class ContractService
             if ($isNew || array_key_exists('utility_openings', $data)) {
                 $this->saveOpenings($contract, $room, $data['utility_openings'] ?? $this->context($user, $roomId)['utility_openings']->all());
             }
+            if ($contract->is_demo) {
+                $this->refreshDemoSnapshot($user, $contract);
+            } elseif ($contract->demo_document_snapshot !== null) {
+                $contract->demo_document_snapshot = null;
+                $contract->save();
+            }
             if ($target === 'ACTIVE') {
                 $this->activate($contract, $room, $house, $representative);
             }
 
             return $contract;
         }, 3);
+    }
+
+    /** Refresh inside the caller's existing contract-locked transaction. */
+    public function refreshDemoSnapshot(User $user, Contract $contract): void
+    {
+        if (! $contract->is_demo) {
+            return;
+        }
+        $template = $this->templates->select($contract->room->boardingHouse->landlord_id, $contract->contract_template_id, false, $user);
+        $snapshot = $this->previewSnapshot($user, $contract->id);
+        $html = app(ContractTemplateRenderer::class)->render($template->content_html, $snapshot);
+        $contract->demo_document_snapshot = ['is_demo' => true, 'template_id' => $template->id, 'template_name' => $template->name, 'template_version' => $template->version, 'source_snapshot' => $snapshot, 'rendered_html' => $html, 'document_hash' => hash('sha256', $html)];
+        $contract->save();
     }
 
     private function sameValue(string $key, Contract $contract, mixed $value): bool
@@ -336,7 +361,8 @@ class ContractService
             'occupants' => Tenant::query()->where('landlord_id', $house->landlord_id)->whereIn('id', $ids)->get()->map(fn (Tenant $person) => ['tenant_id' => $person->id, 'is_primary' => (int) $person->id === (int) $contract->tenant_id, ...$this->person($person)])->all(),
             'utility_openings' => $contract->utilityOpenings()->get()->toArray(),
             'electricity_opening' => $contract->utilityOpenings()->whereIn('service_id', Service::query()->where('type', 'ELECTRICITY')->select('id'))->value('opening_reading'),
-            'handover_checkin' => $handover?->status === 'CONFIRMED' ? $handover->items : [],
+            'handover_checkin' => ($handover?->status === 'CONFIRMED' || $contract->is_demo) ? ($handover?->items ?? []) : [],
+            ...($contract->is_demo ? ['handover_status' => $handover?->status ?? 'NOT_CREATED'] : []),
             ...($handover === null ? [] : ['handover_item_names' => array_column($handover->items ?? [], 'name')]),
         ];
     }

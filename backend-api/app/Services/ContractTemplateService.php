@@ -16,24 +16,25 @@ class ContractTemplateService
 
     public function visible(User $user): Builder
     {
-        return ContractTemplate::query()->where(fn ($query) => $query->whereNull('landlord_id')
+        return ContractTemplate::query()->when($user->hasDemoContractAccess(), fn ($query) => $query->whereNull('landlord_id')->whereIn('template_key', ContractTemplateDemo::KEYS))->where(fn ($query) => $query->whereNull('landlord_id')
             ->orWhereIn('landlord_id', Landlord::query()->where('user_id', $user->id)->select('id')));
     }
 
-    public function available(int $landlordId): Builder
+    public function available(int $landlordId, ?User $user = null): Builder
     {
         return ContractTemplate::query()->where('is_active', true)
+            ->when($this->demoOnly($landlordId, $user), fn ($query) => $query->whereNull('landlord_id')->whereIn('template_key', ContractTemplateDemo::KEYS), fn ($query) => $query->whereNotIn('template_key', ContractTemplateDemo::KEYS))
             ->where(fn ($query) => $query->whereNull('landlord_id')->orWhere('landlord_id', $landlordId))
             ->orderByRaw('CASE WHEN landlord_id IS NULL THEN 1 ELSE 0 END')
             ->orderByRaw("CASE WHEN template_key = 'ROOM_RENTAL_STANDARD' THEN 0 ELSE 1 END")
             ->orderByDesc('version')->orderBy('id');
     }
 
-    public function select(int $landlordId, ?int $id, bool $lock = false): ContractTemplate
+    public function select(int $landlordId, ?int $id, bool $lock = false, ?User $user = null): ContractTemplate
     {
-        $query = ContractTemplate::query()->where(fn ($query) => $query->whereNull('landlord_id')->orWhere('landlord_id', $landlordId));
+        $query = ContractTemplate::query()->when($this->demoOnly($landlordId, $user), fn ($query) => $query->whereNull('landlord_id')->whereIn('template_key', ContractTemplateDemo::KEYS))->where(fn ($query) => $query->whereNull('landlord_id')->orWhere('landlord_id', $landlordId));
         $template = $id === null
-            ? $this->available($landlordId)->when($lock, fn ($query) => $query->lockForUpdate())->first()
+            ? $this->available($landlordId, $user)->when($lock, fn ($query) => $query->lockForUpdate())->first()
             : $query->when($lock, fn ($query) => $query->lockForUpdate())->findOrFail($id);
         if ($template === null || ! $template->is_active) {
             throw ValidationException::withMessages(['contract_template_id' => 'Vui lòng chọn một mẫu hợp đồng đang được sử dụng. Mẫu đã chọn không được tự thay thế.']);
@@ -42,8 +43,19 @@ class ContractTemplateService
         return $template;
     }
 
+    public function demoOnly(int $landlordId, ?User $user = null): bool
+    {
+        return $user?->hasDemoContractAccess() || Landlord::query()->whereKey($landlordId)->whereHas('user', fn ($query) => $query->where('contract_access', 'DEMO'))->exists();
+    }
+
+    public function defaultKey(int $landlordId, string $type, ?User $user = null): string
+    {
+        return ($type === 'DORM_BED' ? 'DORM_BED_' : 'ROOM_RENTAL_').($this->demoOnly($landlordId, $user) ? 'DEMO' : 'STANDARD');
+    }
+
     private function owner(User $user): Landlord
     {
+        abort_if($user->hasDemoContractAccess(), 403, 'Tài khoản DEMO chỉ sử dụng mẫu trải nghiệm có sẵn.');
         $owner = Landlord::query()->where('user_id', $user->id)->lockForUpdate()->first();
         abort_unless($owner, 403, 'Chỉ chủ trọ được quản lý mẫu hợp đồng.');
 

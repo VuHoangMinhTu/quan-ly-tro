@@ -34,38 +34,25 @@ class ContractTemplateDemoApiTest extends TestCase
         $this->assertSame($room, $this->getJson('/api/contract-templates/demos/room')->assertOk()->json('data'));
         $this->assertSame($dorm, $this->getJson('/api/contract-templates/demos/dorm')->assertOk()->json('data'));
 
-        foreach ([[$room, 12, 13], [$dorm, 9, 6]] as [$demo, $articles, $items]) {
+        foreach ([$room, $dorm] as $demo) {
             $html = $demo['rendered_html'];
             $dom = new DOMDocument;
             $dom->loadHTML('<meta charset="UTF-8">'.$html, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
-            $this->assertCount($articles, $dom->getElementsByTagName('h2'));
-            $this->assertCount($items + 1, $dom->getElementsByTagName('tr'));
+            $this->assertCount(2, $dom->getElementsByTagName('h2'));
+            $this->assertStringContainsString('contract-handover-table', $html);
+            $this->assertSame(2, substr_count($html, 'class="signature-handwritten-space"'));
+            $this->assertStringContainsString('ĐIỀU 2:', $html);
+            $this->assertStringNotContainsString('ĐIỀU 3:', $html);
+            $this->assertStringContainsString('KHÔNG PHẢI HỢP ĐỒNG ĐẦY ĐỦ', $html);
             $this->assertStringNotContainsString('{{', $html);
-            $this->assertStringNotContainsString('Chưa cập nhật', $html);
-            $this->assertStringNotContainsString('Chưa ký', $html);
-            $this->assertStringNotContainsString($first->name, $html);
-            $this->assertStringContainsString('signature-handwritten-space', $html);
-            $this->assertStringContainsString('052098006132', $html);
-            $this->assertStringContainsString('Minh Tú', $html);
-            $this->assertStringContainsString('MB Bank', $html);
-            $this->assertStringContainsString('0385528994', $html);
-            $this->assertStringNotContainsString('(không thanh toán)', $html);
-            $this->assertStringNotContainsString('không giao dịch', $html);
-            $this->assertStringNotContainsString('DEMO-', $html);
-            $this->assertStringContainsString('3.800', $html);
-            $this->assertStringContainsString('100.000', $html);
-            $this->assertStringContainsString('150.000', $html);
+            $this->assertStringContainsString('Người thuê minh họa', $html);
+            foreach (['052098006132', '0385528994', '0983407941', 'VU HOANG MINH TU', 'Minh Tú', 'Bùi Quang Duy'] as $privateValue) {
+                $this->assertStringNotContainsString($privateValue, json_encode($demo, JSON_UNESCAPED_UNICODE));
+            }
         }
-        $this->assertStringContainsString('Bùi Quang Duy', $room['rendered_html']);
-        $this->assertStringContainsString('12 tháng', $room['rendered_html']);
         $this->assertStringContainsString('3.000.000 VNĐ', $room['rendered_html']);
-        $this->assertStringContainsString('Bùi Quang Duy', $dorm['rendered_html']);
-        $this->assertStringContainsString('6 tháng', $dorm['rendered_html']);
-        $this->assertStringContainsString('1.500.000 VNĐ/tháng', $dorm['rendered_html']);
-        $this->assertStringContainsString('[x] Gói tính theo định mức/tiêu thụ:', $dorm['rendered_html']);
+        $this->assertStringContainsString('1.500.000 VNĐ', $dorm['rendered_html']);
         $this->assertStringContainsString('Giường: G01', $dorm['rendered_html']);
-        $this->assertSame('BeeHouse_HopDong_PhongTro_DEMO.pdf', $room['filename']);
-        $this->assertSame('BeeHouse_HopDong_KTX_DEMO.pdf', $dorm['filename']);
         foreach (['contracts', 'contract_documents', 'room_tenants', 'invoices', 'payments', 'rooms', 'beds', 'tenants', 'landlords'] as $table) {
             $this->assertDatabaseCount($table, 0);
         }

@@ -1,3 +1,4 @@
+import { contractPrintTitle } from '../../utils/printDocument.js'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
@@ -63,6 +64,9 @@ test('document section supports draft finalization, invalidates dependent data a
   assert.deepEqual(calls, [1])
   assert.deepEqual(destinations, ['/contracts/1/document'])
   assert.ok(invalidated.some(key => key[0] === 'room-tenants'))
+  const demo = Section({ contract: { ...contract, is_demo: true }, handoverConfirmed: true })
+  assert.equal(nodes(demo).filter(node => node.type === 'button').length, 0)
+  assert.match(text(demo), /không phải hợp đồng đầy đủ/)
   const legacy = Section({ contract: { id: 2, status: 'ACTIVE' } })
   assert.match(text(legacy), /Chưa có tài liệu hợp đồng được chốt/)
   assert.equal(nodes(legacy).filter(node => node.type === 'button').length, 0)
@@ -77,7 +81,7 @@ test('document page reads the finalized HTML endpoint; only drafts use preview a
   let preview = false; let printed = 0; const calls = []
   const data = { rendered_html: '<p>Văn bản đã chốt</p>', template_name: 'Mẫu riêng', template_version: 1, finalized_at: '2026-11-01T03:00:00Z', is_preview: false }
   const Page = await load('../../pages/contracts/ContractDocumentPage.jsx', 'ContractDocumentPage', {
-    ...helpers, Link, contractDocumentKeys, getApiErrorMessage, ContractDocumentSheet,
+    ...helpers, Link, contractDocumentKeys, getApiErrorMessage, ContractDocumentSheet, contractPrintTitle, useEffect: () => {},
     useParams: () => ({ id: '7' }), useSearchParams: () => [new URLSearchParams(preview ? 'preview=1' : '')],
     useQuery: options => { options.queryFn(); return { data: { data: { data: { ...data, is_preview: preview } } } } },
     getContractDocument: id => calls.push(['final', id]), previewContractDocument: id => calls.push(['preview', id]),
@@ -94,6 +98,8 @@ test('document page reads the finalized HTML endpoint; only drafts use preview a
   preview = true
   assert.equal(nodes(Page()).filter(node => node.type === 'button').length, 0)
   assert.deepEqual(calls.at(-1), ['preview', '7'])
+  data.is_demo = true
+  assert.equal(nodes(Page()).filter(node => node.type === 'button').length, 1)
 })
 
 test('template editor prevents unknown variables before API calls and locks content of used versions', async () => {

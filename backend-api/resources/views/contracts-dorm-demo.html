@@ -1,0 +1,46 @@
+<div class="word-contract">
+<p class="text-center"><strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong></p>
+<p class="text-center"><strong>Độc lập – Tự do – Hạnh phúc</strong></p>
+<p class="text-center"><strong>———•0•———</strong></p>
+<h1 class="text-center">HỢP ĐỒNG CHO THUÊ GIƯỜNG KÝ TÚC XÁ — DEMO</h1>
+<p class="text-center"><strong>BẢN TRẢI NGHIỆM — KHÔNG PHẢI HỢP ĐỒNG ĐẦY ĐỦ</strong></p>
+<p class="text-center">{{boarding_house.ward}}, ngày {{contract.document_day}} tháng {{contract.document_month}} năm {{contract.document_year}} </p>
+<p>Đại diện các bên xét thấy có đủ năng lực hành vì dân sự và tự chịu trách nhiệm trước pháp luật về mọi hành vi của mình, gồm:</p>
+<p><strong>BÊN CHO THUÊ - BÊN A:</strong></p>
+<p>Đại diện : {{lessor.full_name}}        Chức vụ: {{lessor.title}}</p>
+<p>Điện thoại hỗ trợ: {{lessor.phone}}</p>
+<p>Ngân hàng: {{lessor.bank_name}} | Số tài khoản: {{lessor.bank_account_number}} | Chủ TK: {{lessor.bank_account_name}}</p>
+<p><strong>BÊN THUÊ - BÊN B:</strong></p>
+<p>Họ và tên: {{tenant.full_name}}</p>
+<p>Ngày sinh: {{tenant.date_of_birth}} Giới tính: {{tenant.gender_checkboxes}}</p>
+<p>Địa chỉ thường trú: {{tenant.permanent_address}}</p>
+<p>Số CCCD: {{tenant.identity_number}} Ngày cấp: {{tenant.identity_issue_date}}</p>
+<p>Nơi cấp: {{tenant.identity_issue_place}}</p>
+<p>Nghề nghiệp / Đơn vị học tập: {{tenant.occupation}}</p>
+<p>Số điện thoại cá nhân: {{tenant.phone}}</p>
+<p>Số điện thoại người thân (khẩn cấp): {{tenant.emergency_phone}}</p>
+<p>Họ và tên người thân: {{tenant.emergency_name}}</p>
+<p>Loại xe: {{tenant.vehicle_type}} Biển số: {{tenant.vehicle_plate}}</p>
+<p>Màu xe: {{tenant.vehicle_color}} Số lượng: {{tenant.vehicle_quantity}}</p>
+<p>KTX / Cơ sở: {{boarding_house.address}}</p>
+<p>Tầng: {{bed.floor_label}} Phòng: {{room.room_code}} Giường: {{bed.bed_code}}</p>
+<p>Ngày nhận phòng: {{contract.start_date}}</p>
+<p>Ngày kết thúc: {{contract.end_date}}</p>
+<p>Ghi chú: {{contract.note}}</p>
+<p>Hai bên thống nhất giao kết Hợp đồng thuê chỗ ở / giường Ký túc xá với các nội dung chi tiết sau:</p>
+<p>Mã hợp đồng: {{contract.contract_code}}</p>
+<p>Tiền cọc thỏa thuận: {{contract.deposit_value}} VNĐ</p>
+<p>Giá thuê hàng tháng: {{contract.monthly_rent_value}} VNĐ</p>
+<h2 class="text-center">ĐIỀU 1: ĐỐI TƯỢNG HỢP ĐỒNG &amp; KHÔNG GIAN CHO THUÊ</h2>
+<p><strong>1. Không gian riêng: </strong>Bên A đồng ý cho Bên B thuê chỗ ở tại vị trí giường, số phòng và tầng cụ thể đã được ghi nhận chi tiết tại phần thông tin ban đầu của hợp đồng, thuộc căn nhà tại địa chỉ: {{boarding_house.address}}.</p>
+<p><strong>2. Khu vực sử dụng chung:</strong> Bên B được quyền sử dụng các không gian và tiện ích chung của tòa nhà bao gồm: Nhà vệ sinh chung, khu vực nấu ăn/bếp chung, tủ lạnh chung, máy giặt chung, sân phơi, khu sinh hoạt chung và khu để xe theo nội quy.</p>
+<h2 class="text-center">ĐIỀU 2: THỜI HẠN HỢP ĐỒNG</h2>
+<p><strong>Thời hạn:</strong> Thời hạn thuê là {{contract.duration_months}} tháng, </p>
+<p>tính từ ngày {{contract.start_date}} đến ngày {{contract.end_date}}</p>
+<p><strong>2. Gia hạn hợp đồng:</strong> Trước ngày kết thúc hợp đồng tối thiểu 30 ngày, hai bên có nghĩa vụ thông báo bằng văn bản hoặc tin nhắn/email/zalo về việc tiếp tục gia hạn hoặc dừng thuê.</p>
+<p><strong>3. Quyền ưu tiên:</strong> Hết thời hạn hợp đồng, nếu Bên B có nhu cầu và tuân thủ tốt nội quy sẽ được ưu tiên ký tiếp. Trường hợp đến hạn mà không bên nào có thông báo chấm dứt, hợp đồng có thể được xem xét gia hạn thêm theo chính sách hiện hành của Bên A.</p>
+<div><p class="handover-heading"><strong>BIÊN BẢN BÀN GIAO HIỆN TRẠNG TRANG THIẾT BỊ</strong></p>
+{{handover_checkin_table}}
+</div>
+<div class="document-signatures"></div>
+</div>

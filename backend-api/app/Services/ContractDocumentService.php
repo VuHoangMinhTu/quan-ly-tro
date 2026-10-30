@@ -48,6 +48,11 @@ class ContractDocumentService
     public function preview(User $user, int $id): array
     {
         $contract = app(ContractService::class)->find($user, $id);
+        if ($contract->is_demo) {
+            abort_unless($contract->demo_document_snapshot, 422, 'Bản nháp DEMO chưa có snapshot. Vui lòng lưu lại.');
+
+            return [...$contract->demo_document_snapshot, 'is_preview' => true, 'finalized_at' => null];
+        }
         if ($contract->status !== 'DRAFT') {
             return [...$this->document($user, $id)->toArray(), 'is_preview' => false];
         }

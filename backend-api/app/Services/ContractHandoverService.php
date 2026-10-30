@@ -58,6 +58,9 @@ class ContractHandoverService
                 'type' => 'CHECK_IN', 'status' => 'DRAFT',
                 'items' => $names->map(fn (string $name) => ['name' => $name, 'quantity' => 1, 'condition' => null, 'note' => null])->all(),
             ]);
+            if ($contract->is_demo) {
+                $this->contracts->refreshDemoSnapshot($user, $contract);
+            }
         }, 3);
     }
 
@@ -77,6 +80,10 @@ class ContractHandoverService
                 'name' => trim($item['name']), 'quantity' => $item['quantity'] ?? 1, 'condition' => $item['condition'] ?? null,
                 'note' => $item['note'] ?? null, 'key_count' => $item['key_count'] ?? null, 'remote_count' => $item['remote_count'] ?? null,
             ], $items)]);
+            $contract = $report->contract;
+            if ($contract->is_demo) {
+                $this->contracts->refreshDemoSnapshot($user, $contract);
+            }
         });
     }
 
@@ -86,6 +93,10 @@ class ContractHandoverService
             $report = $this->lockedReport($user, $contractId);
             $this->ensureDraft($report);
             $report->update(['status' => 'CONFIRMED', 'confirmed_at' => now()]);
+            $contract = $report->contract;
+            if ($contract->is_demo) {
+                $this->contracts->refreshDemoSnapshot($user, $contract);
+            }
         });
     }
 

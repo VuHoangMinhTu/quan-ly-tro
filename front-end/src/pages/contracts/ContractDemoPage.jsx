@@ -29,7 +29,7 @@ export default function ContractDemoPage() {
     <nav className="contract-document-actions no-print" aria-label="Thao tác mẫu minh họa">
       <Link to="/contract-templates">← Mẫu hợp đồng</Link>
       <button type="button" onClick={async () => { await document.fonts.ready; window.print() }}>In / Xuất PDF</button>
-      <div className="w-full space-y-1 text-sm"><strong>{demo.name} — DEMO</strong><p>Chỉ để giới thiệu, không tạo hợp đồng hoặc dữ liệu giao dịch. Các bên ký trực tiếp trên giấy; vùng chữ ký để trống.</p><p>Chọn Save as PDF, khổ A4 và tắt Headers and footers. Tên file gợi ý: {demo.filename}</p></div>
+      <div className="w-full space-y-1 text-sm"><strong>{demo.name} — DEMO</strong><p>Dữ liệu minh họa an toàn. Bản DEMO không phải hợp đồng đầy đủ.</p><p>Chọn Save as PDF, khổ A4 và tắt Headers and footers. Tên file gợi ý: {demo.filename}</p></div>
     </nav>
     <ContractDocumentSheet html={demo.rendered_html} demo />
   </main>

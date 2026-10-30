@@ -42,6 +42,7 @@ class GoogleAuthController extends Controller
                 $user = User::where('google_id', $google->getId())->first() ?? User::where('email', $google->getEmail())->first();
                 if (! $user) {
                     $user = User::create(['name' => $google->getName() ?: 'Google User', 'email' => $google->getEmail(), 'google_id' => $google->getId(), 'avatar' => $google->getAvatar(), 'password' => Hash::make(Str::random(40)), 'email_verified_at' => now()]);
+                    $user->forceFill(['contract_access' => 'DEMO'])->save();
                     Landlord::create(['user_id' => $user->id, 'full_name' => $user->name, 'phone' => '']);
                 } else {
                     $user->update(['google_id' => $google->getId(), 'avatar' => $google->getAvatar(), 'email_verified_at' => $user->email_verified_at ?? now()]);

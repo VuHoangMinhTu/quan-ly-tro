@@ -34,6 +34,11 @@ class User extends Authenticatable implements MustVerifyEmail
         ];
     }
 
+    public function hasDemoContractAccess(): bool
+    {
+        return $this->contract_access === 'DEMO';
+    }
+
     public function landlord()
     {
         return $this->hasOne(Landlord::class);

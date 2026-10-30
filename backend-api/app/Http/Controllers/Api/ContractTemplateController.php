@@ -23,7 +23,7 @@ class ContractTemplateController extends Controller
     {
         return ApiResponse::success([
             'templates' => $this->templates->visible($request->user())->select(['id', 'landlord_id', 'name', 'template_key', 'version', 'is_active', 'created_at'])->withCount(['documents' => fn ($query) => $this->scopedDocuments($query, $request)])->orderBy('template_key')->orderByDesc('version')->get(),
-            'variables' => $this->variables->definitions(), 'can_manage' => $request->user()->landlord()->exists(),
+            'variables' => $this->variables->definitions(), 'can_manage' => ! $request->user()->hasDemoContractAccess() && $request->user()->landlord()->exists(),
         ], 'Lấy danh sách mẫu hợp đồng thành công.');
     }
 

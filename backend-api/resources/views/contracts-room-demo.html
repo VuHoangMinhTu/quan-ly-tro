@@ -1,0 +1,41 @@
+<div class="word-contract">
+<p class="text-center"><strong>Cộng Hòa Xã Hội Chủ Nghĩa Việt Nam</strong></p>
+<p class="text-center"><strong>Độc Lập – Tự Do – Hạnh Phúc</strong></p>
+<p class="text-center"><strong>———•0•———</strong></p>
+<h1 class="text-center">HỢP ĐỒNG CHO THUÊ PHÒNG — DEMO</h1>
+<p class="text-center"><strong>BẢN TRẢI NGHIỆM — KHÔNG PHẢI HỢP ĐỒNG ĐẦY ĐỦ</strong></p>
+<p class="text-right">{{boarding_house.ward}}, ngày {{contract.document_day}} tháng {{contract.document_month}} năm {{contract.document_year}}</p>
+<p>Đại diện các bên xét thấy có đủ năng lực hành vì dân sự và tự chịu trách nhiệm trước pháp luật về mọi hành vi của mình, gồm:</p>
+<p><strong>BÊN CHO THUÊ – BÊN A:</strong></p>
+<p class="contract-info-line"><span class="contract-info-label">Đại diện</span>: {{lessor.full_name}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Chức vụ</span>: {{lessor.title}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Điện thoại hỗ trợ</span>: {{lessor.phone}}</p>
+<p><strong>BÊN THUÊ – KHÁCH HÀNG – BÊN B:</strong>(Xin quý khách hàng điền đầy đủ tất cả thông tin)</p>
+<p class="contract-info-line"><span class="contract-info-label">Khách hàng</span>: {{tenant.full_name}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Địa chỉ</span>: {{tenant.permanent_address}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Ngày sinh</span>: {{tenant.date_of_birth}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Số CMND/CCCD</span>: {{tenant.identity_number}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Ngày cấp</span>: {{tenant.identity_issue_date}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Nơi cấp</span>: {{tenant.identity_issue_place}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Điện thoại</span>: {{tenant.phone}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Nghề nghiệp</span>: {{tenant.occupation}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Số tài khoản</span>: {{tenant.bank_account_number}}</p>
+<p class="contract-info-line"><span class="contract-info-label">Ngân hàng</span>: {{tenant.bank_name}}</p>
+<p><strong>Cùng thỏa thuận giao kết hợp đồng cho thuê với các nội dung sau đây:</strong></p>
+<p>Mã hợp đồng: {{contract.contract_code}}</p>
+<p>Tiền cọc thỏa thuận: {{contract.deposit_value}} VNĐ</p>
+<h2 class="text-center">ĐIỀU 1: KHÔNG GIAN CHO THUÊ:</h2>
+<p>Bên A đồng ý cho khách hàng thuê phòng: {{room.room_code}}</p>
+<p>Trong căn nhà số: {{boarding_house.address}}</p>
+<p>Thời gian hợp đồng là: {{contract.duration_months}} tháng</p>
+<p>Từ ngày {{contract.start_date}}</p>
+<p>đến ngày {{contract.end_date}} hợp đồng chính thức hết hiệu lực.</p>
+<p><strong>Chỉ số điện ban đầu</strong>: {{contract.electricity_opening}}</p>
+<h2 class="text-center">ĐIỀU 2: TIỀN THUÊ</h2>
+<p>Tiền thuê hàng tháng là: {{contract.monthly_rent_value}} VNĐ</p>
+<p>(Bằng chữ:……..……………………………………………………………..)</p>
+<div><p class="handover-heading"><strong>BIÊN BẢN BÀN GIAO HIỆN TRẠNG PHÒNG</strong></p>
+{{handover_checkin_table}}
+</div>
+<div class="document-signatures"></div>
+</div>
