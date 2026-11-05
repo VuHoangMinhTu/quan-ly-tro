@@ -66,3 +66,24 @@ export function resolveMeterCycleDefault({ meter, period, usageWindow, data }) {
   if (monthStarts.length === 1) return { start: localInput(monthStarts[0].observed_at), end: usageWindow.end }
   return { start: usageWindow.start, end: usageWindow.end }
 }
+
+/** Proposed window only; confirmed meter boundaries remain authoritative. */
+export function suggestedMeterUsageWindow(period, contracts = []) {
+  const [year, month] = String(period).slice(0, 7).split('-').map(Number)
+  const local = (y, m, day) => {
+    const last = new Date(y, m, 0).getDate()
+    const date = new Date(y, m - 1, Math.min(last, day))
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}T00:00`
+  }
+  const monthStart = local(year, month, 1).slice(0, 10)
+  const nextMonthStart = local(year, month + 1, 1).slice(0, 10)
+  const relevant = contracts.filter(contract => {
+    const start = String(contract.start_date || '').slice(0, 10)
+    const end = String(contract.end_date || '').slice(0, 10)
+    return start && start < nextMonthStart && (!end || end >= monthStart)
+  })
+  const days = [...new Set(relevant.map(contract => Number(String(contract.start_date).slice(8, 10))).filter(day => day >= 1 && day <= 31))]
+  const ambiguous = days.length > 1
+  const day = days.length === 1 ? days[0] : 1
+  return { start: local(year, month, day), end: local(year, month + 1, day), ambiguous }
+}

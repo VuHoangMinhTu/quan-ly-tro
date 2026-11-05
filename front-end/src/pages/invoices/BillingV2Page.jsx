@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
-import { confirmBillingPeriodBoundaries, correctBillingPeriodBoundaries, confirmBillingCheckout, confirmBillingSettlement, generateBillingV2, getBillingV2, getBillingV2Status, issueBillingV2, recordBillingDeposit } from '../../api/billingV2Api'
+import { confirmBillingPeriodBoundaries, correctBillingPeriodBoundaries, confirmBillingCheckout, confirmBillingSettlement, generateBillingV2, generateRoomMonthlyInvoice, getBillingV2, getBillingV2Status, recordBillingDeposit } from '../../api/billingV2Api'
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { formatCurrency } from '../../utils/formatters'
 import { createUtilityMeter } from '../../api/utilityMeterApi'
 import { utilityKeys } from '../../api/utilityKeys'
 import UtilityMeterForm from '../../components/forms/UtilityMeterForm'
-import { resolveMeterCycleDefault } from './meterCycleDefaults.mjs'
+import { resolveMeterCycleDefault, suggestedMeterUsageWindow } from './meterCycleDefaults.mjs'
 import { buildMeterPeriodPayload } from './meterPeriodPayload.mjs'
 
 const inputClass = 'mt-1 min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2'
@@ -31,6 +31,7 @@ export default function BillingV2Page() {
   const [checkout, setCheckout] = useState({ contract: '', reason: 'MUTUAL_EARLY_END', observed: '', readings: {}, confirmNoHeld: false })
   const [deposit, setDeposit] = useState({ contract: '', event: 'RECEIVED', amount: '', observed: '', key: crypto.randomUUID() })
   const [notice, setNotice] = useState('')
+  const [invoiceNotice, setInvoiceNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const pending = useRef(false)
   const client = useQueryClient()
@@ -99,7 +100,8 @@ export default function BillingV2Page() {
     return { value: '', source: 'Chưa có số tham chiếu trước thời điểm bắt đầu' }
   }
   const periodHistory = data?.checkpoint_history || []
-  const meterDefault = meter => resolveMeterCycleDefault({ meter, period, usageWindow, data })
+  const suggestedWindow = suggestedMeterUsageWindow(period, contracts)
+  const meterDefault = meter => resolveMeterCycleDefault({ meter, period, usageWindow: suggestedWindow, data })
   const meterCycle = meter => ({ ...meterDefault(meter), ...meterDrafts[meter.id] })
   const setMeterCycle = (meter, changes) => setMeterDrafts(previous => ({
     ...previous, [meter.id]: { ...meterDefault(meter), ...previous[meter.id], ...changes },
@@ -109,11 +111,33 @@ export default function BillingV2Page() {
     const cycle = meterCycle(meter)
     return !savedPoint(meter, cycle.start) || !savedPoint(meter, cycle.end)
   })
-  const calculateCycle = () => {
-    if (meters.length === 0 || missingData || historyConflict || Object.keys(meterEdits).length > 0) return
+  const calculateCycle = async () => {
+    if (meters.length === 0 || missingData || historyConflict || Object.keys(meterEdits).length > 0 || suggestedWindow.ambiguous) return
+    setInvoiceNotice('')
     try {
       const { meterPeriods, start, end } = buildMeterPeriodPayload(meters, meterCycle)
-      run(() => generateBillingV2(roomId, period + '-01', start, end, meterPeriods))
+      const settled = await run(() => generateBillingV2(roomId, period + '-01', start, end, meterPeriods))
+      if (!settled) return
+      // The meter endpoint creates utility obligations only. Compose the FULL
+      // monthly DRAFT for this room without issuing or touching other rooms.
+      try {
+        const response = await generateRoomMonthlyInvoice(roomId, {
+          billing_period: period + '-01', usage_start_at: start, usage_end_at: end, confirmations: [],
+        })
+        const result = response.data?.data?.[0]
+        if (result?.status === 'CREATED') {
+          setInvoiceNotice('Đã tổng hợp tiền phòng, dịch vụ và điện nước vào hóa đơn nháp của phòng này.')
+        } else if (result?.status === 'EXISTING') {
+          setInvoiceNotice('Hóa đơn tháng đã tồn tại. Hệ thống giữ nguyên, không ghi đè; nếu cần hãy cập nhật bản nháp từ trang hóa đơn.')
+        } else {
+          const reason = Object.values(result?.errors || {}).flat().join(' ')
+          setInvoiceNotice(`Đã quyết toán điện nước nhưng chưa thể tổng hợp hóa đơn tháng. ${reason || 'Hãy kiểm tra hợp đồng và khoản thu trong mục Hóa đơn.'}`)
+        }
+        await client.invalidateQueries({ queryKey: ['billing-v2', roomId] })
+        await client.invalidateQueries({ queryKey: ['invoices'] })
+      } catch (error) {
+        setInvoiceNotice(`Đã quyết toán điện nước nhưng chưa tổng hợp hóa đơn tháng: ${getApiErrorMessage(error)}`)
+      }
     } catch (error) {
       setNotice(error.message)
     }
@@ -129,6 +153,7 @@ export default function BillingV2Page() {
     {statusQuery.isError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-red-800">Không xác minh được quyền thao tác V2. Chế độ ghi dữ liệu đang bị khóa an toàn.</p>}
     {statusQuery.isSuccess && !enabled && <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950">Billing V2 đang tạm khóa. Bằng chứng, phân bổ và hóa đơn hiện có vẫn được xem; các thao tác ghi và phát hành đang tắt.</p>}
     {notice && <p role="status" className="rounded-lg bg-green-50 p-3 text-green-800">{notice}</p>}
+    {invoiceNotice && <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">{invoiceNotice} <Link className="underline" to={`/rooms/${roomId}/invoices`}>Xem hóa đơn của phòng</Link></p>}
     {mutation.isError && <p role="alert" className={`rounded-lg p-3 ${mutation.error?.billingV2Message ? 'bg-amber-50 text-amber-900' : 'bg-red-50 text-red-700'}`}>{mutation.error?.billingV2Message || getApiErrorMessage(mutation.error)}</p>}
     <fieldset disabled={busy || !enabled} className="min-w-0 space-y-6 disabled:opacity-70">
       <section className="min-w-0 space-y-4 rounded-xl border bg-white p-5" aria-label="Chốt điện nước theo từng công tơ">
@@ -139,7 +164,7 @@ export default function BillingV2Page() {
           </div>
           <label className="text-sm">Tháng hóa đơn
             <input className={inputClass} type="month" required value={period} onChange={event => {
-              setPeriod(event.target.value); setUsageWindow(suggestedUsageWindow(event.target.value)); setMeterDrafts({}); setMeterEdits({})
+              setPeriod(event.target.value); setUsageWindow(suggestedUsageWindow(event.target.value)); setMeterDrafts({}); setMeterEdits({}); setInvoiceNotice('')
             }} />
           </label>
         </div>
@@ -274,9 +299,10 @@ export default function BillingV2Page() {
           </article>
         })}
         {meters.length > 1 && new Set(meters.map(meter => `${at(meterCycle(meter).start)}|${at(meterCycle(meter).end)}`)).size > 1 && <p role="status" className="rounded-lg bg-blue-50 p-3 text-sm text-blue-900">Điện và nước có ngày đọc khác nhau. Hệ thống tính riêng theo hai mốc đã xác nhận của từng công tơ, rồi gộp khoản thu vào tháng {period}. Không cộng gộp chỉ số tuyệt đối giữa các đồng hồ.</p>}
+        {suggestedWindow.ambiguous && <p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-950">Có nhiều hợp đồng bắt đầu vào các ngày khác nhau trong kỳ. Hãy đối chiếu kỳ công tơ và khoản thu; không tự chọn ngày đầu tháng để tính tiền.</p>}
         {missingData && <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Chưa đủ mốc đầu/cuối khớp thời gian cho tất cả công tơ. Hãy lưu từng công tơ rồi kiểm tra trạng thái “Đã lưu đủ hai mốc”.</p>}
-        <button type="button" className={buttonClass} disabled={meters.length === 0 || missingData || Boolean(historyConflict) || busy || Object.keys(meterEdits).length > 0} onClick={calculateCycle}>{busy ? 'Đang xử lý…' : 'Tính khoản thu điện nước đã xác nhận'}</button>
-        <p className="text-xs text-slate-600">Nút trên chỉ tính điện nước. Hóa đơn tháng đầy đủ được tạo trong mục Hóa đơn. Không phát hành hoặc thanh toán tự động.</p>
+        <button type="button" className={buttonClass} disabled={meters.length === 0 || missingData || suggestedWindow.ambiguous || Boolean(historyConflict) || busy || Object.keys(meterEdits).length > 0} onClick={calculateCycle}>{busy ? 'Đang xử lý…' : 'Tính khoản thu điện nước đã xác nhận'}</button>
+        <p className="text-xs text-slate-600">Nút trên quyết toán điện nước, sau đó thử tổng hợp hóa đơn nháp đầy đủ cho đúng phòng này. Không tự phát hành hoặc thu tiền.</p>
       </section>
       <section className="rounded-xl border bg-blue-50 p-4 text-sm text-blue-900">
         <h3 className="font-semibold">Bàn giao điện nước khi nhận phòng</h3>
@@ -316,7 +342,7 @@ export default function BillingV2Page() {
       </article>)}
     </section>
     <section className="space-y-3"><h3 className="text-lg font-semibold">Phân bổ kỳ {period}</h3>{data.allocations.length === 0 && <p>Chưa có phân bổ được tính cho kỳ này.</p>}{data.allocations.map(row => <article key={row.id} className="rounded-lg border bg-white p-4"><p>{row.responsible_party === 'TENANT' ? `Hợp đồng #${row.contract_id}` : 'Chủ trọ chịu'} · {row.reason === 'VACANT' ? 'Phòng trống' : row.reason === 'ABANDONMENT' ? 'Bỏ ngang' : 'Đang cư trú'}</p><p>{row.quantity} đơn vị · Giá bán phân bổ {formatCurrency(row.tariff_amount)}</p>{row.responsible_party === 'LANDLORD' && <p className="text-sm text-slate-600">Giá vốn thực tế: {row.supplier_cost === null ? 'Chưa xác nhận' : formatCurrency(row.supplier_cost)}</p>}</article>)}</section>
-    <section className="space-y-2"><h3 className="text-lg font-semibold">Hóa đơn từng hợp đồng</h3>{data.invoices.map(row => <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded border bg-white p-3"><Link className="inline-flex min-h-11 items-center underline" to={`/invoices/${row.invoice_id}`}>Hợp đồng #{row.contract_id} — hóa đơn #{row.invoice_id}</Link><span>{row.status === 'DRAFT' ? 'Nháp' : row.status === 'UNPAID' ? 'Chưa thanh toán' : row.status}</span>{row.status === 'DRAFT' && <button type="button" disabled={busy || !enabled} className={buttonClass} onClick={() => window.confirm('Phát hành nghĩa vụ điện nước này? Sau phát hành, hệ thống không tự tính lại các khoản thu.') && run(() => issueBillingV2(row.invoice_id))}>Phát hành hóa đơn #{row.invoice_id}</button>}</div>)}</section>
+    <section className="space-y-2"><h3 className="text-lg font-semibold">Hóa đơn từng hợp đồng</h3><p className="text-sm text-slate-600">Kiểm tra đủ tiền phòng, dịch vụ và điện nước trong hóa đơn tháng trước khi phát hành.</p>{data.invoices.map(row => <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded border bg-white p-3"><Link className="inline-flex min-h-11 items-center underline" to={`/invoices/${row.invoice_id}`}>Hợp đồng #{row.contract_id} — hóa đơn #{row.invoice_id}</Link><span>{row.status === 'DRAFT' ? 'Nháp' : row.status === 'UNPAID' ? 'Chưa thanh toán' : row.status}</span></div>)}</section>
     <section className="space-y-2"><h3 className="text-lg font-semibold">Lịch sử cọc đã ghi nhận</h3>{data.deposits.length === 0 && <p>Chưa ghi nhận cọc thực tế.</p>}{data.deposits.map(row => <p className="break-words rounded border bg-white p-3" key={row.id}>Hợp đồng #{row.contract_id} · {({ RECEIVED: 'Nhận cọc', REFUNDED: 'Hoàn cọc', FORFEITED: 'Mất cọc' })[row.event]} · {formatCurrency(row.amount)} · {row.request_key}</p>)}</section>
   </section>
 }
