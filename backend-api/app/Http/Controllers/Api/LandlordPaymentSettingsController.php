@@ -84,6 +84,20 @@ class LandlordPaymentSettingsController extends Controller
         return ApiResponse::success(app(InvoicePaymentInfoService::class)->profile($profile), 'Đã lưu tài khoản nhận tiền.');
     }
 
+    public function syncUnpaidInvoices(Request $request, InvoicePaymentInfoService $info): JsonResponse
+    {
+        $request->validate(['confirm' => ['required', 'accepted']]);
+        $landlord = $this->landlord($request);
+        $updatedCount = $info->syncUnpaidInvoices($landlord->id);
+
+        return ApiResponse::success(
+            ['updated_count' => $updatedCount],
+            $updatedCount > 0
+                ? "Đã cập nhật thông tin thanh toán cho {$updatedCount} hóa đơn chưa thanh toán."
+                : 'Không có hóa đơn nào đủ điều kiện cập nhật; hóa đơn đã có giao dịch hoặc yêu cầu PayOS đang xử lý được giữ nguyên.'
+        );
+    }
+
     public function qr(Request $request, InvoicePaymentInfoService $info): StreamedResponse
     {
         $landlord = $this->landlord($request);

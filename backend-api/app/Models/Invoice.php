@@ -7,6 +7,7 @@ use App\Services\InvoicePaymentInfoService;
 use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class Invoice extends Model
@@ -105,6 +106,10 @@ class Invoice extends Model
      */
     public function canEditFinancials(): bool
     {
+        if (DB::table('invoice_obligations')->where('invoice_id', $this->id)->exists()) {
+            return $this->status === 'DRAFT' && $this->issued_at === null && BigDecimal::of($this->paid_amount)->isZero();
+        }
+
         return $this->status === 'DRAFT'
             || ($this->status === 'UNPAID' && (float) $this->paid_amount === 0.0);
     }

@@ -140,6 +140,60 @@ class ContractLifecycleApiTest extends TestCase
         $this->getJson("/api/contracts/{$contract->id}")->assertJsonPath('data.active_occupants_count', 1);
     }
 
+    public function test_same_tenant_same_day_unlinked_primary_is_reused_on_activation(): void
+    {
+        [$contract, $owner] = $this->fixture();
+        $membership = RoomTenant::create([
+            'room_id' => $contract->room_id,
+            'tenant_id' => $contract->tenant_id,
+            'move_in_date' => '2026-10-01',
+            'is_primary' => true,
+            'status' => 'ACTIVE',
+        ]);
+
+        $this->login($owner)->putJson("/api/contracts/{$contract->id}", $this->activate($contract, $owner))->assertOk();
+        $this->putJson("/api/contracts/{$contract->id}/status", ['status' => 'ACTIVE'])->assertOk();
+
+        $this->assertDatabaseCount('room_tenants', 1);
+        $this->assertDatabaseHas('room_tenants', [
+            'id' => $membership->id, 'contract_id' => $contract->id,
+            'tenant_id' => $contract->tenant_id, 'is_primary' => true,
+            'status' => 'ACTIVE', 'move_in_date' => '2026-10-01', 'move_out_date' => null,
+        ]);
+        $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'status' => 'ACTIVE']);
+    }
+
+    public function test_other_tenant_primary_same_day_still_blocks_activation(): void
+    {
+        [$contract, $owner, , $otherTenant] = $this->fixture();
+        $membership = RoomTenant::create([
+            'room_id' => $contract->room_id, 'tenant_id' => $otherTenant->id,
+            'move_in_date' => '2026-10-01', 'is_primary' => true, 'status' => 'ACTIVE',
+        ]);
+
+        $this->login($owner)->putJson("/api/contracts/{$contract->id}", $this->activate($contract, $owner))
+            ->assertUnprocessable()->assertJsonValidationErrors('tenant_id');
+        $this->assertDatabaseHas('room_tenants', ['id' => $membership->id, 'contract_id' => null]);
+        $this->assertDatabaseCount('room_tenants', 1);
+        $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'status' => 'DRAFT']);
+    }
+
+    public function test_primary_linked_to_previous_contract_is_not_silently_reassigned(): void
+    {
+        [$contract, $owner] = $this->fixture();
+        $old = Contract::factory()->create(['room_id' => $contract->room_id, 'tenant_id' => $contract->tenant_id, 'status' => 'TERMINATED']);
+        $membership = RoomTenant::create([
+            'room_id' => $contract->room_id, 'tenant_id' => $contract->tenant_id,
+            'contract_id' => $old->id, 'move_in_date' => '2026-10-01',
+            'is_primary' => true, 'status' => 'ACTIVE',
+        ]);
+
+        $this->login($owner)->putJson("/api/contracts/{$contract->id}", $this->activate($contract, $owner))
+            ->assertUnprocessable()->assertJsonValidationErrors('tenant_id');
+        $this->assertDatabaseHas('room_tenants', ['id' => $membership->id, 'contract_id' => $old->id]);
+        $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'status' => 'DRAFT']);
+    }
+
     public function test_existing_unlinked_active_primary_blocks_activation(): void
     {
         [$contract, $owner] = $this->fixture();
@@ -240,7 +294,7 @@ class ContractLifecycleApiTest extends TestCase
             'move_in_date' => '2026-09-15', 'status' => 'ACTIVE', 'is_primary' => false]);
 
         $this->login($owner)->putJson("/api/contracts/{$contract->id}", $this->activate($contract, $owner))
-            ->assertUnprocessable()->assertJsonPath('errors.tenant_id.0', "Phòng {$contract->room->room_code} hiện vẫn ghi nhận Nguyễn Văn A là người đứng tên đang ở từ ngày 01/09/2026. Hãy ghi nhận chuyển đi trước khi kích hoạt hợp đồng mới.");
+            ->assertUnprocessable()->assertJsonPath('errors.tenant_id.0', "Phòng {$contract->room->room_code} hiện vẫn ghi nhận Nguyễn Văn A là người đứng tên đang ở từ ngày 01/09/2026. Chỉ có thể liên kết tự động khi đúng người, đúng ngày bắt đầu và bản ghi chưa thuộc hợp đồng khác; nếu không, hãy đối chiếu lịch sử cư trú trước khi kích hoạt.");
 
         $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'status' => 'DRAFT']);
         $this->assertDatabaseHas('room_tenants', ['id' => $membership->id, 'contract_id' => null, 'is_primary' => false]);
@@ -294,7 +348,7 @@ class ContractLifecycleApiTest extends TestCase
         $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'status' => 'DRAFT', 'monthly_rent' => null]);
     }
 
-    public function test_service_and_tier_snapshots_are_frozen_and_meter_uses_latest_reading(): void
+    public function test_tiered_price_snapshots_are_frozen_without_auto_opening_suggestion(): void
     {
         [$contract, $owner] = $this->fixture();
         $room = $contract->room;
@@ -304,7 +358,7 @@ class ContractLifecycleApiTest extends TestCase
         $meter = UtilityMeter::create(['room_id' => $room->id, 'service_id' => $service->id, 'initial_reading' => 0, 'is_active' => true]);
         UtilityReading::create(['utility_meter_id' => $meter->id, 'reading_date' => '2026-09-01', 'reading_value' => 1200]);
         UtilityReading::create(['utility_meter_id' => $meter->id, 'reading_date' => '2026-10-01', 'reading_value' => 1800]);
-        $this->login($owner)->getJson("/api/rooms/{$room->id}/contract-context")->assertOk()->assertJsonPath('data.utility_openings.0.opening_reading', '1800.00');
+        $this->login($owner)->getJson("/api/rooms/{$room->id}/contract-context")->assertOk()->assertJsonCount(0, 'data.utility_openings');
         $this->putJson("/api/contracts/{$contract->id}", $this->activate($contract, $owner, ['service_ids' => [$service->id], 'utility_openings' => [['utility_meter_id' => $meter->id, 'opening_reading' => 1800, 'reading_date' => '2026-10-01']]]))->assertOk();
         $snapshot = $contract->fresh()->signing_snapshot;
         $this->assertSame('4000.00', $snapshot['services'][0]['pricing_snapshot'][0]['unit_price']);

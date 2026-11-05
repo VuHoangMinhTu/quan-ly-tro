@@ -50,6 +50,26 @@ class BedContractApiTest extends TestCase
         $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'contract_type' => 'DORM_BED', 'bed_id' => $bed->id]);
     }
 
+    public function test_dorm_bed_contract_does_not_require_shared_meter_opening_when_utility_is_included(): void
+    {
+        $contract = Contract::factory()->create();
+        $room = $contract->room;
+        $room->update(['room_type' => 'DORMITORY']);
+        $bed = $room->beds()->create(['bed_code' => 'KTX-01', 'monthly_rent' => 1500000]);
+        $service = $room->boardingHouse->services()->create(['name' => 'Điện bao gồm', 'type' => 'ELECTRICITY',
+            'billing_method' => 'PER_UNIT', 'base_price' => 3000, 'unit' => 'kWh', 'is_active' => true]);
+        $room->services()->attach($service, ['is_active' => true]);
+        $room->utilityMeters()->create(['service_id' => $service->id, 'is_active' => true]);
+        $owner = $room->boardingHouse->landlord->user;
+        $this->actingAs($owner, 'sanctum');
+        $this->putJson('/api/contracts/'.$contract->id, ['contract_type' => 'DORM_BED', 'bed_id' => $bed->id,
+            'lessor_representative_user_id' => $owner->id, 'monthly_rent' => 1500000])->assertOk();
+        $contract->handoverReports()->create(['type' => 'CHECK_IN', 'status' => 'CONFIRMED', 'items' => [], 'confirmed_at' => now()]);
+        $this->putJson('/api/contracts/'.$contract->id.'/status', ['status' => 'ACTIVE'])->assertOk();
+        $this->assertDatabaseHas('contracts', ['id' => $contract->id, 'status' => 'ACTIVE', 'bed_id' => $bed->id]);
+        $this->assertDatabaseCount('contract_utility_openings', 0);
+    }
+
     public function test_different_beds_can_have_active_contracts_but_the_same_bed_cannot_overlap(): void
     {
         $first = Contract::factory()->create(['contract_code' => 'BED-FIRST']);

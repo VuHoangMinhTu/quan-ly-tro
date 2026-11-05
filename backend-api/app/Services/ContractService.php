@@ -33,7 +33,8 @@ class ContractService
         $room = $this->access->room($user, $roomId)->load('boardingHouse');
         $services = $this->eligibleServices($room);
         $meters = $room->utilityMeters()->where('is_active', true)->whereIn('service_id', $services->pluck('id'))
-            ->whereHas('service', fn ($query) => $query->whereIn('type', ['ELECTRICITY', 'WATER']))->with(['service', 'latestReading'])->get();
+            ->whereHas('service', fn ($query) => $query->whereIn('type', ['ELECTRICITY', 'WATER'])->where('billing_method', 'PER_UNIT'))
+            ->with(['service', 'latestReading', 'latestFinalizedContractOpening'])->get();
 
         return [
             'room' => $room, 'beds' => $room->beds()->orderBy('bed_code')->get(), 'operational_role' => $this->access->role($user, $room->boardingHouse),
@@ -45,8 +46,8 @@ class ContractService
             'occupants' => $room->roomTenants()->where('status', 'ACTIVE')->with('tenant:id,full_name')->get(),
             'utility_openings' => $meters->map(fn ($meter) => [
                 'utility_meter_id' => $meter->id, 'service_id' => $meter->service_id, 'service_name' => $meter->service->name,
-                'unit' => $meter->service->unit, 'opening_reading' => $meter->latestReading?->reading_value ?? $meter->initial_reading,
-                'reading_date' => $meter->latestReading?->reading_date?->format('Y-m-d') ?? now()->toDateString(),
+                'unit' => $meter->service->unit, 'opening_reading' => $meter->currentReadingSnapshot()['reading_value'],
+                'reading_date' => $meter->currentReadingSnapshot()['reading_date'] ?? now()->toDateString(),
             ]),
         ];
     }
@@ -166,7 +167,7 @@ class ContractService
                 $this->terms->replaceDraft($contract, $room, $rows, $user->id);
             }
             if ($isNew || array_key_exists('utility_openings', $data)) {
-                $this->saveOpenings($contract, $room, $data['utility_openings'] ?? $this->context($user, $roomId)['utility_openings']->all());
+                $this->saveOpenings($contract, $room, $data['utility_openings'] ?? []);
             }
             if ($contract->is_demo) {
                 $this->refreshDemoSnapshot($user, $contract);
@@ -217,13 +218,65 @@ class ContractService
 
     private function saveOpenings(Contract $contract, Room $room, array $openings): void
     {
-        $meters = $room->utilityMeters()->where('is_active', true)->whereIn('service_id', $this->eligibleServices($room)->pluck('id'))
-            ->whereHas('service', fn ($query) => $query->whereIn('type', ['ELECTRICITY', 'WATER']))->with('service')->get()->keyBy('id');
+        // ContractOpeningAutoMeterV4: keep eligible room meters; selected per-unit services drive entry.
+        $meters = $room->utilityMeters()->where('is_active', true)
+            ->whereIn('service_id', $this->eligibleServices($room)->pluck('id'))
+            ->whereHas('service', fn ($query) => $query->whereIn('type', ['ELECTRICITY', 'WATER']))
+            ->with('service')->get()->keyBy('id');
+        $serviceIds = [];
         $contract->utilityOpenings()->delete();
         foreach ($openings as $index => $opening) {
-            $meter = $meters->get($opening['utility_meter_id']);
+            $requestedMeterId = $opening['utility_meter_id'] ?? null;
+            $meter = !empty($requestedMeterId) ? $meters->get($requestedMeterId) : null;
+            // Preserve the old contract lifecycle rule: an explicit, previously
+            // registered meter must be checked first, including at activation.
+            // This also keeps utility_meter_id as the validation field when
+            // an old draft's meter has since been deactivated.
+            if (!empty($requestedMeterId) && ! $meter) {
+                throw ValidationException::withMessages(["utility_openings.{$index}.utility_meter_id" => 'Công tơ đã chọn không còn hoạt động hoặc không thuộc phòng.']);
+            }
+            $serviceId = (int) ($opening['service_id'] ?? $meter?->service_id ?? 0);
+            if (in_array($serviceId, $serviceIds, true)) {
+                throw ValidationException::withMessages(["utility_openings.{$index}.service_id" => 'Mỗi dịch vụ chỉ nhập một chỉ số đầu.']);
+            }
+            $serviceIds[] = $serviceId;
+            $term = $contract->agreedServices()->where('service_id', $serviceId)->where('is_active', true)->first();
+            $service = $this->eligibleServices($room)->firstWhere('id', $serviceId);
+            if (! $service || ! in_array($service->type, ['ELECTRICITY', 'WATER'], true)) {
+                throw ValidationException::withMessages(["utility_openings.{$index}.service_id" => 'Dịch vụ điện/nước không còn áp dụng cho phòng.']);
+            }
+            if (! $term || ! in_array($term->billing_method, ['PER_UNIT', 'TIERED'], true)) {
+                // Legacy compatibility: a DRAFT may already contain an explicit,
+                // room-owned, active meter opening before service terms are
+                // selected. Preserve this valid record and validate the meter
+                // again at activation. Never auto-create an unselected meter.
+                if (empty($requestedMeterId) || ! $meter) {
+                    throw ValidationException::withMessages(["utility_openings.{$index}.service_id" => 'Vui lòng chọn dịch vụ điện/nước tính theo chỉ số trước khi đăng ký công tơ mới.']);
+                }
+            }
             if (! $meter) {
-                throw ValidationException::withMessages(["utility_openings.{$index}.utility_meter_id" => 'Đồng hồ phải đang hoạt động và thuộc dịch vụ áp dụng cho phòng này.']);
+                $candidates = $meters->where('service_id', $serviceId);
+                if ($candidates->count() > 1) {
+                    throw ValidationException::withMessages(["utility_openings.{$index}.utility_meter_id" => 'Phòng có nhiều công tơ cho dịch vụ này. Hãy đối chiếu trước khi lưu.']);
+                }
+                $meter = $candidates->first();
+                if (! $meter) {
+                    // Never replace a disabled or deleted historical meter automatically.
+                    if ($room->utilityMeters()->withTrashed()->where('service_id', $serviceId)->exists()) {
+                        throw ValidationException::withMessages(["utility_openings.{$index}.utility_meter_id" => 'Dịch vụ từng có công tơ nhưng hiện đã ngừng hoạt động. Hãy đối chiếu lịch sử trước khi tạo mới.']);
+                    }
+                    // save() holds the room row lock and wraps contract and meter in one transaction.
+                    $meter = $room->utilityMeters()->create([
+                        'service_id' => $serviceId,
+                        'initial_reading' => $opening['opening_reading'],
+                        'is_active' => true,
+                    ]);
+                    $meter->setRelation('service', $service);
+                    $meters->put($meter->id, $meter);
+                }
+            }
+            if ((int) $meter->service_id !== $serviceId) {
+                throw ValidationException::withMessages(["utility_openings.{$index}.utility_meter_id" => 'Công tơ không khớp dịch vụ đã chọn.']);
             }
             $previous = $meter->readings()->whereDate('reading_date', '<=', $opening['reading_date'])->reorder('reading_date', 'desc')->orderByDesc('id')->first();
             $next = $meter->readings()->whereDate('reading_date', '>=', $opening['reading_date'])->reorder('reading_date')->orderBy('id')->first();
@@ -232,6 +285,22 @@ class ContractService
             }
             if ($next && BigDecimal::of((string) $opening['opening_reading'])->isGreaterThan((string) $next->reading_value)) {
                 throw ValidationException::withMessages(["utility_openings.{$index}.opening_reading" => 'Chỉ số bàn giao không được lớn hơn chỉ số đã ghi nhận kế tiếp.']);
+            }
+            // Contract handover also needs to agree with V2's confirmed physical
+            // checkpoints, not only with V1 utility_readings. A contract opening
+            // has date precision (not time), so same-date disagreements must be
+            // reconciled rather than silently selecting an arbitrary clock time.
+            $confirmed = DB::table('utility_checkpoints')->where('utility_meter_id', $meter->id)
+                ->orderByDesc('revision')->orderByDesc('id')->get()->unique('scope_key');
+            foreach ($confirmed as $checkpoint) {
+                $checkpointDate = substr($checkpoint->observed_at, 0, 10);
+                $value = BigDecimal::of((string) $opening['opening_reading']);
+                if ($checkpointDate <= $opening['reading_date'] && $value->isLessThan($checkpoint->reading_value)) {
+                    throw ValidationException::withMessages(["utility_openings.{$index}.opening_reading" => 'Chỉ số bàn giao nhỏ hơn mốc V2 đã xác nhận ngày '.$checkpointDate.'. Hãy đối chiếu lịch sử tại Quyết toán V2.']);
+                }
+                if ($checkpointDate >= $opening['reading_date'] && $value->isGreaterThan($checkpoint->reading_value)) {
+                    throw ValidationException::withMessages(["utility_openings.{$index}.opening_reading" => 'Chỉ số bàn giao lớn hơn mốc V2 kế tiếp ngày '.$checkpointDate.'. Hãy đối chiếu lịch sử tại Quyết toán V2.']);
+                }
             }
             $contract->utilityOpenings()->create([
                 'utility_meter_id' => $meter->id, 'service_id' => $meter->service_id, 'service_name' => $meter->service->name,
@@ -279,12 +348,28 @@ class ContractService
             $scope->whereNull('contract_id')->orWhere('contract_id', '!=', $contract->id);
         });
         if ($room->room_type === 'PRIVATE_ROOM') {
-            $primary = $otherActive($room->roomTenants()->where('status', 'ACTIVE')->where('is_primary', true))
-                ->with('tenant:id,full_name')->first();
-            if ($primary) {
+            // A landlord may record the tenant's arrival before finalizing the
+            // contract. Reuse that unlinked stay only if it is unambiguous and
+            // started on the contract's exact start date.
+            $primaries = $otherActive($room->roomTenants()->where('status', 'ACTIVE')->where('is_primary', true))
+                ->with('tenant:id,full_name')->lockForUpdate()->get();
+            foreach ($primaries as $primary) {
+                $sameTenant = (int) $primary->tenant_id === (int) $contract->tenant_id;
+                $sameDate = $primary->move_in_date?->format('Y-m-d') === $contract->start_date->format('Y-m-d');
+                $onlyUnlinkedStay = $primary->contract_id === null
+                    && $room->roomTenants()->where('tenant_id', $primary->tenant_id)
+                        ->where('status', 'ACTIVE')->count() === 1;
+                $hasEndedContractHistory = $room->contracts()->whereKeyNot($contract->id)
+                    ->whereIn('status', ['TERMINATED', 'EXPIRED'])
+                    ->where(fn ($query) => $query->where('tenant_id', $primary->tenant_id)
+                        ->orWhereJsonContains('occupant_tenant_ids', (int) $primary->tenant_id)
+                        ->orWhereHas('occupants', fn ($occupants) => $occupants->where('tenant_id', $primary->tenant_id)))->exists();
+                if ($sameTenant && $sameDate && $onlyUnlinkedStay && ! $hasEndedContractHistory) {
+                    continue;
+                }
                 $name = $primary->tenant?->full_name ?? 'người thuê trước';
                 $date = $primary->move_in_date?->format('d/m/Y') ?? 'không rõ ngày';
-                throw ValidationException::withMessages(['tenant_id' => "Phòng {$room->room_code} hiện vẫn ghi nhận {$name} là người đứng tên đang ở từ ngày {$date}. Hãy ghi nhận chuyển đi trước khi kích hoạt hợp đồng mới."]);
+                throw ValidationException::withMessages(['tenant_id' => "Phòng {$room->room_code} hiện vẫn ghi nhận {$name} là người đứng tên đang ở từ ngày {$date}. Chỉ có thể liên kết tự động khi đúng người, đúng ngày bắt đầu và bản ghi chưa thuộc hợp đồng khác; nếu không, hãy đối chiếu lịch sử cư trú trước khi kích hoạt."]);
             }
         }
         $unrelated = $otherActive($room->roomTenants()->where('status', 'ACTIVE')->whereNotIn('tenant_id', $ids))->count();
@@ -292,12 +377,16 @@ class ContractService
             throw ValidationException::withMessages(['occupant_tenant_ids' => 'Số người đăng ký vượt quá số người tối đa của phòng.']);
         }
         $this->terms->finalize($contract, $room);
-        $requiredMeters = $room->utilityMeters()->where('is_active', true)
-            ->whereIn('service_id', $this->eligibleServices($room)->whereIn('billing_method', ['PER_UNIT', 'TIERED'])->whereIn('type', ['ELECTRICITY', 'WATER'])->pluck('id'))->get();
+        // Shared KTX meters are included in the agreed bed rent by default.
+        // Keep optional readings as evidence, but do not require one per bed at activation.
+        $requiredMeters = $room->room_type === 'DORMITORY'
+            ? collect()
+            : $room->utilityMeters()->where('is_active', true)
+                ->whereIn('service_id', $contract->agreedServices()->where('billing_method', 'PER_UNIT')->whereIn('service_type', ['ELECTRICITY', 'WATER'])->pluck('service_id'))->get();
         $openings = $contract->utilityOpenings()->get()->keyBy('utility_meter_id');
         foreach ($requiredMeters as $meter) {
             $opening = $openings->get($meter->id);
-            if (! $opening || $opening->reading_date < $contract->start_date || ($contract->end_date && $opening->reading_date > $contract->end_date)) {
+            if (! $opening || $opening->reading_date?->format('Y-m-d') !== $contract->start_date->format('Y-m-d')) {
                 throw ValidationException::withMessages(['utility_openings' => 'Vui lòng xác nhận chỉ số công tơ thực tế và ngày bàn giao trong thời hạn của lần thuê mới trước khi kích hoạt hợp đồng.']);
             }
         }
@@ -308,13 +397,22 @@ class ContractService
         $contract->status = 'ACTIVE';
         $contract->finalized_at = now();
         $contract->save();
+        app(\App\Services\ContractOpeningCheckIn::class)->sync($contract, (int) $representative['user_id']);
         foreach ($ids as $tenantId) {
             $membership = $room->roomTenants()->where('contract_id', $contract->id)->where('tenant_id', $tenantId)->where('status', 'ACTIVE')->first();
             if (! $membership) {
-                // Reuse the same stay rather than duplicating a legacy roommate
-                // when they become the contract holder. Preserve move_in_date.
+                // Reuse an existing unlinked primary recorded on the same day
+                // (the case validated above), or a legitimate legacy roommate.
+                // Preserve the original move-in date and membership ID.
                 $membership = $room->roomTenants()->where('tenant_id', $tenantId)
-                    ->where('status', 'ACTIVE')->where('is_primary', false)
+                    ->where('status', 'ACTIVE')
+                    ->where(function ($query) use ($contract, $tenantId) {
+                        $query->where('is_primary', false);
+                        if ($tenantId === (int) $contract->tenant_id) {
+                            $query->orWhere(fn ($primary) => $primary->where('is_primary', true)
+                                ->whereNull('contract_id')->whereDate('move_in_date', $contract->start_date->format('Y-m-d')));
+                        }
+                    })
                     ->lockForUpdate()->first();
                 if ($membership) {
                     $source = $membership->contract;
@@ -323,6 +421,13 @@ class ContractService
                         ->where(fn ($query) => $query->where('tenant_id', $tenantId)
                             ->orWhereJsonContains('occupant_tenant_ids', (int) $tenantId)
                             ->orWhereHas('occupants', fn ($occupants) => $occupants->where('tenant_id', $tenantId)))->exists();
+                    if ($membership->is_primary && $membership->contract_id === null) {
+                        $ambiguousLegacy = $room->contracts()->whereKeyNot($contract->id)
+                            ->whereIn('status', ['TERMINATED', 'EXPIRED'])
+                            ->where(fn ($query) => $query->where('tenant_id', $tenantId)
+                                ->orWhereJsonContains('occupant_tenant_ids', (int) $tenantId)
+                                ->orWhereHas('occupants', fn ($occupants) => $occupants->where('tenant_id', $tenantId)))->exists();
+                    }
                     if ($ambiguousLegacy || ($membership->contract_id !== null && $source?->status !== 'ACTIVE')) {
                         throw ValidationException::withMessages(['occupant_tenant_ids' => 'Lịch sử cư trú của người ở cùng chưa rõ hoặc thuộc hợp đồng đã kết thúc. Vui lòng kiểm tra và ghi nhận chuyển đi cho giai đoạn cũ trước khi kích hoạt hợp đồng mới.']);
                     }
@@ -388,6 +493,9 @@ class ContractService
     {
         if ($target === $contract->status) {
             return;
+        }
+        if (DB::table('utility_checkpoints')->where('contract_id', $contract->id)->where('kind', 'CHECK_IN')->exists()) {
+            throw ValidationException::withMessages(['status' => 'Hợp đồng đã ghi mốc V2. Hãy xác nhận CHECK_OUT, lý do và thời điểm tại Quyết toán điện nước V2.']);
         }
         if ($contract->status !== 'ACTIVE' || ! in_array($target, ['EXPIRED', 'TERMINATED'], true)) {
             throw ValidationException::withMessages(['status' => 'Không thể chuyển trạng thái hợp đồng theo yêu cầu.']);

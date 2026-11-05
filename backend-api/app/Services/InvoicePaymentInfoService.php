@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\Invoice;
+use App\Models\Landlord;
 use App\Models\LandlordPaymentProfile;
+use App\Models\PayOSPaymentRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -44,6 +46,34 @@ class InvoicePaymentInfoService
     private function current(int $landlordId): array
     {
         return [...array_fill_keys(self::FIELDS, null), ...LandlordPaymentProfile::where('landlord_id', $landlordId)->first()?->only(self::FIELDS) ?? []];
+    }
+
+    public function syncUnpaidInvoices(int $landlordId): int
+    {
+        return DB::transaction(function () use ($landlordId): int {
+            // Serialize with profile saves and invoice snapshot capture.
+            Landlord::query()->whereKey($landlordId)->lockForUpdate()->firstOrFail();
+
+            $unsafePayosStatuses = [...PayOSPaymentRequest::REUSABLE_STATUSES,
+                'CREATING', 'CREATION_FAILED', 'RECONCILIATION_REQUIRED', 'STALE', 'PAID', 'UNDERPAID'];
+            $invoices = Invoice::query()
+                ->where('status', 'UNPAID')
+                ->where('paid_amount', 0)
+                ->whereHas('room.boardingHouse', fn ($query) => $query->where('landlord_id', $landlordId))
+                ->whereDoesntHave('payments')
+                ->whereDoesntHave('payosPaymentRequests', fn ($query) => $query->whereIn('status', $unsafePayosStatuses))
+                ->lockForUpdate()
+                ->get(['id']);
+            $snapshot = $this->current($landlordId);
+
+            foreach ($invoices as $invoice) {
+                DB::table('invoices')->where('id', $invoice->id)
+                    ->where('status', 'UNPAID')->where('paid_amount', 0)
+                    ->update(['payment_snapshot' => json_encode($snapshot, JSON_THROW_ON_ERROR), 'updated_at' => now()]);
+            }
+
+            return $invoices->count();
+        });
     }
 
     public function profile(?LandlordPaymentProfile $profile): array

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AmenityController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BedController;
+use App\Http\Controllers\Api\BillingV2Controller;
 use App\Http\Controllers\Api\BoardingHouseController;
 use App\Http\Controllers\Api\BoardingHouseManagerController;
 use App\Http\Controllers\Api\ContractController;
@@ -32,6 +33,7 @@ use App\Http\Controllers\Api\TenantImportController;
 use App\Http\Controllers\Api\TenantLookupController;
 use App\Http\Controllers\Api\UtilityMeterController;
 use App\Http\Controllers\Api\UtilityReadingController;
+use App\Http\Middleware\EnsureBillingV2Enabled;
 use App\Http\Middleware\SigningPrivacy;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
@@ -110,6 +112,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/me', [AuthController::class, 'me']);
     Route::get('/landlord/payment-profile', [LandlordPaymentSettingsController::class, 'profile']);
     Route::put('/landlord/payment-profile', [LandlordPaymentSettingsController::class, 'saveProfile']);
+    Route::post('/landlord/payment-profile/sync-unpaid-invoices', [LandlordPaymentSettingsController::class, 'syncUnpaidInvoices']);
     Route::get('/landlord/payment-profile/qr', [LandlordPaymentSettingsController::class, 'qr']);
     Route::get('/landlord/payos-config', [LandlordPaymentSettingsController::class, 'payos']);
     Route::put('/landlord/payos-config', [LandlordPaymentSettingsController::class, 'savePayos']);
@@ -147,6 +150,23 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::put('/invoices/{id}', [InvoiceController::class, 'update']);
     Route::delete('/invoices/{id}', [InvoiceController::class, 'destroy']);
     Route::post('/invoices/{id}/generate', [InvoiceController::class, 'generate']);
+    Route::get('/billing-v2/status', [BillingV2Controller::class, 'status']);
+    Route::middleware(EnsureBillingV2Enabled::class)->group(function (): void {
+        Route::get('/billing-v2/boarding-houses/{id}/monthly-options', [BillingV2Controller::class, 'monthlyOptions']);
+        Route::get('/billing-v2/rooms/{id}', [BillingV2Controller::class, 'show']);
+        Route::post('/billing-v2/meters/{id}/checkpoints', [BillingV2Controller::class, 'checkpoint']);
+        Route::post('/billing-v2/meters/{id}/period-boundaries', [BillingV2Controller::class, 'periodBoundaries']);
+        Route::post('/billing-v2/meters/{id}/period-boundaries/correct', [BillingV2Controller::class, 'correctPeriodBoundaries']);
+        Route::post('/billing-v2/contracts/{id}/checkout', [BillingV2Controller::class, 'checkout']);
+        Route::post('/billing-v2/contracts/{id}/settlement-confirmation', [BillingV2Controller::class, 'confirmSettlement']);
+        Route::post('/billing-v2/contracts/{id}/deposits', [BillingV2Controller::class, 'deposit']);
+        Route::post('/billing-v2/rooms/{id}/generate', [BillingV2Controller::class, 'generate']);
+        Route::post('/billing-v2/rooms/{id}/monthly-recalculations/preview', [BillingV2Controller::class, 'previewMonthlyDraft']);
+        Route::post('/billing-v2/rooms/{id}/monthly-recalculations/{token}/confirm', [BillingV2Controller::class, 'confirmMonthlyDraft']);
+        Route::post('/billing-v2/rooms/{id}/monthly-invoices', [BillingV2Controller::class, 'monthlyRoom']);
+        Route::post('/billing-v2/boarding-houses/{id}/monthly-invoices', [BillingV2Controller::class, 'monthly']);
+        Route::post('/billing-v2/invoices/{id}/issue', [BillingV2Controller::class, 'issue']);
+    });
     Route::post('/invoices/{invoiceId}/items', [InvoiceItemController::class, 'store']);
     Route::put('/invoice-items/{id}', [InvoiceItemController::class, 'update']);
     Route::delete('/invoice-items/{id}', [InvoiceItemController::class, 'destroy']);

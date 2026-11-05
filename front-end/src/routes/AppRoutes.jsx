@@ -34,6 +34,7 @@ import SignedContractDocumentPage from '../pages/contracts/SignedContractDocumen
 import ServiceListPage from '../pages/services/ServiceListPage'
 import UtilityMeterDetailPage from '../pages/utilities/UtilityMeterDetailPage'
 import InvoiceCreatePage from '../pages/invoices/InvoiceCreatePage'
+import BillingV2Page from '../pages/invoices/BillingV2Page'
 import InvoiceDetailPage from '../pages/invoices/InvoiceDetailPage'
 import InvoiceEditPage from '../pages/invoices/InvoiceEditPage'
 import InvoiceListPage from '../pages/invoices/InvoiceListPage'
@@ -105,6 +106,7 @@ export default function AppRoutes() {
             <Route path="/boarding-houses/:boardingHouseId/services" element={<ServiceListPage />} />
             <Route path="/utility-meters/:id" element={<UtilityMeterDetailPage />} />
             <Route path="/rooms/:roomId/invoices" element={<InvoiceListPage />} />
+            <Route path="/rooms/:roomId/billing-v2" element={<BillingV2Page />} />
             <Route path="/rooms/:roomId/invoices/new" element={<InvoiceCreatePage />} />
             <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
             <Route path="/invoices/:id/edit" element={<InvoiceEditPage />} />

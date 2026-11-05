@@ -18,7 +18,8 @@ class UtilityMeterController extends Controller
 {
     public function index(Request $request, int $roomId): JsonResponse
     {
-        $meters = $this->room($request, $roomId)->utilityMeters()->with(['service', 'latestReading'])->get();
+        $meters = $this->room($request, $roomId)->utilityMeters()->with(['service', 'latestReading', 'latestFinalizedContractOpening'])->get();
+        $meters->each(fn (UtilityMeter $meter) => $meter->setAttribute('current_reading', $meter->currentReadingSnapshot()));
 
         return ApiResponse::success($meters, 'Lấy danh sách đồng hồ điện/nước thành công.');
     }
@@ -37,7 +38,10 @@ class UtilityMeterController extends Controller
 
     public function show(Request $request, int $id): JsonResponse
     {
-        return ApiResponse::success($this->meter($request, $id)->load(['room', 'service', 'latestReading']), 'Lấy thông tin đồng hồ điện/nước thành công.');
+        $meter = $this->meter($request, $id)->load(['room', 'service', 'latestReading', 'latestFinalizedContractOpening']);
+        $meter->setAttribute('current_reading', $meter->currentReadingSnapshot());
+
+        return ApiResponse::success($meter, 'Lấy thông tin đồng hồ điện/nước thành công.');
     }
 
     public function update(UpdateUtilityMeterRequest $request, int $id): JsonResponse

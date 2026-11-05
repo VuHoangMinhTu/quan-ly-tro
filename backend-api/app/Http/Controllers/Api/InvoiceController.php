@@ -13,12 +13,14 @@ use App\Models\Room;
 use App\Services\BillingService;
 use App\Services\BoardingHouseAccessService;
 use App\Services\ContractService;
+use App\Services\ContractSettlementPolicy;
 use App\Services\InvoiceContractEligibility;
 use App\Services\InvoicePaymentInfoService;
 use App\Services\PayOSService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -104,6 +106,16 @@ class InvoiceController extends Controller
         $invoice = Invoice::query()->whereHas('room', fn ($query) => $query->whereIn('boarding_house_id', $access->houses($r->user())->select('boarding_houses.id')))
             ->with(['room.boardingHouse', 'contract.tenant', 'items', 'payosPaymentRequest'])->findOrFail($id);
         $invoice->setAttribute('can_manage', $access->isOwner($r->user(), $invoice->room->boardingHouse));
+        $invoice->setAttribute('billing_engine_version', DB::table('invoice_obligations')->where('invoice_id', $invoice->id)->exists() ? 2 : 1);
+        $composition = DB::table('monthly_invoice_compositions')->where('invoice_id', $invoice->id)->first();
+        $invoice->setAttribute('monthly_evidence', $composition ? ['snapshot' => json_decode($composition->snapshot, true), 'confirmation' => json_decode($composition->confirmation, true), 'created_by' => $composition->created_by, 'created_at' => $composition->created_at] : null);
+        $invoice->setAttribute('monthly_recalculations', $composition ? DB::table('monthly_draft_recalculations')->where('room_id', $invoice->room_id)->where('billing_period', $composition->billing_period)->where('status', 'APPLIED')->orderBy('id')->get(['id', 'approved_by', 'approved_at', 'reason']) : []);
+        $invoice->setAttribute('utility_evidence', DB::table('utility_charge_allocations as allocation')
+            ->join('utility_billing_periods as period', 'period.id', '=', 'allocation.utility_billing_period_id')
+            ->join('utility_checkpoints as opening', 'opening.id', '=', 'allocation.from_checkpoint_id')
+            ->join('utility_checkpoints as closing', 'closing.id', '=', 'allocation.to_checkpoint_id')
+            ->whereIn('allocation.invoice_item_id', $invoice->items->pluck('id'))
+            ->get(['period.utility_meter_id', 'allocation.quantity', 'allocation.tariff_amount', 'opening.id as opening_id', 'opening.observed_at as opening_at', 'opening.reading_value as opening_value', 'closing.id as closing_id', 'closing.observed_at as closing_at', 'closing.reading_value as closing_value']));
         $invoice->setAttribute('payos_available', app(PayOSService::class)->availableFor($invoice->room->boardingHouse->landlord));
         $invoice->setAttribute('payment_profile', app(InvoicePaymentInfoService::class)->forInvoice($invoice));
 
@@ -120,6 +132,11 @@ class InvoiceController extends Controller
     public function update(UpdateInvoiceRequest $r, int $id): JsonResponse
     {
         $i = $this->invoice($r, $id);
+        app(ContractSettlementPolicy::class)->assertInvoiceWriteAllowed($i);
+        $this->assertNotMonthlyComposed($i);
+        if ($this->hasV2Obligation($i->id)) {
+            throw ValidationException::withMessages(['billing_period' => 'Hóa đơn V2 phải được đối soát và phát hành tại màn hình Quyết toán điện nước V2.']);
+        }
         $d = $r->validated();
         $d['billing_period'] = date('Y-m-01', strtotime($d['billing_period']));
 
@@ -164,16 +181,28 @@ class InvoiceController extends Controller
     public function destroy(Request $r, int $id): JsonResponse
     {
         $i = $this->invoice($r, $id);
+        app(ContractSettlementPolicy::class)->assertInvoiceWriteAllowed($i);
+        $this->assertNotMonthlyComposed($i);
+        if ($this->hasV2Obligation($i->id)) {
+            throw ValidationException::withMessages(['status' => 'Hóa đơn V2 đang liên kết phân bổ; không tự xóa nghĩa vụ tài chính.']);
+        }
         if ($i->status !== 'DRAFT') {
             throw ValidationException::withMessages(['status' => 'Chỉ có thể xóa hóa đơn ở trạng thái nháp.']);
-        }$i->delete();
+        }
+        $i->delete();
 
         return ApiResponse::success(null, 'Xóa hóa đơn thành công.');
     }
 
     public function generate(Request $r, int $id, BillingService $billing): JsonResponse
     {
-        $billing->generateForInvoice($this->invoice($r, $id));
+        $invoice = $this->invoice($r, $id);
+        app(ContractSettlementPolicy::class)->assertInvoiceWriteAllowed($invoice);
+        $this->assertNotMonthlyComposed($invoice);
+        if ($this->hasV2Obligation($invoice->id)) {
+            throw ValidationException::withMessages(['invoice_id' => 'Hóa đơn V2 chỉ được phát hành sau khi rà soát qua luồng hóa đơn tháng; không thể tạo khoản thu bằng API cũ.']);
+        }
+        $billing->generateForInvoice($invoice);
 
         return ApiResponse::success(null, 'Tạo các khoản thu tự động thành công.');
     }
@@ -186,6 +215,18 @@ class InvoiceController extends Controller
     private function invoice(Request $r, int $id): Invoice
     {
         return Invoice::whereHas('room.boardingHouse', fn ($q) => $q->where('landlord_id', $r->user()->landlord?->id))->findOrFail($id);
+    }
+
+    private function assertNotMonthlyComposed(Invoice $invoice): void
+    {
+        if (Schema::hasTable('monthly_invoice_compositions') && DB::table('monthly_invoice_compositions')->where('invoice_id', $invoice->id)->exists()) {
+            throw ValidationException::withMessages(['invoice_id' => 'Hóa đơn tháng V2 phải được thay đổi qua luồng đối soát và cập nhật draft có lịch sử.']);
+        }
+    }
+
+    private function hasV2Obligation(int $invoiceId): bool
+    {
+        return Schema::hasTable('invoice_obligations') && DB::table('invoice_obligations')->where('invoice_id', $invoiceId)->exists();
     }
 
     private function contract(Room $room, ?int $id): ?Contract
@@ -203,10 +244,23 @@ class InvoiceController extends Controller
 
     private function period(Room $room, string $date, ?int $ignore = null, ?int $contractId = null): void
     {
+        if ($this->hasV2ObligationForPeriod($room, $date, $ignore)) {
+            throw ValidationException::withMessages(['billing_period' => 'Kỳ này đã được Billing V2 xử lý. Không thể tạo thêm hóa đơn bằng luồng cũ.']);
+        }
         if (Invoice::where('room_id', $room->id)->whereDate('billing_period', $date)->where('status', '!=', 'CANCELLED')->when($ignore, fn ($q) => $q->whereKeyNot($ignore))
             ->when($room->room_type === 'DORMITORY' && $contractId !== null, fn ($query) => $query->where(fn ($scope) => $scope->where('contract_id', $contractId)->orWhereNull('contract_id')))->exists()) {
             throw ValidationException::withMessages(['billing_period' => $room->room_type === 'DORMITORY' ? 'Hợp đồng/giường đã có hóa đơn cho kỳ này. Vui lòng chọn kỳ khác.' : 'Phòng đã có hóa đơn cho kỳ này. Vui lòng chọn kỳ khác.']);
         }
+    }
+
+    private function hasV2ObligationForPeriod(Room $room, string $date, ?int $ignore): bool
+    {
+        if (! Schema::hasTable('invoice_obligations')) {
+            return false;
+        }
+
+        return DB::table('invoice_obligations')->where('room_id', $room->id)->whereDate('billing_period', $date)
+            ->when($ignore, fn ($query) => $query->where('invoice_id', '!=', $ignore))->exists();
     }
 
     private function changesFinancialData(Invoice $invoice, array $data): bool

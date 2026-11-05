@@ -1,4 +1,6 @@
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
+import MonthlyDraftUpdatePanel from './MonthlyDraftUpdatePanel'
+import MonthlyEvidenceSummary from './MonthlyEvidenceSummary'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Controller, useForm } from 'react-hook-form'
@@ -17,6 +19,7 @@ import { formatCurrency, formatDate } from '../../utils/formatters'
 import MoneyInput from '../../components/ui/MoneyInput'
 import { canEditInvoiceFinancials } from '../../utils/invoiceFinancials'
 import { numberFieldError } from '../../utils/formValidation'
+import { invoiceUsageWindow } from '../../utils/invoiceUsageWindow'
 
 const paymentMethodLabels = { CASH: 'Tiền mặt', BANK_TRANSFER: 'Chuyển khoản', CARD: 'Thẻ', OTHER: 'Khác', PAYOS: 'payOS' }
 
@@ -81,7 +84,7 @@ export default function InvoiceDetailPage() {
   const invoice = invoiceQuery.data.data.data
   const bank = invoice.payment_profile
   const canManage = invoice.can_manage !== false
-  const draft = canManage && invoice.status === 'DRAFT'
+  const draft = canManage && invoice.status === 'DRAFT' && invoice.billing_engine_version !== 2
   const canEditFinancials = canEditInvoiceFinancials(invoice)
   const remaining = Number(invoice.total_amount) - Number(invoice.paid_amount)
   const canPay = canManage && ['UNPAID', 'PARTIALLY_PAID'].includes(invoice.status) && Number(invoice.total_amount) > 0
@@ -104,6 +107,11 @@ export default function InvoiceDetailPage() {
   )
 
   return <section className="min-w-0">
+    {invoice.utility_evidence?.length > 0 && <details className="mb-3 rounded border bg-white p-3 text-sm print-hide"><summary className="cursor-pointer py-2">Mốc công tơ được dùng trên hóa đơn</summary>{invoice.utility_evidence.map((source, index) => <p key={index} className="mt-2 break-words">Công tơ #{source.utility_meter_id} · Mốc #{source.opening_id}: {source.opening_value} ({source.opening_at}) → Mốc #{source.closing_id}: {source.closing_value} ({source.closing_at}) · Sản lượng {source.quantity} · Phân bổ {formatCurrency(source.tariff_amount)}</p>)}</details>}
+    {invoice.monthly_evidence && <>
+      <MonthlyEvidenceSummary invoice={invoice} />
+      {canManage && invoice.status === 'DRAFT' && <MonthlyDraftUpdatePanel roomId={invoice.room_id} period={invoice.billing_period?.slice(0, 10)} initialUsageStartAt={invoiceUsageWindow(invoice.monthly_evidence.snapshot).start} initialUsageEndAt={invoiceUsageWindow(invoice.monthly_evidence.snapshot).end} />}
+    </>}
     <div className="print-hide min-w-0"><Link to={canManage ? `/rooms/${invoice.room_id}/invoices` : '/dashboard'} className="inline-flex min-h-11 items-center">← Quay lại</Link>
     {deleteInvoiceMutation.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(deleteInvoiceMutation.error)}</p>}
     {deleteItemMutation.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(deleteItemMutation.error)}</p>}
@@ -111,7 +119,7 @@ export default function InvoiceDetailPage() {
     {paymentsQuery.isError && <p className="mt-3 text-sm text-red-600">{getApiErrorMessage(paymentsQuery.error)}</p>}
     <div className="my-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0"><h2 className="break-words text-xl font-bold sm:text-2xl">{invoice.invoice_code}</h2><p className="mt-1 flex flex-wrap items-center gap-2">Kỳ {invoice.billing_period?.slice(5, 7)}/{invoice.billing_period?.slice(0, 4)} · <InvoiceStatusBadge status={invoice.status} /></p></div>
-      <div className="flex shrink-0 flex-wrap gap-3"><Link to={`/invoices/${id}/print`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center underline">In hóa đơn</Link>{canManage && <Link to={`/invoices/${id}/edit`} className="inline-flex min-h-11 min-w-11 items-center justify-center underline lg:min-w-0">Sửa</Link>}{draft && <button onClick={() => window.confirm('Bạn có chắc muốn xóa hóa đơn này?') && deleteInvoiceMutation.mutate(id)} className="min-h-11 px-2 text-red-700">Xóa</button>}</div>
+      <div className="flex shrink-0 flex-wrap gap-3"><Link to={`/invoices/${id}/print`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center underline">In hóa đơn</Link>{canManage && <Link to={invoice.billing_engine_version === 2 ? `/rooms/${invoice.room_id}/billing-v2` : `/invoices/${id}/edit`} className="inline-flex min-h-11 min-w-11 items-center justify-center underline lg:min-w-0">{invoice.billing_engine_version === 2 ? 'Quyết toán V2' : 'Sửa'}</Link>}{draft && <button onClick={() => window.confirm('Bạn có chắc muốn xóa hóa đơn này?') && deleteInvoiceMutation.mutate(id)} className="min-h-11 px-2 text-red-700">Xóa</button>}</div>
     </div>
     <div className="grid min-w-0 gap-4 md:grid-cols-2">
       <div className="min-w-0 rounded-xl bg-white p-4 shadow sm:p-5"><h3 className="font-semibold">Thông tin hóa đơn</h3><p className="mt-3">Ngày phát hành: {formatDate(invoice.issued_at)}</p><p>Hạn thanh toán: {formatDate(invoice.due_date)}</p><p className="break-words">Ghi chú: {invoice.note || '—'}</p></div>

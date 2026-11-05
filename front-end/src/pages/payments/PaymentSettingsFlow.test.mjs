@@ -15,6 +15,7 @@ async function harness() {
   const states = []
   let cursor = 0
   const requests = []
+  const syncCalls = []
   const bank = { bank_name: 'Vietcombank', bank_account_name: 'Chủ tài khoản', bank_account_number: '00123', has_payment_qr: true, payment_qr_url: '/landlord/payment-profile/qr', payment_qr_version: 'old' }
   const bindings = {
     useState: initial => {
@@ -25,14 +26,14 @@ async function harness() {
     useQueryClient: () => ({ getQueryData: () => ({ data: { data: { landlord: { id: 5 } } } }), setQueryData: () => {}, invalidateQueries: () => {} }),
     useQuery: ({ queryKey }) => ({ data: { data: { data: queryKey.at(-1) === 'payment-profile' ? bank : { configured: true } } } }),
     useMutation: options => ({ mutate: value => options.mutationFn(value), isPending: false }),
-    savePaymentProfile: value => requests.push(value), getPaymentProfile: () => {}, getPayosConfig: () => {}, savePayosConfig: () => {}, disconnectPayos: () => {}, getApiErrorMessage: () => '',
+    savePaymentProfile: value => requests.push(value), syncUnpaidInvoices: () => syncCalls.push(true), getPaymentProfile: () => {}, getPayosConfig: () => {}, savePayosConfig: () => {}, disconnectPayos: () => {}, getApiErrorMessage: () => '',
     PrivatePaymentQr: () => null, LocalQrImage: () => null,
   }
   const source = (await readFile(new URL('./PaymentSettingsPage.jsx', import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
   const { code } = await transformWithOxc(source, 'PaymentSettingsPage.jsx', { jsx: { runtime: 'classic' } })
   const Page = new Function('React', ...Object.keys(bindings), `${code}\nreturn PaymentSettingsPage`)(React, ...Object.values(bindings))
   const render = () => { cursor = 0; return nodes(Page()) }
-  return { render, requests, submit: () => render().find(node => node.type === 'form').props.onSubmit({ preventDefault() {} }) }
+  return { render, requests, syncCalls, submit: () => render().find(node => node.type === 'form').props.onSubmit({ preventDefault() {} }) }
 }
 
 test('bank QR upload and deletion send multipart data while preserving account number text', async () => {
@@ -68,4 +69,25 @@ test('multipart transport uses POST with PUT override so PHP receives uploaded f
   assert.equal(data.get('_method'), 'PUT')
   assert.equal(calls[0][0], '/landlord/payment-profile')
   assert.equal(calls[0][2].headers['Content-Type'], undefined)
+})
+
+test('issued invoice snapshots are synchronized only after the explicit confirmation action', async () => {
+  const page = await harness()
+  page.submit()
+  assert.equal(page.syncCalls.length, 0)
+  page.render().find(node => node.type === 'button' && String(node.props.children).includes('Cập nhật hóa đơn đủ điều kiện')).props.onClick()
+  const dialog = page.render().find(node => node.props.role === 'dialog')
+  assert.ok(dialog)
+  assert.equal(page.syncCalls.length, 0)
+  page.render().find(node => node.type === 'button' && node.props.children === 'Xác nhận cập nhật').props.onClick()
+  assert.deepEqual(page.syncCalls, [true])
+})
+
+test('invoice snapshot synchronization calls the dedicated backend action', async () => {
+  const calls = []
+  const source = (await readFile(new URL('../../api/paymentSettingsApi.js', import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replaceAll('export const ', 'const ')
+  const sync = new Function('client', `${source}\nreturn syncUnpaidInvoices`)({ post: (...args) => calls.push(args), put: (...args) => calls.push(args) })
+  sync()
+  assert.equal(calls[0][0], '/landlord/payment-profile/sync-unpaid-invoices')
+  assert.deepEqual(calls[0][1], { confirm: true })
 })
