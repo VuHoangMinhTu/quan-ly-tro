@@ -38,7 +38,11 @@ class BillingV2MysqlConcurrencyTest extends TestCase
         $contract->service_terms_version = 1;
         $contract->save();
         $contract->agreedServices()->create(['service_id' => $service->id, 'service_name' => $service->name, 'service_type' => $service->type, 'billing_method' => 'TIERED', 'base_price' => 0, 'effective_from' => '2026-10-01', 'is_active' => true, 'pricing_snapshot' => $service->priceTiers->map->only(['from_quantity', 'to_quantity', 'unit_price', 'tier_order'])->all()]);
-        $meter = $room->utilityMeters()->create(['service_id' => $service->id, 'is_active' => true]);
+        $meter = $room->utilityMeters()->create([
+    'service_id' => $service->id,
+    'initial_reading' => 0,
+    'is_active' => true,
+]);
         foreach ([['PERIOD_BOUNDARY', null, 'P:2026-10-01 00:00:00', '2026-10-01 00:00:00', 100], ['CHECK_IN', $contract->id, 'CHECK_IN:'.$contract->id, '2026-10-01 00:00:00', 100], ['PERIOD_BOUNDARY', null, 'P:2026-11-01 00:00:00', '2026-11-01 00:00:00', 150]] as [$kind, $contractId, $scope, $at, $reading]) {
             DB::table('utility_checkpoints')->insert(['utility_meter_id' => $meter->id, 'contract_id' => $contractId, 'kind' => $kind, 'scope_key' => $scope, 'revision' => 1, 'observed_at' => $at, 'reading_value' => $reading, 'confirmed_by' => $actor, 'created_at' => now()]);
         }
