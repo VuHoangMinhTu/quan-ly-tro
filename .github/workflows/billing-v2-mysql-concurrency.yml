@@ -1,0 +1,80 @@
+
+name: BeeHouse Billing V2 MySQL concurrency
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mysql-concurrency:
+    name: Three isolated MySQL concurrency tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci_root_only
+          MYSQL_DATABASE: beehouse_billing_v2_test
+          MYSQL_USER: billing_test
+          MYSQL_PASSWORD: ci_test_only
+        ports:
+          - 13368:3306
+        options: >-
+          --health-cmd="mysqladmin ping --protocol=tcp -h 127.0.0.1 -u root -pci_root_only"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=15
+
+    defaults:
+      run:
+        working-directory: backend-api
+
+    env:
+      APP_ENV: testing
+      APP_URL: http://127.0.0.1
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      BILLING_V2_ENABLED: 'true'
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '13368'
+      DB_DATABASE: beehouse_billing_v2_test
+      DB_USERNAME: billing_test
+      DB_PASSWORD: ci_test_only
+      DB_URL: ''
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, xml, dom, pdo_mysql, zip, gd, intl, bcmath
+          coverage: none
+          tools: composer:v2
+
+      - name: Install PHP dependencies
+        run: |
+          cp .env.example .env
+          composer install --no-interaction --prefer-dist --no-progress
+          php artisan config:clear
+
+      - name: Verify isolated database
+        run: |
+          php -r 'if (getenv("APP_ENV") !== "testing" || getenv("DB_HOST") !== "127.0.0.1" || getenv("DB_PORT") !== "13368" || getenv("DB_DATABASE") !== "beehouse_billing_v2_test") { fwrite(STDERR, "Unsafe database environment\n"); exit(1); }'
+
+      - name: Run MySQL concurrency tests
+        run: |
+          php -d memory_limit=512M vendor/bin/phpunit \
+            --filter=BillingV2MysqlConcurrencyTest \
+            --display-skipped \
+            --fail-on-skipped
