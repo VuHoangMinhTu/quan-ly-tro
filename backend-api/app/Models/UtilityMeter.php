@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 
 // Công tơ điện
 class UtilityMeter extends Model
@@ -113,7 +114,8 @@ class UtilityMeter extends Model
         }
 
         return [
-            'reading_value' => $latest->reading_value,
+             'reading_value' => (string) BigDecimal::of((string) $latest->reading_value)
+        ->toScale(2, RoundingMode::HalfUp),
             'reading_date' => $date,
             'observed_at' => $latest->observed_at,
             'source' => 'BILLING_V2_CHECKPOINT',

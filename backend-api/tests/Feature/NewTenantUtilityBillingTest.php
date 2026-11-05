@@ -46,7 +46,10 @@ class NewTenantUtilityBillingTest extends TestCase
         $this->getJson("/api/rooms/{$new->room_id}/utility-meters")->assertOk()
             ->assertJsonPath('data.0.latest_reading.reading_value', '100.00')
             ->assertJsonPath('data.0.current_reading.reading_value', '175.00')
-            ->assertJsonPath('data.0.current_reading.source', 'CONTRACT_HANDOVER');
+            ->assertJsonPath(
+    'data.0.current_reading.source',
+    $agreed ? 'BILLING_V2_CHECKPOINT' : 'CONTRACT_HANDOVER'
+);
         $this->getJson("/api/rooms/{$new->room_id}/contract-context")->assertOk()
             ->assertJsonPath('data.utility_openings.0.opening_reading', '175.00')
             ->assertJsonPath('data.utility_openings.0.reading_date', '2026-10-23');

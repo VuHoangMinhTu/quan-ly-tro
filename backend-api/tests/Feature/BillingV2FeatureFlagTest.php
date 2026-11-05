@@ -37,33 +37,50 @@ class BillingV2FeatureFlagTest extends TestCase
         $this->assertDatabaseCount('invoices', 0);
     }
 
-    public function test_global_flag_and_explicit_pilot_allowlist_are_both_required(): void
+    public function test_global_switch_enables_v2_for_all_authenticated_users_without_pilot_list(): void
     {
-        $pilot = User::factory()->create();
+        config(['billing.v2_enabled' => true]);
+
+        $first = User::factory()->create();
+        $second = User::factory()->create();
+
+        foreach ([$first, $second] as $user) {
+            $this->actingAs($user, 'sanctum');
+
+            $this->getJson('/api/billing-v2/status')
+                ->assertOk()
+                ->assertJsonPath('data.enabled', true);
+
+            $this->postJson('/api/billing-v2/meters/999999/checkpoints', [])
+                ->assertNotFound();
+        }
+    }
+
+    public function test_without_pilot_gate_unrelated_user_still_cannot_access_another_house(): void
+    {
+        config(['billing.v2_enabled' => true]);
+
+        $contract = \App\Models\Contract::factory()->create();
+        $room = $contract->room;
+
         $other = User::factory()->create();
-        config(['billing.v2_enabled' => true, 'billing.v2_pilot_user_ids' => [$pilot->id]]);
-
-        $this->actingAs($pilot, 'sanctum');
-        $this->getJson('/api/billing-v2/status')->assertOk()->assertJsonPath('data.enabled', true);
-        // The request passes the feature gate and reaches the owner-scoped controller lookup.
-        $this->postJson('/api/billing-v2/meters/999999/checkpoints', [])->assertNotFound();
-
         $this->actingAs($other, 'sanctum');
-        $this->getJson('/api/billing-v2/status')->assertOk()->assertJsonPath('data.enabled', false);
-        $this->getJson('/api/billing-v2/rooms/1?billing_period=2026-10-01')->assertStatus(503);
-        $this->postJson('/api/billing-v2/boarding-houses/1/monthly-invoices', ['billing_period' => '2026-10-01'])
-            ->assertStatus(503);
+
+        $this->getJson('/api/billing-v2/status')
+            ->assertOk()
+            ->assertJsonPath('data.enabled', true);
+
+        $this->getJson('/api/billing-v2/rooms/'.$room->id.'?billing_period=2026-10-01')
+            ->assertNotFound();
+
         $this->assertDatabaseCount('invoices', 0);
     }
 
-    public function test_empty_pilot_allowlist_fails_closed_even_when_global_switch_is_on(): void
+    public function test_v2_still_requires_authentication(): void
     {
-        config(['billing.v2_enabled' => true, 'billing.v2_pilot_user_ids' => []]);
-        $this->actingAs(User::factory()->create(), 'sanctum');
+        config(['billing.v2_enabled' => true]);
 
-        $this->getJson('/api/billing-v2/status')->assertOk()->assertJsonPath('data.enabled', false);
-        $this->postJson('/api/billing-v2/boarding-houses/1/monthly-invoices', ['billing_period' => '2026-10-01'])
-            ->assertStatus(503);
-        $this->assertDatabaseCount('invoices', 0);
+        $this->postJson('/api/billing-v2/meters/1/checkpoints', [])
+            ->assertUnauthorized();
     }
 }

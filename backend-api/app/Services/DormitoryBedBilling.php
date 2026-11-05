@@ -30,8 +30,12 @@ final class DormitoryBedBilling
         $day = (int) $origin->format('d');
         $start = $base->day(min($day, $base->daysInMonth));
         $end = $next->day(min($day, $next->daysInMonth));
-        $this->check($start->greaterThanOrEqualTo($origin->copy()->startOfDay()), 'billing_period',
-            'Tháng hóa đơn trước ngày bắt đầu hợp đồng.');
+$this->check(
+    $start->toDateString() >= $origin->toDateString(),
+    'billing_period',
+    'Tháng hóa đơn trước ngày bắt đầu hợp đồng.'
+);
+
 
         return [$start, $end];
     }

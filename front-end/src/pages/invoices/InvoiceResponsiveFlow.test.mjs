@@ -34,6 +34,7 @@ async function pageHarness(path, { invoice = invoiceFixture, payments = [] } = {
   let mutationCursor = 0
   const mutations = []
   const bindings = {
+    PageHeader: 'page-header',
     invoiceKeys, paymentKeys, canEditInvoiceFinancials, applyApiFieldErrors, getApiErrorMessage, invoiceStatusLabels,
     useState: (initial) => {
       const index = stateCursor++
@@ -75,8 +76,7 @@ async function pageHarness(path, { invoice = invoiceFixture, payments = [] } = {
 test('invoice list uses the same amounts and detail route in mobile cards and desktop table', async () => {
   const page = await pageHarness('./InvoiceListPage.jsx')
   const rendered = page.render()
-  assert.match(rendered.find((node) => node.type === 'h2').props.className, /text-xl/)
-  assert.match(rendered.find((node) => node.type === 'h2').props.className, /sm:text-2xl/)
+  assert.equal(rendered.find((node) => node.type === 'page-header').props.title, 'Hóa đơn')
   const card = rendered.find((node) => node.type === 'article')
   assert.match(text(card), /2\.800\.000 đ/)
   assert.equal(rendered.filter((node) => node.type === 'a' && node.props.href === '/invoices/1').length, 2)

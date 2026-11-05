@@ -104,6 +104,7 @@ export default function MainLayout() {
   }
 
   return <div className="app-shell min-h-dvh lg:flex">
+    <a className="bh-skip" href="#app-main">Đến nội dung chính</a>
     <aside className="hidden bg-slate-900 p-5 text-white lg:sticky lg:top-0 lg:block lg:h-dvh lg:w-60 lg:shrink-0 lg:overflow-y-auto">
       <Brand /><Navigation pathname={pathname} canManageTemplates={Boolean(me?.landlord)} />
     </aside>
@@ -140,7 +141,7 @@ export default function MainLayout() {
           </div>}
         </div>
       </header>
-      <main className="app-content min-w-0 p-4 [padding-bottom:max(1rem,env(safe-area-inset-bottom))] sm:p-5 lg:p-6"><Outlet /></main>
+      <main id="app-main" className="app-content min-w-0 p-4 [padding-bottom:max(1rem,env(safe-area-inset-bottom))] sm:p-5 lg:p-6"><Outlet /></main>
     </section>
   </div>
 }

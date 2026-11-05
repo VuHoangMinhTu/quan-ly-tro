@@ -9,6 +9,7 @@ import { editableContractService, contractServicesPayload, contractServicePricin
 import { createBed, getContractContext } from '../../api/contractApi'
 import { getApiErrorMessage, getApiFieldErrors } from '../../api/getApiErrorMessage'
 import { openingDateFromContract, selectedUnitOpenings } from './contractOpeningRules.mjs'
+import { Check, AlertCircle, FileText, ShieldCheck } from 'lucide-react'
 
 const inputClass = 'mt-1 min-h-11 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2'
 const buttonClass = 'min-h-11 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50'
@@ -95,9 +96,12 @@ export default function ContractWizard({ context, initial, onSubmit, allowActiva
     } catch (requestError) { setError(getApiErrorMessage(requestError)); setFieldErrors(getApiFieldErrors(requestError)) } finally { setSaving(false) }
   }
   const titles = ['Thông tin & tài chính', 'Người ở & dịch vụ', 'Đại diện & lịch thanh toán', 'Kiểm tra và lưu']
-  return <div className="min-w-0 space-y-4">
-    <ol aria-label="Các bước tạo hợp đồng" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{titles.map((title, index) => <li key={title} aria-current={step === index ? 'step' : undefined} className={`rounded-lg p-3 text-sm ${step === index ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>{index + 1}. {title}</li>)}</ol>
-    <p className="text-sm text-slate-500">Phòng {context.room.room_code} · {context.room.boarding_house.name}. Bản nháp có thể chưa có giá thuê/ngày bắt đầu. Kích hoạt sẽ chốt điều khoản và ghi nhận người ở.</p>
+  const descriptions = ['Chọn mẫu và người đứng tên, sau đó ghi nhận các khoản đã thỏa thuận.', 'Kiểm tra người ở cùng, dịch vụ và chỉ số tại thời điểm bàn giao.', 'Xác định người đại diện và ngày thanh toán phù hợp với thỏa thuận.', 'Rà soát thông tin trước khi lưu. Bản nháp chưa phải hợp đồng có hiệu lực.']
+  return <div className="contract-wizard min-w-0 space-y-4" aria-busy={saving}>
+    <ol aria-label="Các bước tạo hợp đồng" className="bh-stepper">{titles.map((title, index) => <li key={title} aria-current={step === index ? 'step' : undefined} data-state={step === index && error ? 'error' : step === index ? 'current' : index < step ? 'complete' : 'upcoming'}><span className="bh-step-number" aria-hidden="true">{step === index && error ? <AlertCircle size={17} /> : index < step ? <Check size={17} /> : String(index + 1).padStart(2, '0')}</span><span><small>{step === index && error ? 'Cần kiểm tra' : index < step ? 'Đã đi qua' : step === index ? 'Đang thực hiện' : 'Tiếp theo'}</small>{title}</span></li>)}</ol>
+    <div className="bh-contract-context"><span className="bh-context-icon"><FileText size={22} aria-hidden="true" /></span><div><strong>Phòng {context.room.room_code}</strong><p>{context.room.boarding_house.name}</p></div><span className="bh-type-label">{demoOnly || initial?.is_demo ? 'HỢP ĐỒNG DEMO' : 'BẢN NHÁP HỢP ĐỒNG'}</span></div>
+    <div className="bh-step-intro"><p className="bh-eyebrow">BƯỚC {String(step + 1).padStart(2, '0')} / 04</p><h3>{titles[step]}</h3><p>{descriptions[step]}</p></div>
+    <p className="bh-wizard-note"><ShieldCheck size={17} aria-hidden="true" />{demoOnly ? 'Chế độ DEMO: dùng hai mẫu minh họa theo quyền tài khoản; chỉ lưu nháp và in/PDF, không kích hoạt hoặc ghi nhận khoản thu.' : 'Bản nháp có thể chưa có giá thuê hoặc ngày bắt đầu. Dữ liệu thỏa thuận được chốt khi kích hoạt.'}</p>
     {step === 0 && contractType === 'DORM_BED' && <div className="grid gap-2 rounded-xl bg-white p-4 shadow-sm sm:grid-cols-[1fr_1fr_auto]">
       <input aria-label="Mã giường mới" value={newBedCode} onChange={event => setNewBedCode(event.target.value)} placeholder="Mã giường mới" className={inputClass} />
       <input aria-label="Tầng" value={newBedFloor} onChange={event => setNewBedFloor(event.target.value)} placeholder="Tầng (không bắt buộc)" className={inputClass} />
