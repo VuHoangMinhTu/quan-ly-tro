@@ -11,13 +11,13 @@ use Illuminate\Validation\ValidationException;
 
 class MonthlyDraftRecalculation
 {
-    public function preview(Room $room, string $period, string $usageStartAt, string $usageEndAt, array $confirmations, int $actor): array
+    public function preview(Room $room, string $period, string $usageStartAt, string $usageEndAt, array $confirmations, int $actor, ?int $onlyContractId = null): array
     {
         try {
-            return DB::transaction(function () use ($room, $period, $usageStartAt, $usageEndAt, $confirmations, $actor): array {
-                $this->lock($room, $period, $actor);
-                $before = $this->state($room, $period, true);
-                $candidate = $this->simulate($room, $period, $usageStartAt, $usageEndAt, $confirmations, $actor);
+            return DB::transaction(function () use ($room, $period, $usageStartAt, $usageEndAt, $confirmations, $actor, $onlyContractId): array {
+                $this->lock($room, $period, $actor, $onlyContractId);
+                $before = $this->state($room, $period, true, $onlyContractId);
+                $candidate = $this->simulate($room, $period, $usageStartAt, $usageEndAt, $confirmations, $actor, $onlyContractId);
                 $token = (string) Str::uuid();
                 $id = DB::table('monthly_draft_recalculations')->insertGetId(['token' => $token, 'room_id' => $room->id, 'billing_period' => $period,
                     'usage_start_at' => $usageStartAt, 'usage_end_at' => $usageEndAt,
@@ -43,13 +43,14 @@ class MonthlyDraftRecalculation
                 return $this->result($record, true);
             }
             $this->check($record->usage_start_at !== null && $record->usage_end_at !== null, 'token', 'Bản xem trước cũ thiếu kỳ sử dụng; hãy xem trước lại với thời gian bắt đầu và kết thúc.');
-            $this->lock($room, $record->billing_period, $actor);
-            $this->check($this->hash($this->state($room, $record->billing_period, true)) === $record->before_hash, 'stale_preview', 'Hóa đơn đã thay đổi sau khi xem trước. Hãy xem trước lại.');
+            $scope = json_decode($record->before_snapshot, true)['scope_contract_id'] ?? null;
+            $this->lock($room, $record->billing_period, $actor, $scope);
+            $this->check($this->hash($this->state($room, $record->billing_period, true, $scope)) === $record->before_hash, 'stale_preview', 'Hóa đơn đã thay đổi sau khi xem trước. Hãy xem trước lại.');
             $confirmations = json_decode($record->confirmations, true, 512, JSON_THROW_ON_ERROR);
-            $candidate = $this->simulate($room, $record->billing_period, $record->usage_start_at, $record->usage_end_at, $confirmations, $actor);
+            $candidate = $this->simulate($room, $record->billing_period, $record->usage_start_at, $record->usage_end_at, $confirmations, $actor, $scope);
             $this->check($this->hash($candidate) === $record->candidate_hash, 'stale_preview', 'Dữ liệu nguồn đã thay đổi. Hãy xem trước chênh lệch mới trước khi xác nhận.');
-            app(MonthlyInvoiceBilling::class)->rebuildDrafts($room, $record->billing_period, $record->usage_start_at, $record->usage_end_at, $confirmations, $actor);
-            $this->check($this->hash($this->state($room, $record->billing_period, false)) === $record->candidate_hash, 'stale_preview', 'Kết quả không khớp bản xem trước; toàn bộ cập nhật đã hủy.');
+            app(MonthlyInvoiceBilling::class)->rebuildDrafts($room, $record->billing_period, $record->usage_start_at, $record->usage_end_at, $confirmations, $actor, $scope);
+            $this->check($this->hash($this->state($room, $record->billing_period, false, $scope)) === $record->candidate_hash, 'stale_preview', 'Kết quả không khớp bản xem trước; toàn bộ cập nhật đã hủy.');
             DB::table('monthly_draft_recalculations')->where('id', $record->id)->update(['status' => 'APPLIED', 'approved_by' => $actor, 'reason' => $reason, 'approved_at' => now(), 'updated_at' => now()]);
 
             return $this->result(DB::table('monthly_draft_recalculations')->find($record->id), false);
@@ -62,11 +63,15 @@ class MonthlyDraftRecalculation
             'before' => json_decode($record->before_snapshot, true), 'after' => json_decode($record->candidate_snapshot, true)];
     }
 
-    private function lock(Room $room, string $period, int $actor): void
+    private function lock(Room $room, string $period, int $actor, ?int $onlyContractId = null): void
     {
         $locked = Room::query()->lockForUpdate()->findOrFail($room->id);
         $this->check((int) $locked->boardingHouse->landlord->user_id === $actor, 'owner', 'Chỉ chủ trọ sở hữu được cập nhật hóa đơn.');
-        $invoices = Invoice::withTrashed()->where('room_id', $room->id)->whereDate('billing_period', $period)->orderBy('id')->lockForUpdate()->get();
+        $this->check($onlyContractId === null || ($room->room_type === 'DORMITORY'
+            && $room->contracts()->whereKey($onlyContractId)->exists()), 'contract_id', 'Hợp đồng không thuộc phòng KTX.');
+        $invoices = Invoice::withTrashed()->where('room_id', $room->id)->whereDate('billing_period', $period)
+            ->when($onlyContractId !== null, fn ($query) => $query->where('contract_id', $onlyContractId))
+            ->orderBy('id')->lockForUpdate()->get();
         $composedIds = DB::table('monthly_invoice_compositions')->whereIn('invoice_id', $invoices->pluck('id'))->pluck('invoice_id')->map(fn ($id) => (int) $id)->all();
         $this->check($invoices->isNotEmpty() && $invoices->every(fn (Invoice $invoice) => in_array((int) $invoice->id, $composedIds, true) || app(MonthlyInvoiceBilling::class)->isUtilityOnlyInvoice($invoice)), 'invoice_review', 'Cần đối soát hóa đơn tháng trước khi cập nhật.');
         foreach ($invoices as $invoice) {
@@ -75,21 +80,23 @@ class MonthlyDraftRecalculation
     }
 
     /** Reuse the exact writer inside a savepoint; no preview money/item change commits. */
-    private function simulate(Room $room, string $period, string $usageStartAt, string $usageEndAt, array $confirmations, int $actor): array
+    private function simulate(Room $room, string $period, string $usageStartAt, string $usageEndAt, array $confirmations, int $actor, ?int $onlyContractId = null): array
     {
         DB::beginTransaction();
         try {
-            app(MonthlyInvoiceBilling::class)->rebuildDrafts($room, $period, $usageStartAt, $usageEndAt, $confirmations, $actor);
+            app(MonthlyInvoiceBilling::class)->rebuildDrafts($room, $period, $usageStartAt, $usageEndAt, $confirmations, $actor, $onlyContractId);
 
-            return $this->state($room, $period, false);
+            return $this->state($room, $period, false, $onlyContractId);
         } finally {
             DB::rollBack();
         }
     }
 
-    private function state(Room $room, string $period, bool $identities): array
+    private function state(Room $room, string $period, bool $identities, ?int $onlyContractId = null): array
     {
-        $invoices = Invoice::withTrashed()->where('room_id', $room->id)->whereDate('billing_period', $period)->orderBy('id')->get()->map(function ($invoice) use ($identities) {
+        $invoices = Invoice::withTrashed()->where('room_id', $room->id)->whereDate('billing_period', $period)
+            ->when($onlyContractId !== null, fn ($query) => $query->where('contract_id', $onlyContractId))
+            ->orderBy('id')->get()->map(function ($invoice) use ($identities) {
             $items = $invoice->items()->orderBy('id')->get()->map(function ($item) use ($identities) {
                 $data = $item->only(['type', 'description', 'quantity', 'unit', 'unit_price', 'amount', 'source', 'tax_rate']);
                 if ($identities || $item->source === 'MANUAL') {
@@ -105,7 +112,7 @@ class MonthlyDraftRecalculation
         })->all();
         $cycles = DB::table('utility_billing_periods')->whereIn('utility_meter_id', $room->utilityMeters()->withTrashed()->select('id'))->where('billing_period', $period)->orderBy('utility_meter_id')->get();
 
-        return ['invoices' => $invoices, 'meters' => $cycles->map(fn ($cycle) => json_decode($cycle->snapshot, true))->all(),
+        return ['scope_contract_id' => $onlyContractId, 'invoices' => $invoices, 'meters' => $cycles->map(fn ($cycle) => json_decode($cycle->snapshot, true))->all(),
             'allocations' => DB::table('utility_charge_allocations')->whereIn('utility_billing_period_id', $cycles->pluck('id'))->orderBy('segment_order')->get()->map(function ($allocation) use ($identities) {
                 $data = (array) $allocation;
                 if (! $identities) {

@@ -104,7 +104,7 @@ class InvoiceController extends Controller
     public function show(Request $r, int $id, BoardingHouseAccessService $access): JsonResponse
     {
         $invoice = Invoice::query()->whereHas('room', fn ($query) => $query->whereIn('boarding_house_id', $access->houses($r->user())->select('boarding_houses.id')))
-            ->with(['room.boardingHouse', 'contract.tenant', 'items', 'payosPaymentRequest'])->findOrFail($id);
+            ->with(['room.boardingHouse', 'contract.tenant', 'contract.bed', 'items', 'payosPaymentRequest'])->findOrFail($id);
         $invoice->setAttribute('can_manage', $access->isOwner($r->user(), $invoice->room->boardingHouse));
         $invoice->setAttribute('billing_engine_version', DB::table('invoice_obligations')->where('invoice_id', $invoice->id)->exists() ? 2 : 1);
         $composition = DB::table('monthly_invoice_compositions')->where('invoice_id', $invoice->id)->first();

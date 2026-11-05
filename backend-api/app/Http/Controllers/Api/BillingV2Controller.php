@@ -32,6 +32,7 @@ class BillingV2Controller extends Controller
         $room = $this->room($request, $id);
         $data = $request->validate([
             'billing_period' => ['required', 'date_format:Y-m-01'],
+            'contract_id' => ['sometimes', 'integer'],
             'usage_start_at' => ['required', 'date_format:Y-m-d H:i:s'], 'usage_end_at' => ['required', 'date_format:Y-m-d H:i:s'],
             'confirmations' => ['sometimes', 'array', 'max:1000'],
             'confirmations.*.contract_id' => ['required', 'integer', 'distinct'],
@@ -49,7 +50,7 @@ class BillingV2Controller extends Controller
         }
         abort_if(CarbonImmutable::parse($data['usage_start_at'], 'Asia/Ho_Chi_Minh')->greaterThanOrEqualTo(CarbonImmutable::parse($data['usage_end_at'], 'Asia/Ho_Chi_Minh')), 422, 'Thời điểm kết thúc phải sau thời điểm bắt đầu kỳ sử dụng.');
 
-        return ApiResponse::success($recalculation->preview($room, $data['billing_period'], $data['usage_start_at'], $data['usage_end_at'], $data['confirmations'] ?? [], $request->user()->id), 'Đã kiểm tra bản xem trước; chưa cập nhật khoản thu.');
+        return ApiResponse::success($recalculation->preview($room, $data['billing_period'], $data['usage_start_at'], $data['usage_end_at'], $data['confirmations'] ?? [], $request->user()->id, $data['contract_id'] ?? null), 'Đã kiểm tra bản xem trước; chưa cập nhật khoản thu.');
     }
 
     public function confirmMonthlyDraft(Request $request, int $id, string $token, MonthlyDraftRecalculation $recalculation): JsonResponse
@@ -67,7 +68,7 @@ class BillingV2Controller extends Controller
         $start = CarbonImmutable::parse($data['billing_period']);
         $contracts = Contract::whereIn('room_id', $house->rooms()->select('id'))->whereIn('status', ['ACTIVE', 'TERMINATED', 'EXPIRED'])
             ->whereDate('start_date', '<', $start->addMonth())->where(fn ($q) => $q->whereNull('end_date')->orWhereDate('end_date', '>=', $start))
-            ->with(['agreedServices', 'room:id,room_code,room_type', 'bed:id,bed_code'])->get(['id', 'room_id', 'contract_type', 'bed_id', 'contract_code', 'monthly_rent', 'start_date', 'end_date']);
+            ->with(['agreedServices', 'room:id,room_code,room_type', 'bed:id,bed_code', 'tenant:id,full_name'])->get(['id', 'room_id', 'tenant_id', 'contract_type', 'bed_id', 'contract_code', 'monthly_rent', 'start_date', 'end_date']);
 
         return ApiResponse::success($contracts);
     }

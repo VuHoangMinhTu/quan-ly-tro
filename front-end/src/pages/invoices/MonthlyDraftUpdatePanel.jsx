@@ -12,7 +12,7 @@ const suggestedEndForPeriod = period => {
 
 const defaultReason = 'Cập nhật hóa đơn theo số liệu quyết toán mới'
 
-export default function MonthlyDraftUpdatePanel({ roomId, period, confirmations = [], initialUsageStartAt, initialUsageEndAt, onUpdated }) {
+export default function MonthlyDraftUpdatePanel({ roomId, contractId, period, confirmations = [], initialUsageStartAt, initialUsageEndAt, onUpdated }) {
   const [usageWindow, setUsageWindow] = useState(() => ({ start: initialUsageStartAt?.replace(' ', 'T').slice(0, 16) || `${period.slice(0, 7)}-01T00:00`, end: initialUsageEndAt?.replace(' ', 'T').slice(0, 16) || suggestedEndForPeriod(period) }))
   const [checkedStart, setCheckedStart] = useState(Boolean(initialUsageStartAt))
   const [checkedEnd, setCheckedEnd] = useState(Boolean(initialUsageEndAt))
@@ -48,6 +48,7 @@ export default function MonthlyDraftUpdatePanel({ roomId, period, confirmations 
       } else {
         const response = await previewMonthlyDraft(roomId, {
           billing_period: period,
+          ...(contractId ? { contract_id: contractId } : {}),
           usage_start_at: `${usageWindow.start.replace('T', ' ')}:00`,
           usage_end_at: `${usageWindow.end.replace('T', ' ')}:00`,
           confirmations,

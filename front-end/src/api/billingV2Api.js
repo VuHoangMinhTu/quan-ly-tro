@@ -26,6 +26,7 @@ export const getBillingV2 = (room, period) => client.get(`/billing-v2/rooms/${ro
 export const getBillingV2Status = () => client.get('/billing-v2/status')
 export const getMonthlyBillingOptions = (house, period) => client.get(`/billing-v2/boarding-houses/${house}/monthly-options`, { params: { billing_period: period } })
 export const generateRoomMonthlyInvoice = (room, payload) => write(`/billing-v2/rooms/${room}/monthly-invoices`, payload)
+export const generateDormitoryBedInvoice = (contract, payload) => write(`/billing-v2/contracts/${contract}/bed-invoices`, payload)
 export const generateMonthlyInvoices = (house, payload) => write(`/billing-v2/boarding-houses/${house}/monthly-invoices`, payload)
 export const previewMonthlyDraft = (room, payload) => write(`/billing-v2/rooms/${room}/monthly-recalculations/preview`, payload)
 export const confirmMonthlyDraft = (room, token, reason) => write(`/billing-v2/rooms/${room}/monthly-recalculations/${token}/confirm`, { confirmed: true, reason })

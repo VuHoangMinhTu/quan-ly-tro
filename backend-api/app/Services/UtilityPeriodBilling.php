@@ -31,11 +31,18 @@ class UtilityPeriodBilling
             $this->require($invoice->status === 'DRAFT' && $invoice->issued_at === null && BigDecimal::of($invoice->paid_amount)->isZero() && ! $invoice->payments()->exists() && ! $invoice->payosPaymentRequests()->exists(), 'status', 'Chỉ phát hành hóa đơn V2 nháp chưa có giao dịch thanh toán.');
             app(MonthlyInvoiceBilling::class)->assertSourcesCurrent($invoice);
             $period = $invoice->billing_period->toDateString();
-            $cycles = DB::table('utility_billing_periods')->where('billing_period', $period)->whereIn('utility_meter_id', $room->utilityMeters()->withTrashed()->select('id'))->get();
-            $this->require($cycles->isNotEmpty() || DB::table('monthly_invoice_compositions')->where('invoice_id', $invoice->id)->exists(), 'billing_period', 'Chưa có bằng chứng tính tiền V2.');
+            $composition = DB::table('monthly_invoice_compositions')->where('invoice_id', $invoice->id)->first();
+            $isBedRent = $room->room_type === 'DORMITORY' && $composition
+                && (json_decode($composition->snapshot, true)['engine'] ?? null) === 'DORM_BED_V3';
+            // Shared dorm meters are internal evidence, not a prerequisite to issue inclusive bed rent.
+            $cycles = $isBedRent ? collect() : DB::table('utility_billing_periods')
+                ->where('billing_period', $period)
+                ->whereIn('utility_meter_id', $room->utilityMeters()->withTrashed()->select('id'))->get();
+            $this->require($cycles->isNotEmpty() || $composition !== null, 'billing_period', 'Chưa có bằng chứng tính tiền V2.');
             $firstCycle = $cycles->first();
             if ($firstCycle === null) {
-                $this->require(! $room->utilityMeters()->where('is_active', true)->exists(), 'billing_period', 'Thiếu kỳ sử dụng đã xác nhận cho công tơ đang hoạt động.');
+                $this->require($isBedRent || ! $room->utilityMeters()->where('is_active', true)->exists(),
+                    'billing_period', 'Thiếu kỳ sử dụng đã xác nhận cho công tơ đang hoạt động.');
                 $invoice->recalculateTotals();
                 $invoice->update(['status' => 'UNPAID', 'issued_at' => now()->toDateString()]);
 

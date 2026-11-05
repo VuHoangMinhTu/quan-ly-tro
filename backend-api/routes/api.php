@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AmenityController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BedController;
 use App\Http\Controllers\Api\BillingV2Controller;
+use App\Http\Controllers\Api\DormitoryBedInvoiceController;
 use App\Http\Controllers\Api\BoardingHouseController;
 use App\Http\Controllers\Api\BoardingHouseManagerController;
 use App\Http\Controllers\Api\ContractController;
@@ -164,6 +165,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('/billing-v2/rooms/{id}/monthly-recalculations/preview', [BillingV2Controller::class, 'previewMonthlyDraft']);
         Route::post('/billing-v2/rooms/{id}/monthly-recalculations/{token}/confirm', [BillingV2Controller::class, 'confirmMonthlyDraft']);
         Route::post('/billing-v2/rooms/{id}/monthly-invoices', [BillingV2Controller::class, 'monthlyRoom']);
+        Route::post('/billing-v2/contracts/{id}/bed-invoices', [DormitoryBedInvoiceController::class, 'store']);
         Route::post('/billing-v2/boarding-houses/{id}/monthly-invoices', [BillingV2Controller::class, 'monthly']);
         Route::post('/billing-v2/invoices/{id}/issue', [BillingV2Controller::class, 'issue']);
     });

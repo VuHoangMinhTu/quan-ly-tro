@@ -19,7 +19,7 @@ class MonthlyInvoiceBilling
         $results = [];
         foreach ($house->rooms()->orderBy('id')->get() as $room) {
             try {
-                $results[] = DB::transaction(fn () => $this->room($room, $period, $usageStartAt, $usageEndAt, $confirmations, $actor), 3);
+                $results[] = $this->generateForRoom($room, $period, $usageStartAt, $usageEndAt, $confirmations, $actor);
             } catch (ValidationException $error) {
                 $results[] = ['room_id' => $room->id, 'room_code' => $room->room_code, 'status' => isset($error->errors()['checkpoints']) ? 'PENDING_FINAL_SETTLEMENT' : 'BLOCKED', 'errors' => $error->errors(), 'invoices' => []];
             }
@@ -31,6 +31,9 @@ class MonthlyInvoiceBilling
     /** Separate transaction for one room; never touch other rooms. */
     public function generateForRoom(Room $room, string $period, string $usageStartAt, string $usageEndAt, array $confirmations, int $actor): array
     {
+        if ($room->room_type === 'DORMITORY') {
+            return $this->generateForDormitoryRoom($room, $period, $confirmations, $actor);
+        }
         try {
             return DB::transaction(fn () => $this->room($room, $period, $usageStartAt, $usageEndAt, $confirmations, $actor), 3);
         } catch (ValidationException $error) {
@@ -40,9 +43,69 @@ class MonthlyInvoiceBilling
         }
     }
 
-    /** Only the preview/confirmation coordinator calls this under its room lock. */
-    public function rebuildDrafts(Room $room, string $period, string $usageStartAt, string $usageEndAt, array $confirmations, int $actor): array
+    /** KTX: iterate contracts independently. One bed's failure must not roll back another. */
+    private function generateForDormitoryRoom(Room $room, string $period, array $confirmations, int $actor): array
     {
+        $start = CarbonImmutable::parse($period);
+        $end = $start->addMonth();
+        $contracts = $room->contracts()->whereIn('status', ['ACTIVE', 'TERMINATED', 'EXPIRED'])
+            ->whereDate('start_date', '<', $end)->get()->filter(function ($contract) use ($start) {
+                $termination = DB::table('contract_terminations')->where('contract_id', $contract->id)->first();
+                if ($termination) return $termination->actual_ended_at > $start->format('Y-m-d H:i:s');
+                return !$contract->end_date || $contract->end_date->gte($start);
+            });
+        $rows = []; $invoices = []; $errors = [];
+        foreach ($contracts as $contract) {
+            $input = collect($confirmations)->firstWhere('contract_id', $contract->id) ?? [];
+            try {
+                $row = app(DormitoryBedBilling::class)->generate($contract, $period, $input, $actor);
+            } catch (ValidationException $error) {
+                $row = ['status' => 'BLOCKED', 'contract_id' => $contract->id,
+                    'errors' => $error->errors(), 'invoices' => []];
+                $errors['Hợp đồng #'.$contract->id] = $error->errors();
+            }
+            $rows[] = $row;
+            array_push($invoices, ...($row['invoices'] ?? []));
+        }
+        $statuses = collect($rows)->pluck('status');
+        $status = $statuses->contains('BLOCKED') ? 'BLOCKED'
+            : ($statuses->contains('CREATED') ? 'CREATED'
+                : ($statuses->contains('EXISTING') ? 'EXISTING' : 'NO_ELIGIBLE_CONTRACT'));
+        return ['room_id' => $room->id, 'room_code' => $room->room_code,
+            'status' => $status, 'invoices' => $invoices, 'bed_results' => $rows, 'errors' => $errors];
+    }
+
+    /** Only the preview/confirmation coordinator calls this under its room lock. */
+    public function rebuildDrafts(Room $room, string $period, string $usageStartAt, string $usageEndAt, array $confirmations, int $actor, ?int $onlyContractId = null): array
+    {
+        if ($room->room_type === 'DORMITORY') {
+            $invoices = Invoice::query()->where('room_id', $room->id)
+                ->whereDate('billing_period', $period)
+                ->when($onlyContractId !== null, fn ($query) => $query->where('contract_id', $onlyContractId))->get();
+            $isNew = $invoices->isNotEmpty() && $invoices->every(function ($invoice) {
+                $record = DB::table('monthly_invoice_compositions')->where('invoice_id', $invoice->id)->first();
+                return $record && (json_decode($record->snapshot, true)['engine'] ?? null) === 'DORM_BED_V3';
+            });
+            if ($invoices->count() > 1 && $onlyContractId === null && $isNew) {
+                throw ValidationException::withMessages(['contract_id' => 'KTX có nhiều hóa đơn: hãy cập nhật riêng từng hợp đồng, không cập nhật cả phòng.']);
+            }
+            if ($invoices->isNotEmpty() && $invoices->contains(function ($invoice) {
+                $record = DB::table('monthly_invoice_compositions')->where('invoice_id', $invoice->id)->first();
+                return $record && (json_decode($record->snapshot, true)['engine'] ?? null) === 'DORM_BED_V3';
+            }) && !$isNew) {
+                throw ValidationException::withMessages(['invoice_review' => 'Không trộn hóa đơn KTX thế hệ mới với hóa đơn cũ khi cập nhật.']);
+            }
+            if ($isNew) {
+                foreach ($invoices as $invoice) {
+                    $record = DB::table('monthly_invoice_compositions')->where('invoice_id', $invoice->id)->first();
+                    $confirmation = collect($confirmations)->firstWhere('contract_id', $invoice->contract_id)
+                        ?? json_decode($record->confirmation, true) ?? [];
+                    app(DormitoryBedBilling::class)->rebuildDraft($invoice, $confirmation, $actor);
+                }
+                return ['room_id' => $room->id, 'status' => 'UPDATED',
+                    'invoices' => $invoices->map(fn ($i) => $i->fresh()->load('items'))->all()];
+            }
+        }
         return $this->room($room, $period, $usageStartAt, $usageEndAt, $confirmations, $actor, true);
     }
 
@@ -223,7 +286,7 @@ class MonthlyInvoiceBilling
     }
 
     /** KTX: only each contract's bed rent is billed unless an agreed extra service is explicitly selected. */
-    private function dormitoryLines(Contract $contract, Room $room, CarbonImmutable $start, CarbonImmutable $end, bool $partial, ?array $input): array
+    public function buildDormitoryLines(Contract $contract, Room $room, CarbonImmutable $start, CarbonImmutable $end, bool $partial, ?array $input): array
     {
         $this->check($contract->contract_type === 'DORM_BED' && $contract->bed_id !== null
             && $room->beds()->whereKey($contract->bed_id)->exists(), 'bed_id', 'KTX phải có hợp đồng thuê giường hợp lệ thuộc phòng này.');
@@ -266,7 +329,7 @@ class MonthlyInvoiceBilling
     private function lines(Contract $c, Room $room, CarbonImmutable $start, CarbonImmutable $end, bool $partial, ?array $input): array
     {
         if ($room->room_type === 'DORMITORY') {
-            return $this->dormitoryLines($c, $room, $start, $end, $partial, $input);
+            return $this->buildDormitoryLines($c, $room, $start, $end, $partial, $input);
         }
         $this->check($c->monthly_rent !== null && $c->service_terms_version !== null, 'agreement', 'Thiếu giá thuê hoặc bảng giá thỏa thuận.');
         $this->check(! $partial || isset($input['rent_amount']), 'policy_approval', "Hợp đồng #{$c->id}: kỳ lẻ/nối tiếp cần xác nhận tiền phòng, FIXED và số người.");
@@ -313,6 +376,10 @@ class MonthlyInvoiceBilling
         $start = CarbonImmutable::parse($record->billing_period);
         $end = $start->addMonth();
         $snapshot = json_decode($record->snapshot, true);
+        if (($snapshot['engine'] ?? null) === 'DORM_BED_V3') {
+            app(DormitoryBedBilling::class)->assertSourcesCurrent($invoice, $record, $snapshot);
+            return;
+        }
         $window = $snapshot['usage_window'] ?? ['start' => $record->billing_period.' 00:00:00', 'end' => CarbonImmutable::parse($record->billing_period)->addMonth()->format('Y-m-d H:i:s')];
         $usageStart = CarbonImmutable::parse($window['start'], 'Asia/Ho_Chi_Minh');
         $usageEnd = CarbonImmutable::parse($window['end'], 'Asia/Ho_Chi_Minh');

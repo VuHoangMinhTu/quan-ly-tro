@@ -1,4 +1,4 @@
-import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
+﻿import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import MonthlyDraftUpdatePanel from './MonthlyDraftUpdatePanel'
 import MonthlyEvidenceSummary from './MonthlyEvidenceSummary'
 import { useState } from 'react'
@@ -19,6 +19,7 @@ import { formatCurrency, formatDate } from '../../utils/formatters'
 import MoneyInput from '../../components/ui/MoneyInput'
 import { canEditInvoiceFinancials } from '../../utils/invoiceFinancials'
 import { numberFieldError } from '../../utils/formValidation'
+import { issueBillingV2 } from '../../api/billingV2Api'
 import { invoiceUsageWindow } from '../../utils/invoiceUsageWindow'
 
 const paymentMethodLabels = { CASH: 'Tiền mặt', BANK_TRANSFER: 'Chuyển khoản', CARD: 'Thẻ', OTHER: 'Khác', PAYOS: 'payOS' }
@@ -64,6 +65,7 @@ export default function InvoiceDetailPage() {
   const [payment, setPayment] = useState(null)
   const [payosRequest, setPayosRequest] = useState(null)
   const [generateMessage, setGenerateMessage] = useState('')
+  const [issueError, setIssueError] = useState('')
   const invoiceQuery = useQuery({ queryKey: invoiceKeys.detail(id), queryFn: () => getInvoice(id), refetchInterval: payosRequest ? (current) => current.state.data?.data?.data?.status === 'PAID' ? false : 5000 : false })
   const paymentsQuery = useQuery({ queryKey: paymentKeys.byInvoice(id), queryFn: () => getPayments(id), enabled: Boolean(id) })
   const invalidatePaymentData = () => {
@@ -78,6 +80,19 @@ export default function InvoiceDetailPage() {
   const deleteInvoiceMutation = useMutation({ mutationFn: deleteInvoice, onSuccess: () => navigate(`/rooms/${invoiceQuery.data.data.data.room_id}/invoices`) })
   const generateMutation = useMutation({ mutationFn: () => generateInvoice(id), onSuccess: () => { setGenerateMessage('Đã tạo các khoản thu tự động.'); queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(id) }); queryClient.invalidateQueries({ queryKey: invoiceKeys.byRoom(invoiceQuery.data.data.data.room_id) }) }, onError: (error) => setGenerateMessage(getApiErrorMessage(error)) })
 
+  const issueMutation = useMutation({
+    mutationFn: () => issueBillingV2(id),
+    onSuccess: async () => {
+      setIssueError('')
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(id) }),
+        queryClient.invalidateQueries({ queryKey: invoiceKeys.byRoom(invoiceQuery.data.data.data.room_id) }),
+      ])
+    },
+    onError: error => setIssueError(getApiErrorMessage(error)),
+  })
+
+
   if (invoiceQuery.isPending) return <p>Đang tải...</p>
   if (invoiceQuery.isError) return <p className="text-red-600">{getApiErrorMessage(invoiceQuery.error)}</p>
 
@@ -85,6 +100,7 @@ export default function InvoiceDetailPage() {
   const bank = invoice.payment_profile
   const canManage = invoice.can_manage !== false
   const draft = canManage && invoice.status === 'DRAFT' && invoice.billing_engine_version !== 2
+  const canIssueV2 = canManage && Number(invoice.billing_engine_version) === 2 && invoice.status === 'DRAFT' && !invoice.issued_at
   const canEditFinancials = canEditInvoiceFinancials(invoice)
   const remaining = Number(invoice.total_amount) - Number(invoice.paid_amount)
   const canPay = canManage && ['UNPAID', 'PARTIALLY_PAID'].includes(invoice.status) && Number(invoice.total_amount) > 0
@@ -99,6 +115,24 @@ export default function InvoiceDetailPage() {
     payosMutation.mutate()
   }
 
+  const confirmIssueV2 = () => {
+    const tenantName = invoice.contract?.tenant?.full_name || 'Chưa có tên người thuê'
+    const bedCode = invoice.room?.room_type === 'DORMITORY' ? (invoice.contract?.bed?.bed_code || 'Chưa có mã giường') : null
+    const summary = [
+      `Phát hành hóa đơn ${invoice.invoice_code}?`,
+      `Người thuê: ${tenantName}`,
+      ...(bedCode ? [`Giường: ${bedCode}`] : []),
+      `Tổng cộng: ${formatCurrency(invoice.total_amount)}`,
+      ...(invoice.due_date ? [`Hạn thanh toán: ${formatDate(invoice.due_date)}`] : ['Hạn thanh toán chưa thiết lập; thao tác này không tự đặt hạn.']),
+      '',
+      'Sau khi phát hành, không thể sửa trực tiếp các khoản tính tự động. Bạn đã kiểm tra đầy đủ tiền thuê và dịch vụ chưa?',
+    ].join('\n')
+    if (!window.confirm(summary)) return
+    setIssueError('')
+    issueMutation.mutate()
+  }
+
+
   const renderPaymentActions = (currentPayment) => canManage && currentPayment.payment_source !== 'PAYOS_WEBHOOK' && (
     <div className="flex flex-wrap gap-2">
       <button type="button" onClick={() => setPayment(currentPayment)} className="inline-flex min-h-11 items-center px-2 underline">Sửa</button>
@@ -110,19 +144,31 @@ export default function InvoiceDetailPage() {
     {invoice.utility_evidence?.length > 0 && <details className="mb-3 rounded border bg-white p-3 text-sm print-hide"><summary className="cursor-pointer py-2">Mốc công tơ được dùng trên hóa đơn</summary>{invoice.utility_evidence.map((source, index) => <p key={index} className="mt-2 break-words">Công tơ #{source.utility_meter_id} · Mốc #{source.opening_id}: {source.opening_value} ({source.opening_at}) → Mốc #{source.closing_id}: {source.closing_value} ({source.closing_at}) · Sản lượng {source.quantity} · Phân bổ {formatCurrency(source.tariff_amount)}</p>)}</details>}
     {invoice.monthly_evidence && <>
       <MonthlyEvidenceSummary invoice={invoice} />
-      {canManage && invoice.status === 'DRAFT' && <MonthlyDraftUpdatePanel roomId={invoice.room_id} period={invoice.billing_period?.slice(0, 10)} initialUsageStartAt={invoiceUsageWindow(invoice.monthly_evidence.snapshot).start} initialUsageEndAt={invoiceUsageWindow(invoice.monthly_evidence.snapshot).end} />}
+      {canManage && invoice.status === 'DRAFT' && <MonthlyDraftUpdatePanel contractId={invoice.monthly_evidence?.snapshot?.engine === 'DORM_BED_V3' ? invoice.contract_id : undefined} roomId={invoice.room_id} period={invoice.billing_period?.slice(0, 10)} initialUsageStartAt={invoiceUsageWindow(invoice.monthly_evidence.snapshot).start} initialUsageEndAt={invoiceUsageWindow(invoice.monthly_evidence.snapshot).end} />}
     </>}
     <div className="print-hide min-w-0"><Link to={canManage ? `/rooms/${invoice.room_id}/invoices` : '/dashboard'} className="inline-flex min-h-11 items-center">← Quay lại</Link>
+    {issueError && <p role="alert" className="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">{issueError}</p>}
     {deleteInvoiceMutation.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(deleteInvoiceMutation.error)}</p>}
     {deleteItemMutation.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(deleteItemMutation.error)}</p>}
     {deletePaymentMutation.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(deletePaymentMutation.error)}</p>}
     {paymentsQuery.isError && <p className="mt-3 text-sm text-red-600">{getApiErrorMessage(paymentsQuery.error)}</p>}
     <div className="my-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0"><h2 className="break-words text-xl font-bold sm:text-2xl">{invoice.invoice_code}</h2><p className="mt-1 flex flex-wrap items-center gap-2">Kỳ {invoice.billing_period?.slice(5, 7)}/{invoice.billing_period?.slice(0, 4)} · <InvoiceStatusBadge status={invoice.status} /></p></div>
-      <div className="flex shrink-0 flex-wrap gap-3"><Link to={`/invoices/${id}/print`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center underline">In hóa đơn</Link>{canManage && <Link to={invoice.billing_engine_version === 2 ? `/rooms/${invoice.room_id}/billing-v2` : `/invoices/${id}/edit`} className="inline-flex min-h-11 min-w-11 items-center justify-center underline lg:min-w-0">{invoice.billing_engine_version === 2 ? 'Quyết toán V2' : 'Sửa'}</Link>}{draft && <button onClick={() => window.confirm('Bạn có chắc muốn xóa hóa đơn này?') && deleteInvoiceMutation.mutate(id)} className="min-h-11 px-2 text-red-700">Xóa</button>}</div>
+      <div className="flex shrink-0 flex-wrap gap-3"><Link to={`/invoices/${id}/print`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center underline">In hóa đơn</Link>{canManage && <Link to={invoice.billing_engine_version === 2 ? `/rooms/${invoice.room_id}/billing-v2` : `/invoices/${id}/edit`} className="inline-flex min-h-11 min-w-11 items-center justify-center underline lg:min-w-0">{invoice.billing_engine_version === 2 ? 'Quyết toán V2' : 'Sửa'}</Link>}{canIssueV2 && <button type="button" disabled={issueMutation.isPending} onClick={confirmIssueV2} className="inline-flex min-h-11 items-center justify-center rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-60">{issueMutation.isPending ? 'Đang phát hành...' : 'Phát hành hóa đơn'}</button>}{draft && <button onClick={() => window.confirm('Bạn có chắc muốn xóa hóa đơn này?') && deleteInvoiceMutation.mutate(id)} className="min-h-11 px-2 text-red-700">Xóa</button>}</div>
     </div>
     <div className="grid min-w-0 gap-4 md:grid-cols-2">
-      <div className="min-w-0 rounded-xl bg-white p-4 shadow sm:p-5"><h3 className="font-semibold">Thông tin hóa đơn</h3><p className="mt-3">Ngày phát hành: {formatDate(invoice.issued_at)}</p><p>Hạn thanh toán: {formatDate(invoice.due_date)}</p><p className="break-words">Ghi chú: {invoice.note || '—'}</p></div>
+      <div className="min-w-0 rounded-xl bg-white p-4 shadow sm:p-5">
+        <h3 className="font-semibold">Thông tin hóa đơn</h3>
+        {invoice.contract && <div className="mt-3 space-y-1 text-sm">
+          <p>Người thuê (đứng tên): <span className="font-medium">{invoice.contract.tenant?.full_name || 'Chưa có thông tin'}</span></p>
+          {invoice.room?.room_type === 'DORMITORY' && <p>Giường: <span className="font-medium">{invoice.contract.bed?.bed_code || 'Chưa có thông tin'}</span></p>}
+          <p>Hợp đồng: {invoice.contract.contract_code || `#${invoice.contract_id}`}</p>
+        </div>}
+        {!invoice.contract && <p className="mt-3 text-sm text-slate-600">Hóa đơn chưa gắn với hợp đồng thuê.</p>}
+        <p className="mt-3">Ngày phát hành: {invoice.issued_at ? formatDate(invoice.issued_at) : (invoice.status === 'DRAFT' ? 'Chưa phát hành (bản nháp)' : 'Chưa có dữ liệu')}</p>
+        <p>Hạn thanh toán: {invoice.due_date ? formatDate(invoice.due_date) : 'Chưa được thiết lập'}</p>
+        <p className="break-words">Ghi chú: {invoice.note || '—'}</p>
+      </div>
       <div className="min-w-0 rounded-xl bg-white p-4 shadow sm:p-5">
         <h3 className="font-semibold">Tổng kết</h3>
         <dl className="mt-3 space-y-2">
