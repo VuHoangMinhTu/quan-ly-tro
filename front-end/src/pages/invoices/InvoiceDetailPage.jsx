@@ -103,7 +103,7 @@ export default function InvoiceDetailPage() {
     </div>
   )
 
-  return <section className="min-w-0">
+  return <section className="bh-invoice-screen bh-workspace min-w-0">
     <div className="print-hide min-w-0"><Link to={canManage ? `/rooms/${invoice.room_id}/invoices` : '/dashboard'} className="inline-flex min-h-11 items-center">← Quay lại</Link>
     {deleteInvoiceMutation.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(deleteInvoiceMutation.error)}</p>}
     {deleteItemMutation.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(deleteItemMutation.error)}</p>}
@@ -113,9 +113,10 @@ export default function InvoiceDetailPage() {
       <div className="min-w-0"><h2 className="break-words text-xl font-bold sm:text-2xl">{invoice.invoice_code}</h2><p className="mt-1 flex flex-wrap items-center gap-2">Kỳ {invoice.billing_period?.slice(5, 7)}/{invoice.billing_period?.slice(0, 4)} · <InvoiceStatusBadge status={invoice.status} /></p></div>
       <div className="flex shrink-0 flex-wrap gap-3"><Link to={`/invoices/${id}/print`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center underline">In hóa đơn</Link>{canManage && <Link to={`/invoices/${id}/edit`} className="inline-flex min-h-11 min-w-11 items-center justify-center underline lg:min-w-0">Sửa</Link>}{draft && <button onClick={() => window.confirm('Bạn có chắc muốn xóa hóa đơn này?') && deleteInvoiceMutation.mutate(id)} className="min-h-11 px-2 text-red-700">Xóa</button>}</div>
     </div>
-    <div className="grid min-w-0 gap-4 md:grid-cols-2">
+    <dl className="bh-invoice-total" aria-label="Tổng quan thanh toán"><div><dt>Tổng hóa đơn</dt><dd>{formatCurrency(invoice.total_amount)}</dd></div><div><dt>Đã thanh toán</dt><dd>{formatCurrency(invoice.paid_amount)}</dd></div><div className="bh-balance"><dt>Còn phải thu</dt><dd>{formatCurrency(remaining)}</dd></div></dl>
+    <div className="grid min-w-0 gap-5 md:grid-cols-2">
       <div className="min-w-0 rounded-xl bg-white p-4 shadow sm:p-5"><h3 className="font-semibold">Thông tin hóa đơn</h3><p className="mt-3">Ngày phát hành: {formatDate(invoice.issued_at)}</p><p>Hạn thanh toán: {formatDate(invoice.due_date)}</p><p className="break-words">Ghi chú: {invoice.note || '—'}</p></div>
-      <div className="min-w-0 rounded-xl bg-white p-4 shadow sm:p-5">
+      <div className="bh-financial-summary min-w-0 rounded-xl bg-white p-4 shadow sm:p-5">
         <h3 className="font-semibold">Tổng kết</h3>
         <dl className="mt-3 space-y-2">
           <div className="flex flex-wrap justify-between gap-x-3 gap-y-1"><dt>Tạm tính</dt><dd>{formatCurrency(invoice.subtotal)}</dd></div>
@@ -178,7 +179,7 @@ export default function InvoiceDetailPage() {
       </div>
       {generateMessage && <p className="mt-3 break-words text-sm text-slate-700">{generateMessage}</p>}
       <div className="mt-4 min-w-0 max-w-full overflow-x-auto">
-        <table className="min-w-[560px] w-full text-sm"><tbody>{(invoice.items || []).map((currentItem) => <tr key={currentItem.id} className="border-t"><td className="max-w-80 break-words p-2">{currentItem.description}</td><td className="whitespace-nowrap p-2">{formatCurrency(currentItem.amount)}</td><td className="p-2">{canEditFinancials && currentItem.source !== 'AUTO' && <div className="flex gap-2"><button onClick={() => setItem(currentItem)} className="min-h-11 px-2 underline">Sửa</button><button onClick={() => window.confirm('Xóa khoản thu này?') && deleteItemMutation.mutate(currentItem.id)} className="min-h-11 px-2 text-red-700">Xóa</button></div>}</td></tr>)}</tbody></table>
+        <table className="bh-invoice-items-table min-w-[560px] w-full text-sm"><caption className="sr-only">Chi tiết các khoản thu của hóa đơn</caption><thead><tr><th scope="col" className="text-left">Diễn giải</th><th scope="col" className="text-left">Thành tiền</th><th scope="col"><span className="sr-only">Thao tác</span></th></tr></thead><tbody>{(invoice.items || []).map((currentItem) => <tr key={currentItem.id} className="border-t"><td className="max-w-80 break-words p-2">{currentItem.description}</td><td className="whitespace-nowrap p-2">{formatCurrency(currentItem.amount)}</td><td className="p-2">{canEditFinancials && currentItem.source !== 'AUTO' && <div className="flex gap-2"><button onClick={() => setItem(currentItem)} className="min-h-11 px-2 underline">Sửa</button><button onClick={() => window.confirm('Xóa khoản thu này?') && deleteItemMutation.mutate(currentItem.id)} className="min-h-11 px-2 text-red-700">Xóa</button></div>}</td></tr>)}</tbody></table>
       </div>
       {(invoice.items || []).some(currentItem => currentItem.type === 'SERVICE_TAX') && <p className="mt-3 text-sm text-slate-600">Khoản VAT đã ghi nhận được giữ theo hóa đơn gốc, không tự điều chỉnh dữ liệu lịch sử.</p>}
     </div>

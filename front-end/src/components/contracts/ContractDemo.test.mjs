@@ -8,6 +8,7 @@ import { transformWithOxc } from 'vite'
 import { normalizeHandoverPrint } from '../../utils/contractHandoverPrint.js'
 
 async function load(path, name, bindings) {
+  bindings = { FileText: 'svg', BedDouble: 'svg', ArrowUpRight: 'svg', Download: 'svg', ...bindings }
   const source = (await readFile(new URL(path, import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
   const { code } = await transformWithOxc(source, `${name}.jsx`, { jsx: { runtime: 'classic' } })
   return new Function('React', ...Object.keys(bindings), `${code}\nreturn ${name}`)(React, ...Object.values(bindings))

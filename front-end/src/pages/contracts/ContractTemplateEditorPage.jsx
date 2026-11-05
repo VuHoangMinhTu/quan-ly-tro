@@ -6,6 +6,7 @@ import { getApiErrorMessage, getApiFieldErrors } from '../../api/getApiErrorMess
 import { insertContractTemplateVariable, validateContractTemplateVariables } from '../../utils/contractDocuments'
 import ContractTemplatePreview from '../../components/contracts/ContractTemplatePreview'
 import './ContractDocumentPage.css'
+import LoadingState from '../../components/ui/LoadingState'
 
 const inputClass = 'mt-1 min-h-11 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 disabled:bg-slate-50'
 
@@ -85,9 +86,9 @@ export default function ContractTemplateEditorPage() {
     await Promise.all([client.invalidateQueries({ queryKey: contractTemplateKeys.all }), client.invalidateQueries({ queryKey: contractTemplateKeys.detail(id) }), client.invalidateQueries({ queryKey: ['contract-context'] })])
     if (!id) navigate(`/contract-templates/${response.data.data.id}`, { replace: true })
   } })
-  if (list.isPending || (id && query.isPending)) return <p role="status">Đang tải mẫu hợp đồng...</p>
+  if (list.isPending || (id && query.isPending)) return <LoadingState label="Đang tải mẫu hợp đồng…" />
   if (list.isError || (id && query.isError)) return <p role="alert" className="text-red-700">{getApiErrorMessage(list.error ?? query.error)}</p>
   const data = list.data.data.data
   if (!id && !data.can_manage) return <p>Chỉ chủ trọ được tạo mẫu hợp đồng riêng.</p>
-  return <section className="min-w-0 space-y-4"><Link to="/contract-templates" className="inline-flex min-h-11 items-center text-sm underline">← Danh sách mẫu hợp đồng</Link><h2 className="text-xl font-bold sm:text-2xl">{id ? `Mẫu hợp đồng — v${query.data.data.data.version}` : 'Tạo mẫu hợp đồng riêng'}</h2><TemplateEditor key={id ?? 'new'} initial={id ? query.data.data.data : null} variables={data.variables} canManage={data.can_manage} save={payload => mutation.mutateAsync(payload)} clone={async () => { const response = await createContractTemplateVersion(id); await client.invalidateQueries({ queryKey: contractTemplateKeys.all }); navigate(`/contract-templates/${response.data.data.id}`) }} /></section>
+  return <section className="bh-template-editor bh-workspace min-w-0 space-y-6"><Link to="/contract-templates" className="inline-flex min-h-11 items-center text-sm underline">← Danh sách mẫu hợp đồng</Link><div><p className="bh-eyebrow">NỘI DUNG & PHIÊN BẢN</p><h2 className="text-xl font-bold sm:text-2xl">{id ? `Mẫu hợp đồng — v${query.data.data.data.version}` : 'Tạo mẫu hợp đồng riêng'}</h2><p className="bh-page-description">Quản lý mẫu trong phạm vi tài khoản. Tài liệu đã chốt được giữ nguyên.</p></div><TemplateEditor key={id ?? 'new'} initial={id ? query.data.data.data : null} variables={data.variables} canManage={data.can_manage} save={payload => mutation.mutateAsync(payload)} clone={async () => { const response = await createContractTemplateVersion(id); await client.invalidateQueries({ queryKey: contractTemplateKeys.all }); navigate(`/contract-templates/${response.data.data.id}`) }} /></section>
 }
