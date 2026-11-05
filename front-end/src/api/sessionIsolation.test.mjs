@@ -10,6 +10,7 @@ import { endSession, getSession, isCurrentSession, replaceSession, subscribeSess
 import { installSessionInterceptors } from './sessionTransport.js'
 
 async function component(path, name, bindings) {
+  bindings = { AuthAside: 'auth-aside', ...bindings }
   const source = (await readFile(new URL(path, import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replaceAll('import.meta.env.VITE_API_BASE_URL', "'http://synthetic.invalid/api'").replaceAll('import.meta.env.DEV', 'false').replace('export default function ', 'function ').replace('export async function ', 'async function ')
   const { code } = await transformWithOxc(source, name + '.jsx', { jsx: { runtime: 'classic' } })
   return new Function('React', ...Object.keys(bindings), code + '\nreturn ' + name)(React, ...Object.values(bindings))

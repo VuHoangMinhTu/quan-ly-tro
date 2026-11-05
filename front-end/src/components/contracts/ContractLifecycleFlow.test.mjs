@@ -36,7 +36,7 @@ async function wizard(initial, contextOverrides = {}) {
   const state = []
   const payloads = []
   const source = (await readFile(new URL('./ContractWizard.jsx', import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
-  const bindings = { ...dates, TenantPicker: Input, ContractForm: CoreForm, DateInput: Input, BILLING_METHOD_LABELS, getApiErrorMessage, getApiFieldErrors,
+  const bindings = { Check: 'svg', AlertCircle: 'svg', FileText: 'svg', ShieldCheck: 'svg', ...dates, TenantPicker: Input, ContractForm: CoreForm, DateInput: Input, BILLING_METHOD_LABELS, getApiErrorMessage, getApiFieldErrors,
     ContractDraftServicesEditor: DraftServices, editableContractService, contractServicesPayload, contractServicePricingError,
     getContractContext: async () => ({ data: { data: context } }),
     formatCurrency: value => `${value} đ`, formatUtilityValue: String,

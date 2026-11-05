@@ -8,6 +8,7 @@ export const savePaymentProfile = (data) => {
   }
   return client.put('/landlord/payment-profile', data)
 }
+export const syncUnpaidInvoices = () => client.post('/landlord/payment-profile/sync-unpaid-invoices', { confirm: true })
 export const getPaymentQrImage = (endpoint) => client.get(endpoint, { responseType: 'blob' })
 export const getPayosConfig = () => client.get('/landlord/payos-config')
 export const savePayosConfig = (data) => client.put('/landlord/payos-config', data)

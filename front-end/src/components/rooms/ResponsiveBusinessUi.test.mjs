@@ -16,7 +16,7 @@ import { invoiceKeys } from '../../api/invoiceKeys.js'
 // These component checks complement the browser viewport matrix. They protect
 // the shared mobile/desktop handlers without calling an API or adding a dependency.
 async function loadComponent(path, bindings = {}) {
-  bindings = { handleFormSubmit, notifyInvalidSubmit, privateRoomTypeLabel, roomTypeLabel, RoomBedsSection: () => null, ...bindings }
+  bindings = { PageHeader: 'page-header', EmptyState: 'empty-state', LoadingState: 'loading-state', Gauge: 'svg', Plus: 'svg', handleFormSubmit, notifyInvalidSubmit, privateRoomTypeLabel, roomTypeLabel, RoomBedsSection: () => null, ...bindings }
   let source = await readFile(new URL(path, import.meta.url), 'utf8')
   const name = source.match(/export default function (\w+)\(/)[1]
   source = source.replace(/^import .*$/gm, '').replace('export default function ', 'function ')

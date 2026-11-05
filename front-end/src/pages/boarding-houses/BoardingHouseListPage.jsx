@@ -5,6 +5,9 @@ import { Link, useLocation } from 'react-router-dom'
 import { deleteBoardingHouse, getBoardingHouses } from '../../api/boardingHouseApi'
 import { boardingHouseKeys } from '../../api/boardingHouseKeys'
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
+import PageHeader from '../../components/ui/PageHeader'
+import EmptyState from '../../components/ui/EmptyState'
+import LoadingState from '../../components/ui/LoadingState'
 
 export default function BoardingHouseListPage() {
   const queryClient = useQueryClient()
@@ -27,23 +30,19 @@ export default function BoardingHouseListPage() {
     setConfirmingId(id)
   }
 
-  if (query.isPending) return <p>Đang tải danh sách nhà trọ...</p>
+  if (query.isPending) return <LoadingState label="Đang tải danh sách nhà trọ…" />
   if (query.isError) return <p className="text-red-600">{getApiErrorMessage(query.error)}</p>
 
   return (
     <section className="min-w-0">
-      <div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="break-words text-xl font-bold sm:text-2xl">Nhà trọ</h2>
-          <p className="mt-1 text-sm text-slate-600">Quản lý các nhà trọ của bạn.</p>
-        </div>
+      <PageHeader title="Nhà trọ" eyebrow="DANH MỤC QUẢN LÝ" description="Không gian của bạn. Mọi thông tin, cùng một nơi.">
         <Link
           to="/boarding-houses/new"
           className="inline-flex min-h-11 sm:min-h-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
         >
           <Plus size={17} /> Thêm nhà trọ
         </Link>
-      </div>
+      </PageHeader>
 
       {location.state?.message && (
         <p className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{location.state.message}</p>
@@ -51,13 +50,11 @@ export default function BoardingHouseListPage() {
       {deleteError && <p className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{deleteError}</p>}
 
       {houses.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
-          <Building2 className="mx-auto mb-3 text-slate-400" size={36} />
-          <p className="font-medium">Bạn chưa có nhà trọ nào.</p>
+        <EmptyState icon={Building2} title="Bắt đầu với nhà trọ đầu tiên." description="Tạo nhà trọ, sắp xếp các tầng và thêm phòng để bắt đầu vận hành.">
           <Link className="mt-4 inline-block text-sm font-medium text-slate-900 underline" to="/boarding-houses/new">
             Thêm nhà trọ
           </Link>
-        </div>
+        </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
           <table className="w-full min-w-[640px] text-left text-sm">

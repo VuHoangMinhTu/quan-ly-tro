@@ -115,15 +115,15 @@ export default function TenantListPage() {
       : <button type="button" disabled={query.isPlaceholderData} onClick={() => { setDeleteError(''); setConfirmingId(tenant.id) }} className="inline-flex min-h-11 sm:min-h-0 items-center gap-1 rounded-lg px-3 text-sm text-red-700 hover:bg-red-50 disabled:opacity-60"><Trash2 size={15} /> Xóa</button>}
   </div>
 
-  return <section className="min-w-0">
+  return <section className="bh-workspace min-w-0">
     <div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div><h2 className="break-words text-xl font-bold sm:text-2xl">Người thuê</h2><p className="mt-1 text-sm text-slate-600">Quản lý hồ sơ người thuê của bạn.</p></div>
+      <div><p className="bh-eyebrow">HỒ SƠ & LỊCH SỬ CƯ TRÚ</p><h2 className="break-words text-xl font-bold sm:text-2xl">Người thuê</h2><p className="bh-page-description">Tìm hồ sơ, theo dõi người ở và quản lý thông tin tập trung.</p></div>
       <div className="flex flex-wrap gap-2">{queryClient.getQueryData(['me'])?.data?.data?.landlord && <button type="button" onClick={() => setIsImportOpen(true)} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium">Import Excel</button>}<Link to="/tenants/new" className="inline-flex min-h-11 sm:min-h-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"><Plus size={17} /> Thêm người thuê</Link></div>
     </div>
     {isImportOpen && <TenantImportModal onClose={() => setIsImportOpen(false)} />}
     {location.state?.message && <p className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{location.state.message}</p>}
     {deleteError && <p role="alert" className="mb-4 text-sm text-red-600">{deleteError}</p>}
-    <div className="mb-4 space-y-3">
+    <div className="bh-filter-panel mb-5 space-y-4">
       <TenantSearch key={searchReset} value={filters.q} onCommit={commitSearch} />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <TenantFilter label="Nhà trọ" value={filters.boardingHouseId} onChange={(value) => updateFilter('boarding_house_id', value)} options={houses.map((house) => [house.id, house.name])} emptyLabel={housesQuery.isPending ? 'Đang tải nhà trọ...' : 'Tất cả nhà trọ'} disabled={housesQuery.isPending || housesQuery.isError} />

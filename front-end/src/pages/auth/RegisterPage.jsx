@@ -1,5 +1,6 @@
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useState } from 'react'
+import AuthAside from '../../components/ui/AuthAside'
 import { useMutation } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -38,7 +39,8 @@ export default function RegisterPage() {
   })
 
   return (
-    <main className="flex min-h-dvh items-center justify-center p-4">
+    <main className="bh-auth-page flex min-h-dvh items-center justify-center p-4">
+      <AuthAside />
       <form
         onSubmit={form.handleSubmit((data) => mutation.mutate(data))}
         className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 sm:p-8 shadow"

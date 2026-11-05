@@ -19,12 +19,22 @@ class BillingService
 {
     public function generateForInvoice(Invoice $invoice): void
     {
+        app(ContractSettlementPolicy::class)->assertInvoiceWriteAllowed($invoice);
+        if (DB::table('monthly_invoice_compositions')->where('invoice_id', $invoice->id)->exists()) {
+            throw ValidationException::withMessages(['invoice_id' => 'Hóa đơn tháng đã có snapshot V2; hãy dùng chức năng cập nhật tính toán hóa đơn nháp để tránh tạo trùng khoản thu.']);
+        }
+        if (DB::table('invoice_obligations')->where('invoice_id', $invoice->id)->exists()) {
+            app(UtilityPeriodBilling::class)->generate($invoice->room, $invoice->billing_period->toDateString());
+
+            return;
+        }
         $oldRemaining = DB::transaction(function () use ($invoice): float {
             // Term changes and generation share this lock before touching invoices.
             Room::query()->whereKey($invoice->room_id)->lockForUpdate()->firstOrFail();
             // Recheck persisted financial state under the same lock used by payments:
             // a previously loaded invoice may already have been paid by another request.
             $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
+            app(ContractSettlementPolicy::class)->assertInvoiceWriteAllowed($invoice);
             if (! $invoice->canEditFinancials()) {
                 throw new InvoiceFinancialEditException('Hóa đơn đã có thanh toán nên không thể chỉnh sửa các khoản thu.');
             }
@@ -101,7 +111,11 @@ class BillingService
                     }
                     // readings() defaults to ascending order for history views;
                     // replace it here rather than appending a conflicting order.
-                    $previous = $meter->readings()->whereDate('reading_date', '<=', $usageStart)
+                    // A reading on the first day of the billing period may be
+                    // that period's closing reading (for example after its date
+                    // is corrected). Keep it eligible for $current below instead
+                    // of consuming it as the previous period's baseline.
+                    $previous = $meter->readings()->whereDate('reading_date', '<', $usageStart)
                         ->when($opening, fn ($query) => $query->whereDate('reading_date', '>=', $opening->reading_date))
                         ->reorder('reading_date', 'desc')->orderByDesc('id')->first();
                     $openingDate = $previous?->reading_date?->format('Y-m-d');

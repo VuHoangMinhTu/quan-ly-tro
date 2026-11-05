@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\BoardingHouse;
 use App\Models\Invoice;
 use App\Models\Landlord;
+use App\Models\PayOSPaymentRequest;
 use App\Models\Room;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -17,6 +18,15 @@ use Tests\TestCase;
 class PaymentQrApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    private function canonicalSnapshot(?array $snapshot): ?array
+    {
+        if ($snapshot !== null) {
+            ksort($snapshot);
+        }
+
+        return $snapshot;
+    }
 
     private function owner(): User
     {
@@ -136,6 +146,42 @@ class PaymentQrApiTest extends TestCase
         $this->assertSame($snapshot, $invoice->fresh()->payment_snapshot);
     }
 
+    public function test_unpaid_invoice_snapshot_updates_only_after_explicit_confirmation_and_only_when_no_payment_is_in_flight(): void
+    {
+        $owner = $this->owner();
+        $this->upload($owner, ['bank_name' => 'Ngân hàng cũ'])->assertOk();
+        $eligible = $this->invoice($owner, 'UNPAID');
+        $eligible->items()->create(['type' => 'RENT', 'description' => 'Tiền phòng', 'quantity' => 1, 'unit_price' => 120000, 'amount' => 120000, 'source' => 'AUTO']);
+        DB::table('invoices')->where('id', $eligible->id)->update(['subtotal' => 120000, 'total_amount' => 120000]);
+        $paid = $this->invoice($owner, 'UNPAID');
+        $paid->payments()->create(['amount' => 1000, 'payment_method' => 'CASH', 'payment_source' => 'MANUAL', 'paid_at' => '2026-10-24 12:00:00']);
+        $pendingPayos = $this->invoice($owner, 'UNPAID');
+        PayOSPaymentRequest::create(['invoice_id' => $pendingPayos->id, 'order_code' => 900000001, 'amount' => 1000, 'status' => 'PENDING']);
+        $ambiguousPayos = $this->invoice($owner, 'UNPAID');
+        PayOSPaymentRequest::create(['invoice_id' => $ambiguousPayos->id, 'order_code' => 900000002, 'amount' => 1000, 'status' => 'CREATION_FAILED']);
+        $locked = $this->invoice($owner, 'PARTIALLY_PAID');
+        DB::table('invoices')->where('id', $locked->id)->update(['paid_amount' => 1000]);
+
+        $oldSnapshot = $eligible->payment_snapshot;
+        $this->upload($owner, ['bank_name' => 'Ngân hàng mới'])->assertOk();
+        $unconfirmed = $this->actingAs($owner, 'sanctum')->postJson('/api/landlord/payment-profile/sync-unpaid-invoices', ['confirm' => false]);
+        $unconfirmed->assertUnprocessable();
+        $this->assertSame($this->canonicalSnapshot($oldSnapshot), $this->canonicalSnapshot($eligible->fresh()->payment_snapshot));
+
+        $syncResponse = $this->actingAs($owner, 'sanctum')->postJson('/api/landlord/payment-profile/sync-unpaid-invoices', ['confirm' => true]);
+        $syncResponse->assertOk()->assertJsonPath('data.updated_count', 1);
+
+        $this->assertSame('Ngân hàng mới', $eligible->fresh()->payment_snapshot['bank_name']);
+        $this->assertSame('Ngân hàng cũ', $paid->fresh()->payment_snapshot['bank_name']);
+        $this->assertSame('Ngân hàng cũ', $pendingPayos->fresh()->payment_snapshot['bank_name']);
+        $this->assertSame('Ngân hàng cũ', $ambiguousPayos->fresh()->payment_snapshot['bank_name']);
+        $this->assertSame('Ngân hàng cũ', $locked->fresh()->payment_snapshot['bank_name']);
+        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $eligible->id, 'amount' => 120000]);
+        $this->assertDatabaseHas('invoices', ['id' => $eligible->id, 'subtotal' => 120000, 'total_amount' => 120000, 'paid_amount' => 0]);
+        $this->assertDatabaseCount('payments', 1);
+        $this->assertDatabaseCount('payos_payment_requests', 2);
+    }
+
     public function test_issued_without_payment_profile_does_not_adopt_bank_details_added_later(): void
     {
         $owner = $this->owner();
@@ -147,7 +193,7 @@ class PaymentQrApiTest extends TestCase
             ->assertJsonPath('data.payment_profile.source', 'missing_snapshot')
             ->assertJsonPath('data.payment_profile.current_profile_configured', true);
         $this->get("/api/invoices/{$invoice->id}/payment-qr")->assertNotFound();
-        $this->assertSame($invoice->payment_snapshot, $invoice->fresh()->payment_snapshot);
+        $this->assertSame($this->canonicalSnapshot($invoice->payment_snapshot), $this->canonicalSnapshot($invoice->fresh()->payment_snapshot));
     }
 
     public function test_legacy_null_and_empty_snapshots_are_read_only_even_when_invoice_note_is_saved(): void
@@ -191,7 +237,7 @@ class PaymentQrApiTest extends TestCase
             ->assertJsonPath('data.payment_profile.payment_qr_missing', true)
             ->assertJsonPath('data.payment_profile.payment_qr_url', null);
         $this->get("/api/invoices/{$invoice->id}/payment-qr")->assertNotFound();
-        $this->assertSame($snapshot, $invoice->fresh()->payment_snapshot);
+        $this->assertSame($this->canonicalSnapshot($snapshot), $this->canonicalSnapshot($invoice->fresh()->payment_snapshot));
     }
 
     public function test_bank_only_profile_can_be_printed_without_qr(): void

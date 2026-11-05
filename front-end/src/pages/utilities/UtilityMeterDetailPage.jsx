@@ -15,6 +15,7 @@ import { utilityKeys } from '../../api/utilityKeys'
 import UtilityReadingForm from '../../components/forms/UtilityReadingForm'
 import { formatCurrency, formatDate, formatUtilityValue } from '../../utils/formatters'
 import { BILLING_METHOD_LABELS, SERVICE_TYPE_LABELS } from '../../utils/service'
+import LoadingState from '../../components/ui/LoadingState'
 
 function formatQuantity(value, unit) {
   const formattedValue = formatUtilityValue(value)
@@ -123,18 +124,19 @@ export default function UtilityMeterDetailPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: utilityKeys.readings(id) }),
   })
 
-  if (meterQuery.isPending) return <p>Đang tải đồng hồ...</p>
+  if (meterQuery.isPending) return <LoadingState label="Đang tải đồng hồ…" />
   if (meterQuery.isError || !meter) return <p className="text-red-600">{getApiErrorMessage(meterQuery.error)}</p>
 
   const readings = readingsQuery.data?.data?.data || []
   const unit = meter.service?.unit || ''
 
   return (
-    <section className="min-w-0">
+    <section className="bh-meter-screen bh-workspace min-w-0">
       <Link to={`/rooms/${meter.room_id}`} className="inline-flex min-h-11 items-center text-sm text-slate-600">← Quay lại phòng</Link>
 
       <div className="my-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
+          <p className="bh-eyebrow">ĐỒNG HỒ & LỊCH SỬ CHỈ SỐ</p>
           <h2 className="break-words text-xl font-bold text-slate-900 sm:text-2xl">{meter.service?.name || 'Đồng hồ dịch vụ'}</h2>
           <p className="mt-1 break-words text-sm text-slate-600">
             Mã đồng hồ: {meter.meter_code || 'Chưa cập nhật'} · Chỉ số đầu: {formatQuantity(meter.initial_reading, unit)}

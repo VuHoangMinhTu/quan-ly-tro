@@ -8,6 +8,7 @@ import { roomKeys } from '../../api/roomKeys'
 import { getRoomsByBoardingHouse } from '../../api/roomApi'
 import RoomCard from '../../components/rooms/RoomCard'
 import RoomOrderButton from '../../components/rooms/RoomOrderButton'
+import LoadingState from '../../components/ui/LoadingState'
 
 export default function RoomListPage() {
   const { boardingHouseId } = useParams()
@@ -17,7 +18,7 @@ export default function RoomListPage() {
   const boardingHouseQuery = useQuery({ queryKey: boardingHouseKeys.detail(boardingHouseId), queryFn: () => getBoardingHouse(boardingHouseId) })
   const roomsQuery = useQuery({ queryKey: roomKeys.byBoardingHouse(boardingHouseId), queryFn: () => getRoomsByBoardingHouse(boardingHouseId) })
 
-  if (boardingHouseQuery.isPending || roomsQuery.isPending) return <p>Đang tải danh sách phòng...</p>
+  if (boardingHouseQuery.isPending || roomsQuery.isPending) return <LoadingState label="Đang tải danh sách phòng…" />
   if (boardingHouseQuery.isError) return <p className="text-red-600">{getApiErrorMessage(boardingHouseQuery.error)}</p>
   if (roomsQuery.isError) return <p className="text-red-600">{getApiErrorMessage(roomsQuery.error)}</p>
 

@@ -208,6 +208,40 @@ class BillingServiceApiTest extends TestCase
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'total_amount' => 7_600]);
     }
 
+    public function test_reading_moved_to_first_day_of_next_period_is_billed_from_contract_opening(): void
+    {
+        [$user, $room] = $this->ownerAndRoom();
+        $electricity = $this->service($room, 'ELECTRICITY', 'PER_UNIT', 3_500);
+        $this->assign($room, $electricity);
+        $meter = $this->meter($room, $electricity, 100);
+        $tenant = Tenant::create(['landlord_id' => $room->boardingHouse->landlord_id, 'full_name' => 'Tenant fixture']);
+        $contract = Contract::create([
+            'room_id' => $room->id, 'tenant_id' => $tenant->id, 'contract_code' => 'HD-READING-DATE',
+            'start_date' => '2026-10-01', 'end_date' => '2027-09-30', 'monthly_rent' => 0,
+            'deposit_amount' => 0, 'status' => 'ACTIVE',
+        ]);
+        RoomTenant::create(['room_id' => $room->id, 'tenant_id' => $tenant->id, 'contract_id' => $contract->id,
+            'is_primary' => true, 'status' => 'ACTIVE', 'move_in_date' => '2026-10-01']);
+        $contract->utilityOpenings()->create([
+            'utility_meter_id' => $meter->id, 'service_id' => $electricity->id, 'service_name' => $electricity->name,
+            'unit' => 'kWh', 'opening_reading' => 100, 'reading_date' => '2026-10-01',
+        ]);
+        $closing = $meter->readings()->create(['reading_date' => '2026-10-01', 'reading_value' => 150]);
+
+        $this->withToken($user->createToken('test')->plainTextToken)
+            ->putJson("/api/utility-readings/{$closing->id}", ['reading_date' => '2026-11-01', 'reading_value' => 150])
+            ->assertOk();
+        $invoice = $this->invoice($room, '2026-11-01');
+        $invoice->update(['contract_id' => $contract->id]);
+
+        $this->generate($user, $invoice)->assertOk();
+
+        $this->assertDatabaseHas('utility_readings', ['id' => $closing->id, 'reading_date' => '2026-11-01', 'reading_value' => 150]);
+        $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY', 'quantity' => 50,
+            'unit_price' => 3_500, 'amount' => 175_000]);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'subtotal' => 175_000, 'total_amount' => 175_000]);
+    }
+
     public function test_missing_november_closing_fails_atomically_even_when_december_has_a_reading(): void
     {
         [$user, $room] = $this->ownerAndRoom();

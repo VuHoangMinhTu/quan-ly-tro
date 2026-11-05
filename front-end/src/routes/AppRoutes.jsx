@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
 import BoardingHouseCreatePage from '../pages/boarding-houses/BoardingHouseCreatePage'
 import BoardingHouseDetailPage from '../pages/boarding-houses/BoardingHouseDetailPage'
 import BoardingHouseEditPage from '../pages/boarding-houses/BoardingHouseEditPage'
@@ -26,33 +27,38 @@ import ContractEditPage from '../pages/contracts/ContractEditPage'
 import ContractListPage from '../pages/contracts/ContractListPage'
 import ContractNavigationPage from '../pages/contracts/ContractNavigationPage'
 import ContractTemplateListPage from '../pages/contracts/ContractTemplateListPage'
-import ContractTemplateEditorPage from '../pages/contracts/ContractTemplateEditorPage'
-import ContractDocumentPage from '../pages/contracts/ContractDocumentPage'
-import ContractDemoPage from '../pages/contracts/ContractDemoPage'
-import ContractSigningPage from '../pages/contracts/ContractSigningPage'
-import SignedContractDocumentPage from '../pages/contracts/SignedContractDocumentPage'
 import ServiceListPage from '../pages/services/ServiceListPage'
 import UtilityMeterDetailPage from '../pages/utilities/UtilityMeterDetailPage'
 import InvoiceCreatePage from '../pages/invoices/InvoiceCreatePage'
+import BillingV2Page from '../pages/invoices/BillingV2Page'
 import InvoiceDetailPage from '../pages/invoices/InvoiceDetailPage'
 import InvoiceEditPage from '../pages/invoices/InvoiceEditPage'
 import InvoiceListPage from '../pages/invoices/InvoiceListPage'
-import InvoicePrintPage from '../pages/invoices/InvoicePrintPage'
 import ModuleNavigationPage from '../pages/navigation/ModuleNavigationPage'
 import PayOSReturnPage from '../pages/payments/PayOSReturnPage'
 import PaymentSettingsPage from '../pages/payments/PaymentSettingsPage'
 import ResidenceDeclarationListPage from '../pages/residence/ResidenceDeclarationListPage'
 import ResidenceDeclarationEditPage from '../pages/residence/ResidenceDeclarationEditPage'
 import ResidenceDeclarationDetailPage from '../pages/residence/ResidenceDeclarationDetailPage'
-import ResidenceCt01PrintPage from '../pages/residence/ResidenceCt01PrintPage'
-import ResidenceStayConsentPrintPage from '../pages/residence/ResidenceStayConsentPrintPage'
 import MainLayout from '../layouts/MainLayout'
 import ProtectedRoute from './ProtectedRoute'
+import LandingPage from '../pages/LandingPage'
+
+const ContractTemplateEditorPage = lazy(() => import('../pages/contracts/ContractTemplateEditorPage'))
+const ContractDocumentPage = lazy(() => import('../pages/contracts/ContractDocumentPage'))
+const ContractDemoPage = lazy(() => import('../pages/contracts/ContractDemoPage'))
+const ContractSigningPage = lazy(() => import('../pages/contracts/ContractSigningPage'))
+const SignedContractDocumentPage = lazy(() => import('../pages/contracts/SignedContractDocumentPage'))
+const InvoicePrintPage = lazy(() => import('../pages/invoices/InvoicePrintPage'))
+const ResidenceCt01PrintPage = lazy(() => import('../pages/residence/ResidenceCt01PrintPage'))
+const ResidenceStayConsentPrintPage = lazy(() => import('../pages/residence/ResidenceStayConsentPrintPage'))
 
 export default function AppRoutes() {
   return (
     <BrowserRouter>
+      <Suspense fallback={<p role="status" className="p-8 text-sm text-slate-600">Đang tải giao diện…</p>}>
       <Routes>
+        <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/sign/:token" element={<ContractSigningPage publicSigning />} />
         <Route path="/register" element={<RegisterPage />} />
@@ -105,17 +111,18 @@ export default function AppRoutes() {
             <Route path="/boarding-houses/:boardingHouseId/services" element={<ServiceListPage />} />
             <Route path="/utility-meters/:id" element={<UtilityMeterDetailPage />} />
             <Route path="/rooms/:roomId/invoices" element={<InvoiceListPage />} />
+            <Route path="/rooms/:roomId/billing-v2" element={<BillingV2Page />} />
             <Route path="/rooms/:roomId/invoices/new" element={<InvoiceCreatePage />} />
             <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
             <Route path="/invoices/:id/edit" element={<InvoiceEditPage />} />
             <Route path="/payments/payos/success" element={<PayOSReturnPage />} />
             <Route path="/payments/payos/cancel" element={<PayOSReturnPage cancelled />} />
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   )
 }

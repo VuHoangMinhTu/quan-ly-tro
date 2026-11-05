@@ -9,6 +9,7 @@ import { z } from 'zod'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { login } from '../../api/authApi'
 import GoogleButton from '../../components/ui/GoogleButton'
+import AuthAside from '../../components/ui/AuthAside'
 
 const schema = z.object({
   email: z.string().min(1, 'Vui lòng nhập email').email('Email không hợp lệ'),
@@ -39,7 +40,8 @@ export default function LoginPage() {
   const error = mutation.error ? getApiErrorMessage(mutation.error) : ''
 
   return (
-    <main className="flex min-h-dvh items-center justify-center p-4">
+    <main className="bh-auth-page flex min-h-dvh items-center justify-center p-4">
+      <AuthAside />
       <form
         onSubmit={form.handleSubmit((data) => mutation.mutate(data))}
         className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 sm:p-8 shadow"

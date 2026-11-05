@@ -43,7 +43,20 @@ class NewTenantUtilityBillingTest extends TestCase
         [$new, $old, $owner, $service, $meter] = $this->fixture();
         $opening = ['utility_meter_id' => $meter->id, 'opening_reading' => 175, 'reading_date' => '2026-10-23'];
         $this->activate($new, $owner->id, [$opening], $agreed ? [['service_id' => $service->id]] : [])->assertOk();
+        $this->getJson("/api/rooms/{$new->room_id}/utility-meters")->assertOk()
+            ->assertJsonPath('data.0.latest_reading.reading_value', '100.00')
+            ->assertJsonPath('data.0.current_reading.reading_value', '175.00')
+            ->assertJsonPath(
+    'data.0.current_reading.source',
+    $agreed ? 'BILLING_V2_CHECKPOINT' : 'CONTRACT_HANDOVER'
+);
+        $this->getJson("/api/rooms/{$new->room_id}/contract-context")->assertOk()
+            ->assertJsonPath('data.utility_openings.0.opening_reading', '175.00')
+            ->assertJsonPath('data.utility_openings.0.reading_date', '2026-10-23');
         $meter->readings()->create(['reading_date' => '2026-10-31', 'reading_value' => 195]);
+        $this->getJson("/api/rooms/{$new->room_id}/utility-meters")->assertOk()
+            ->assertJsonPath('data.0.current_reading.reading_value', '195.00')
+            ->assertJsonPath('data.0.current_reading.source', 'UTILITY_READING');
         $this->postJson("/api/rooms/{$new->room_id}/invoices", ['contract_id' => $new->id, 'billing_period' => '2026-10-01', 'status' => 'DRAFT'])->assertCreated();
         $invoice = $new->invoices()->firstOrFail();
 

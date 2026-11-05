@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
-import { disconnectPayos, getPaymentProfile, getPayosConfig, savePaymentProfile, savePayosConfig } from '../../api/paymentSettingsApi'
+import { disconnectPayos, getPaymentProfile, getPayosConfig, savePaymentProfile, savePayosConfig, syncUnpaidInvoices } from '../../api/paymentSettingsApi'
 import PrivatePaymentQr, { LocalQrImage } from '../../components/payments/PrivatePaymentQr'
 
 const fieldClass = 'mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2'
@@ -17,6 +17,7 @@ export default function PaymentSettingsPage() {
   const [qrFile, setQrFile] = useState(null)
   const [removeQr, setRemoveQr] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [confirmInvoiceSync, setConfirmInvoiceSync] = useState(false)
   const shownProfile = profile ?? profileQuery.data?.data?.data ?? { bank_name: '', bank_account_name: '', bank_account_number: '' }
   const [credentials, setCredentials] = useState({ client_id: '', api_key: '', checksum_key: '' })
   const [notice, setNotice] = useState('')
@@ -25,10 +26,15 @@ export default function PaymentSettingsPage() {
     cache.invalidateQueries({ queryKey: ['invoice'] })
     setProfile(null); setQrFile(null); setRemoveQr(false); setUploadError(''); setNotice('Đã lưu thông tin nhận thanh toán.')
   } })
+  const invoiceSyncMutation = useMutation({ mutationFn: syncUnpaidInvoices, onSuccess: response => {
+    cache.invalidateQueries({ queryKey: ['invoice'] })
+    setConfirmInvoiceSync(false)
+    setNotice(response?.data?.message || 'Đã kiểm tra hóa đơn chưa thanh toán.')
+  } })
   const payosMutation = useMutation({ mutationFn: savePayosConfig, onSuccess: () => { cache.invalidateQueries({ queryKey: payosKey }); setCredentials({ client_id: '', api_key: '', checksum_key: '' }); setNotice('Đã lưu PayOS. Quản trị viên cần xác nhận webhook trước khi nhận thanh toán.') } })
   const disconnectMutation = useMutation({ mutationFn: disconnectPayos, onSuccess: () => { cache.invalidateQueries({ queryKey: payosKey }); setNotice('Đã ngắt kết nối PayOS.') } })
   const payos = payosQuery.data?.data?.data
-  const error = profileQuery.error || payosQuery.error || profileMutation.error || payosMutation.error || disconnectMutation.error
+  const error = profileQuery.error || payosQuery.error || profileMutation.error || invoiceSyncMutation.error || payosMutation.error || disconnectMutation.error
   const submitProfile = event => {
     event.preventDefault()
     if (profileQuery.isPending || profileQuery.isError || uploadError) return
@@ -63,6 +69,11 @@ export default function PaymentSettingsPage() {
       </div>
       <button disabled={profileQuery.isPending || profileQuery.isError || profileMutation.isPending || Boolean(uploadError)} className="min-h-11 rounded-lg bg-slate-900 px-4 text-white disabled:opacity-50">{profileMutation.isPending ? 'Đang lưu...' : 'Lưu thông tin'}</button>
     </form>
+    <section className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:p-6">
+      <div><h3 className="font-semibold text-slate-900">Đồng bộ hóa đơn đã phát hành</h3><p className="mt-1 text-sm text-slate-700">Hóa đơn nháp dùng thông tin thanh toán hiện tại. Hóa đơn đã phát hành giữ bản chụp lúc phát hành. Bạn có thể chủ động cập nhật các hóa đơn UNPAID chưa có giao dịch hoặc yêu cầu PayOS đang xử lý; hóa đơn đã thanh toán và hóa đơn cần đối soát sẽ được giữ nguyên.</p></div>
+      <button type="button" disabled={invoiceSyncMutation.isPending} onClick={() => setConfirmInvoiceSync(true)} className="min-h-11 rounded-lg border border-amber-300 bg-white px-4 text-sm font-medium text-slate-900 disabled:opacity-50">{invoiceSyncMutation.isPending ? 'Đang cập nhật...' : 'Cập nhật hóa đơn đủ điều kiện'}</button>
+    </section>
+    {confirmInvoiceSync && <div role="dialog" aria-modal="true" aria-labelledby="sync-invoice-title" className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"><div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl sm:p-6"><h3 id="sync-invoice-title" className="text-lg font-semibold">Cập nhật thông tin thanh toán?</h3><p className="mt-3 text-sm text-slate-600">Chỉ snapshot của hóa đơn UNPAID chưa có payment và không có yêu cầu PayOS đang hoạt động/đối soát mới được cập nhật. Tiền hóa đơn, khoản thu và lịch sử thanh toán không thay đổi.</p><div className="mt-5 flex flex-wrap justify-end gap-3"><button type="button" disabled={invoiceSyncMutation.isPending} onClick={() => setConfirmInvoiceSync(false)} className="min-h-11 rounded-lg border px-4">Hủy</button><button type="button" disabled={invoiceSyncMutation.isPending} onClick={() => invoiceSyncMutation.mutate()} className="min-h-11 rounded-lg bg-slate-900 px-4 text-white disabled:opacity-50">Xác nhận cập nhật</button></div></div></div>}
     <form onSubmit={(event) => { event.preventDefault(); payosMutation.mutate({ ...Object.fromEntries(Object.entries(credentials).filter(([, value]) => value.trim() !== '')), is_active: true }) }} className="space-y-4 rounded-xl bg-white p-4 shadow-sm sm:p-6">
       <div><h3 className="text-lg font-semibold">PayOS</h3><p className="text-sm text-slate-600">{payos?.is_active ? 'Đã cấu hình' : 'Chưa cấu hình hoặc đã ngắt kết nối'}</p></div>
       {payos?.webhook_url && <p className="break-all rounded-lg bg-slate-50 p-3 text-xs">Webhook URL: {payos.webhook_url}</p>}
