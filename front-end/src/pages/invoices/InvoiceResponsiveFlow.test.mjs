@@ -8,6 +8,7 @@ import { paymentKeys } from '../../api/paymentKeys.js'
 import { canEditInvoiceFinancials } from '../../utils/invoiceFinancials.js'
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage.js'
 import { invoiceStatusLabels } from '../../utils/invoiceStatus.js'
+import { invoiceUsageWindow } from '../../utils/invoiceUsageWindow.js'
 
 function elements(node) {
   if (Array.isArray(node)) return node.flatMap(elements)
@@ -35,6 +36,9 @@ async function pageHarness(path, { invoice = invoiceFixture, payments = [] } = {
   const mutations = []
   const bindings = {
     PageHeader: 'page-header',
+    MonthlyDraftUpdatePanel: () => null,
+    MonthlyEvidenceSummary: () => null,
+    invoiceUsageWindow,
     invoiceKeys, paymentKeys, canEditInvoiceFinancials, applyApiFieldErrors, getApiErrorMessage, invoiceStatusLabels,
     useState: (initial) => {
       const index = stateCursor++
@@ -65,7 +69,7 @@ async function pageHarness(path, { invoice = invoiceFixture, payments = [] } = {
     createPayment: () => {}, deletePayment: () => {}, getPayments: () => {}, updatePayment: () => {}, createPayOSPaymentRequest: () => {},
     window: { confirm: () => true },
   }
-  const source = (await readFile(new URL(path, import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
+  const source = (await readFile(new URL(path, import.meta.url), 'utf8')).replace(/^\uFEFF/, '').replace(/^import .*$/gm, '').replace('export default function ', 'function ')
   const name = source.match(/function (InvoiceDetailPage|InvoiceListPage)\(/)[1]
   const { code } = await transformWithOxc(source, `${name}.jsx`, { jsx: { runtime: 'classic' } })
   const Page = new Function('React', ...Object.keys(bindings), `${code}\nreturn ${name}`)(React, ...Object.values(bindings))

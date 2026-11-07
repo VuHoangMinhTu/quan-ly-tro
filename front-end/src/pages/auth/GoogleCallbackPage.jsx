@@ -1,3 +1,4 @@
+import AuthLayout from '../../components/ui/AuthLayout'
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useEffect, useRef, useState } from 'react'
 import { completeLogin } from '../../api/authSession'
@@ -62,16 +63,24 @@ export default function GoogleCallbackPage() {
 
   if (!code || error) {
     return (
-      <main className="flex min-h-dvh items-center justify-center p-4">
-        <section className="w-full min-w-0 max-w-md break-words rounded-xl bg-white p-5 text-center shadow sm:p-8">
-        <p role="alert">{error || 'Đăng nhập Google thất bại.'}</p>
-        <Link className="mt-4 inline-flex min-h-11 items-center font-medium underline sm:min-h-0" to="/login">
-          Quay lại đăng nhập
-        </Link>
+      <AuthLayout>
+        <section>
+          <h1>Không thể đăng nhập bằng Google</h1>
+          <p role="alert">{error || 'Đăng nhập Google thất bại.'}</p>
+          <Link className="mt-4 inline-flex min-h-11 items-center font-medium underline sm:min-h-0" to="/login">
+            Quay lại đăng nhập
+          </Link>
         </section>
-      </main>
+      </AuthLayout>
     )
   }
 
-  return <main className="flex min-h-dvh items-center justify-center p-4"><section role="status" className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 text-center shadow sm:p-8">Đang đăng nhập bằng Google...</section></main>
+  return (
+    <AuthLayout>
+      <section role="status">
+        <h1>Đang đăng nhập bằng Google…</h1>
+        <p>Bạn sẽ được chuyển đến BeeHouse khi đăng nhập hoàn tất.</p>
+      </section>
+    </AuthLayout>
+  )
 }

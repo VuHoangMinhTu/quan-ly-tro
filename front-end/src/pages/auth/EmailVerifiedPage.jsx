@@ -1,2 +1,21 @@
 import { Link, useSearchParams } from 'react-router-dom'
-export default function EmailVerifiedPage(){const [params]=useSearchParams();const success=params.get('status')==='success';return <main className="flex min-h-dvh items-center justify-center p-4"><section className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 sm:p-8 text-center shadow"><h1 className="text-xl sm:text-2xl font-bold">{success?'Xác minh email thành công.':'Liên kết xác minh không hợp lệ hoặc đã hết hạn.'}</h1><Link className="w-full sm:w-auto min-h-11 sm:min-h-0 mt-6 inline-block rounded bg-slate-900 px-4 py-2 text-white" to="/login">Đăng nhập</Link></section></main>}
+import { CircleAlert, CircleCheck } from 'lucide-react'
+import AuthLayout from '../../components/ui/AuthLayout'
+
+export default function EmailVerifiedPage() {
+  const [params] = useSearchParams()
+  const success = params.get('status') === 'success'
+  const Icon = success ? CircleCheck : CircleAlert
+
+  return (
+    <AuthLayout>
+      <section>
+        <span className="bh-auth-status-icon" data-tone={success ? 'success' : 'warning'}>
+          <Icon size={26} aria-hidden="true" />
+        </span>
+        <h1>{success ? 'Xác minh email thành công' : 'Liên kết xác minh không hợp lệ hoặc đã hết hạn'}</h1>
+        <Link className="bh-auth-primary mt-6 w-full" to="/login">Đăng nhập</Link>
+      </section>
+    </AuthLayout>
+  )
+}

@@ -1,3 +1,4 @@
+import AuthLayout from '../../components/ui/AuthLayout'
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { resetPassword } from '../../api/authApi'
 import PasswordInput from '../../components/ui/PasswordInput'
@@ -47,23 +48,23 @@ export default function ResetPasswordPage() {
 
   if (!token || !email) {
     return (
-      <main className="flex min-h-dvh items-center justify-center p-4">
-        <section className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 sm:p-8 shadow">
+      <AuthLayout>
+        <section>
           <h1 className="text-xl sm:text-2xl font-bold">Liên kết không hợp lệ</h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">
             Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu liên kết mới.
           </p>
-          <Link to="/forgot-password" className="w-full sm:w-auto min-h-11 sm:min-h-0 mt-6 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+          <Link to="/forgot-password" className="bh-auth-primary w-full mt-6">
             Yêu cầu liên kết mới
           </Link>
         </section>
-      </main>
+      </AuthLayout>
     )
   }
 
   return (
-    <main className="flex min-h-dvh items-center justify-center p-4">
-      <section className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 sm:p-8 shadow">
+    <AuthLayout>
+      <section>
         <h1 className="text-xl sm:text-2xl font-bold">Đặt lại mật khẩu</h1>
         <p className="mt-3 text-sm text-slate-600">Chọn mật khẩu mới cho tài khoản BeeHouse của bạn.</p>
 
@@ -117,12 +118,12 @@ export default function ResetPasswordPage() {
 
           <button
             disabled={mutation.isPending}
-            className="min-h-11 sm:min-h-0 w-full min-w-0 rounded-lg bg-slate-900 px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="bh-auth-primary w-full"
           >
             {mutation.isPending ? 'Đang đặt lại mật khẩu...' : 'Đặt lại mật khẩu'}
           </button>
         </form>
       </section>
-    </main>
+    </AuthLayout>
   )
 }

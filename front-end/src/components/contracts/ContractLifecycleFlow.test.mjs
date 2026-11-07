@@ -9,6 +9,7 @@ import { getApiErrorMessage, getApiFieldErrors } from '../../api/getApiErrorMess
 import { contractKeys } from '../../api/contractKeys.js'
 import { residenceStatusLabels } from '../../utils/residence.js'
 import { editableContractService, contractServicesPayload, contractServicePricingError } from '../../utils/contractServices.js'
+import { openingDateFromContract, selectedUnitOpenings } from './contractOpeningRules.mjs'
 
 function nodes(node) {
   if (Array.isArray(node)) return node.flatMap(nodes)
@@ -27,7 +28,7 @@ const context = {
   room: { id: 7, room_code: '101', monthly_rent: null, max_tenants: 3, boarding_house: { name: 'BeeHouse', default_invoice_issue_day_from: 25, default_invoice_issue_day_to: 28, default_payment_due_day: 5 } },
   tenants: [{ id: 1, full_name: 'Nguyễn Văn A' }, { id: 2, full_name: 'Trần Thị B' }],
   services: [{ id: 3, name: 'Điện', billing_method: 'PER_UNIT', unit: 'kWh', base_price: 4000, vat_rate: 8 }],
-  utility_openings: [{ utility_meter_id: 4, service_name: 'Điện', opening_reading: '1800.00', reading_date: '2026-10-01', unit: 'kWh' }],
+  utility_openings: [{ service_id: 3, utility_meter_id: 4, service_name: 'Điện', opening_reading: '1800.00', reading_date: '2026-10-01', unit: 'kWh' }],
   representatives: [{ user_id: 9, full_name: 'Ngô Đức Bình', title: 'Quản lý' }],
   templates: [{ id: 1, name: 'Mẫu minh họa', version: 1, is_active: true }],
 }
@@ -37,10 +38,10 @@ async function wizard(initial, contextOverrides = {}) {
   const payloads = []
   const source = (await readFile(new URL('./ContractWizard.jsx', import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
   const bindings = { Check: 'svg', AlertCircle: 'svg', FileText: 'svg', ShieldCheck: 'svg', ...dates, TenantPicker: Input, ContractForm: CoreForm, DateInput: Input, BILLING_METHOD_LABELS, getApiErrorMessage, getApiFieldErrors,
-    ContractDraftServicesEditor: DraftServices, editableContractService, contractServicesPayload, contractServicePricingError,
+    ContractDraftServicesEditor: DraftServices, editableContractService, contractServicesPayload, contractServicePricingError, openingDateFromContract, selectedUnitOpenings,
     getContractContext: async () => ({ data: { data: context } }),
     formatCurrency: value => `${value} đ`, formatUtilityValue: String,
-    useState: initialValue => { const index = cursor++; if (!(index in state)) state[index] = typeof initialValue === 'function' ? initialValue() : initialValue; return [state[index], value => { state[index] = value }] },
+    useState: initialValue => { const index = cursor++; if (!(index in state)) state[index] = typeof initialValue === 'function' ? initialValue() : initialValue; return [state[index], value => { state[index] = typeof value === 'function' ? value(state[index]) : value }] },
   }
   const { code } = await transformWithOxc(source, 'ContractWizard.jsx', { jsx: { runtime: 'classic' } })
   const Component = new Function('React', ...Object.keys(bindings), `${code}\nreturn ContractWizard`)(React, ...Object.values(bindings))
@@ -51,21 +52,23 @@ async function wizard(initial, contextOverrides = {}) {
 }
 const coreValues = { tenant_id: 1, contract_code: 'HD101', start_date: '2026-10-01', end_date: null, signed_date: null, monthly_rent: 3800000, deposit_amount: 5000000, note: null, status: 'DRAFT' }
 
-test('wizard prefill uses latest meter reading and submitting is delayed until final step', async () => {
-  const page = await wizard()
+test('wizard requires an explicit opening reading and delays submission until final step', async () => {
+  const page = await wizard(undefined, { services: [{ ...context.services[0], type: 'ELECTRICITY' }] })
   const core = nodes(page.render()).find(node => node.type === CoreForm)
   assert.equal(core.props.initialValues.monthly_rent, '')
   assert.equal(core.props.contextRoomId, context.room.id)
   assert.equal(core.props.tenantOptions, undefined)
   await page.core(coreValues)
-  assert.match(text(page.render()), /1800.00/)
+  const reading = nodes(page.render()).find(node => node.type === 'input' && node.props.type === 'number')
+  assert.equal(reading.props.value, '')
+  reading.props.onChange({ target: { value: '1800' } })
   assert.equal(page.payloads.length, 0)
   nodes(page.render()).find(node => node.type === Input && node.props.multiple).props.onChange([2])
   page.button('Tiếp tục').props.onClick()
   nodes(page.render()).find(node => node.props.id === 'contract-representative').props.onChange({ target: { value: '9' } })
   page.button('Tiếp tục').props.onClick()
   await page.button('Kích hoạt hợp đồng').props.onClick()
-  assert.deepEqual(page.payloads[0], { ...coreValues, status: 'ACTIVE', contract_type: 'ROOM_RENTAL', bed_id: null, lessor_representative_user_id: 9, occupant_tenant_ids: [2], services: [{ service_id: 3, base_price: 4000, vat_rate: 8, pricing_snapshot: null }], payment_due_day: 5, contract_template_id: 1, utility_openings: [{ utility_meter_id: 4, opening_reading: 1800, reading_date: '2026-10-01' }] })
+  assert.deepEqual(page.payloads[0], { ...coreValues, status: 'ACTIVE', contract_type: 'ROOM_RENTAL', bed_id: null, lessor_representative_user_id: 9, occupant_tenant_ids: [2], services: [{ service_id: 3, base_price: 4000, vat_rate: 8, pricing_snapshot: null }], payment_due_day: 5, contract_template_id: 1, utility_openings: [{ service_id: 3, utility_meter_id: 4, opening_reading: 1800, reading_date: '2026-10-01' }] })
 })
 
 test('automatic code remains null through wizard and local mode is not sent to API', async () => {
@@ -159,7 +162,7 @@ test('draft with null rent can be saved but cannot be activated without mandator
 })
 
 test('edit wizard preselects numeric IDs consistently and does not reset user selections on rerender', async () => {
-  const page = await wizard({ ...coreValues, lessor_representative_user_id: 9, occupant_tenant_ids: [2], agreed_services: [{ ...context.services[0], service_id: 3 }], utility_openings: context.utility_openings })
+  const page = await wizard({ ...coreValues, lessor_representative_user_id: 9, occupant_tenant_ids: [2], agreed_services: [{ ...context.services[0], service_id: 3 }], utility_openings: context.utility_openings }, { services: [{ ...context.services[0], type: 'ELECTRICITY' }] })
   await page.core(coreValues)
   const picker = nodes(page.render()).find(node => node.type === Input && node.props.multiple)
   assert.deepEqual(picker.props.value, ['2'])
@@ -174,15 +177,13 @@ test('edit wizard preselects numeric IDs consistently and does not reset user se
   assert.equal(page.payloads[0].utility_openings[0].reading_date, '2026-10-01')
 })
 
-test('invalid schedule or opening date cannot submit a malformed payload', async () => {
-  const page = await wizard()
-  await page.core(coreValues)
-  const dateField = nodes(page.render()).find(node => node.type === Input && !node.props.multiple)
-  dateField.props.onChange('31/02/2026')
+test('missing contract date blocks a selected utility opening', async () => {
+  const page = await wizard(undefined, { services: [{ ...context.services[0], type: 'ELECTRICITY' }] })
+  await page.core({ ...coreValues, start_date: null })
   page.button('Tiếp tục').props.onClick()
   assert.equal(page.button('Lưu nháp'), undefined)
   assert.equal(page.payloads.length, 0)
-  assert.match(text(page.render()), /Ngày ghi phải theo dd\/mm\/yyyy và hợp lệ/)
+  assert.match(text(page.render()), /ngày bắt đầu hợp đồng ở Bước 1/)
 })
 
 test('contract detail renders signing snapshots rather than changed live parties and prices', async () => {

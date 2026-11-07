@@ -1,3 +1,5 @@
+import AuthLayout from '../../components/ui/AuthLayout'
+import { MailCheck } from 'lucide-react'
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
@@ -7,8 +9,9 @@ export default function VerifyEmailSentPage() {
   const mutation = useMutation({ mutationFn: () => resendVerification(email) })
 
   return (
-    <main className="flex min-h-dvh items-center justify-center p-4">
-      <section className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 sm:p-8 text-center shadow">
+    <AuthLayout>
+      <section>
+        <span className="bh-auth-status-icon"><MailCheck size={26} aria-hidden="true" /></span>
         <h1 className="text-xl sm:text-2xl font-bold">Đăng ký thành công</h1>
         <p className="mt-3 break-words">
           Email xác minh đã được gửi đến: <b>{email || 'địa chỉ email của bạn'}</b>
@@ -17,11 +20,11 @@ export default function VerifyEmailSentPage() {
           Nếu quý khách không tìm thấy email do hệ thống gửi đến, vui lòng kiểm tra thư mục Spam / Thư rác trong hộp thư.
         </p>
         {mutation.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(mutation.error)}</p>}
-        {mutation.data && <p className="mt-3 text-sm text-green-700">{mutation.data.data.message}</p>}
+        {mutation.data && <p role="status" className="mt-3 text-sm text-green-700">{mutation.data.data.message}</p>}
         <button
           disabled={!email || mutation.isPending}
           onClick={() => mutation.mutate()}
-          className="w-full sm:w-auto min-h-11 sm:min-h-0 mt-6 rounded bg-slate-900 px-4 py-2 text-white"
+          className="bh-auth-primary w-full mt-6"
         >
           {mutation.isPending ? 'Đang gửi...' : 'Gửi lại email xác minh'}
         </button>
@@ -29,6 +32,6 @@ export default function VerifyEmailSentPage() {
           <Link className="inline-flex min-h-11 items-center underline lg:min-h-0" to="/login">Quay về đăng nhập</Link>
         </p>
       </section>
-    </main>
+    </AuthLayout>
   )
 }

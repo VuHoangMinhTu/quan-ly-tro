@@ -9,7 +9,7 @@ import { z } from 'zod'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { login } from '../../api/authApi'
 import GoogleButton from '../../components/ui/GoogleButton'
-import AuthAside from '../../components/ui/AuthAside'
+import AuthLayout from '../../components/ui/AuthLayout'
 
 const schema = z.object({
   email: z.string().min(1, 'Vui lòng nhập email').email('Email không hợp lệ'),
@@ -40,13 +40,10 @@ export default function LoginPage() {
   const error = mutation.error ? getApiErrorMessage(mutation.error) : ''
 
   return (
-    <main className="bh-auth-page flex min-h-dvh items-center justify-center p-4">
-      <AuthAside />
-      <form
-        onSubmit={form.handleSubmit((data) => mutation.mutate(data))}
-        className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 sm:p-8 shadow"
-      >
-        <h1 className="mb-6 text-xl sm:text-2xl font-bold">Đăng nhập</h1>
+    <AuthLayout>
+      <form onSubmit={form.handleSubmit((data) => mutation.mutate(data))}>
+        <h1>Đăng nhập</h1>
+        <p className="bh-auth-intro">Tiếp tục vào không gian quản lý BeeHouse của bạn.</p>
 
         {location.state?.message && (
           <p className="mb-3 text-sm text-green-700">{location.state.message}</p>
@@ -75,7 +72,7 @@ export default function LoginPage() {
 
         <button
           disabled={mutation.isPending}
-          className="min-h-11 sm:min-h-0 w-full min-w-0 rounded bg-slate-900 p-2 text-white disabled:opacity-60"
+          className="bh-auth-primary w-full"
         >
           {mutation.isPending ? 'Đang đăng nhập...' : 'Đăng nhập'}
         </button>
@@ -99,6 +96,6 @@ export default function LoginPage() {
           </Link>
         </p>
       </form>
-    </main>
+    </AuthLayout>
   )
 }

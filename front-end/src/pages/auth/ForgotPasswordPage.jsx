@@ -1,3 +1,4 @@
+import AuthLayout from '../../components/ui/AuthLayout'
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { forgotPassword } from '../../api/authApi'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -30,8 +31,8 @@ export default function ForgotPasswordPage() {
   const successMessage = mutation.data?.data?.message
 
   return (
-    <main className="flex min-h-dvh items-center justify-center p-4">
-      <section className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 sm:p-8 shadow">
+    <AuthLayout>
+      <section>
         <h1 className="text-xl sm:text-2xl font-bold">Quên mật khẩu</h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">
           Nhập địa chỉ email đã đăng ký. BeeHouse sẽ gửi cho bạn liên kết để đặt lại mật khẩu.
@@ -62,7 +63,7 @@ export default function ForgotPasswordPage() {
 
           <button
             disabled={mutation.isPending}
-            className="min-h-11 sm:min-h-0 w-full min-w-0 rounded-lg bg-slate-900 px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="bh-auth-primary w-full"
           >
             {mutation.isPending ? 'Đang gửi...' : 'Gửi liên kết đặt lại mật khẩu'}
           </button>
@@ -72,6 +73,6 @@ export default function ForgotPasswordPage() {
           ← Quay lại đăng nhập
         </Link>
       </section>
-    </main>
+    </AuthLayout>
   )
 }

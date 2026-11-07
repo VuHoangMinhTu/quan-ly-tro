@@ -1,6 +1,6 @@
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useState } from 'react'
-import AuthAside from '../../components/ui/AuthAside'
+import AuthLayout from '../../components/ui/AuthLayout'
 import { useMutation } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -39,13 +39,10 @@ export default function RegisterPage() {
   })
 
   return (
-    <main className="bh-auth-page flex min-h-dvh items-center justify-center p-4">
-      <AuthAside />
-      <form
-        onSubmit={form.handleSubmit((data) => mutation.mutate(data))}
-        className="w-full min-w-0 max-w-md rounded-xl bg-white p-5 sm:p-8 shadow"
-      >
-        <h1 className="mb-6 text-xl sm:text-2xl font-bold">Đăng ký tài khoản</h1>
+    <AuthLayout>
+      <form onSubmit={form.handleSubmit((data) => mutation.mutate(data))}>
+        <h1>Đăng ký tài khoản</h1>
+        <p className="bh-auth-intro">Tạo không gian riêng để quản lý nhà trọ của bạn.</p>
         {fields.map(([field, label, type]) => {
           const fieldError = form.formState.errors[field]
 
@@ -78,13 +75,13 @@ export default function RegisterPage() {
             {generalError}
           </div>
         )}
-        <button disabled={mutation.isPending} className="min-h-11 sm:min-h-0 w-full min-w-0 rounded bg-slate-900 p-2 text-white disabled:opacity-60">
+        <button disabled={mutation.isPending} className="bh-auth-primary w-full">
           {mutation.isPending ? 'Đang đăng ký...' : 'Đăng ký'}
         </button>
         <p className="mt-4 text-center text-sm">
           Đã có tài khoản? <Link className="inline-flex min-h-11 items-center font-medium underline lg:min-h-0" to="/login">Đăng nhập</Link>
         </p>
       </form>
-    </main>
+    </AuthLayout>
   )
 }
