@@ -1,0 +1,36 @@
+name: BeeHouse frontend
+
+on:
+  pull_request:
+    paths:
+      - 'front-end/**'
+      - '.github/workflows/frontend.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'front-end/**'
+      - '.github/workflows/frontend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: front-end
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: front-end/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm run lint
+      - name: Run frontend tests
+        run: find src -name '*.test.mjs' -print0 | xargs -0 node --test

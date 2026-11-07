@@ -85,5 +85,5 @@ test('utility generation sends invoice month separately from selected usage time
   const sent = []
   const billing = await api(async config => { sent.push({ url: config.url, data: JSON.parse(config.data) }); return { status: 200, data: { success: true, data: { meters: [] } }, config } })
   await billing.generateBillingV2(7, '2026-12-01', '2026-11-02 08:30:00', '2026-12-02 09:00:00')
-  assert.deepEqual(sent, [{ url: '/billing-v2/rooms/7/generate', data: { billing_period: '2026-12-01', usage_start_at: '2026-11-02 08:30:00', usage_end_at: '2026-12-02 09:00:00' } }])
+  assert.deepEqual(sent, [{ url: '/billing-v2/rooms/7/generate', data: { billing_period: '2026-12-01', usage_start_at: '2026-11-02 08:30:00', usage_end_at: '2026-12-02 09:00:00', meter_periods: [] } }])
 })

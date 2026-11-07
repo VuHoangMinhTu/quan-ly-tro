@@ -49,7 +49,7 @@ export default function ChangePasswordPage() {
   ]
 
   return (
-    <section className="max-w-xl">
+    <section className="bh-auth-controls bh-auth-settings">
       <h2 className="text-xl sm:text-2xl font-bold">Đổi mật khẩu</h2>
       <p className="mt-2 text-sm text-slate-600">Đặt mật khẩu mới để bảo vệ tài khoản BeeHouse của bạn.</p>
 
@@ -76,7 +76,7 @@ export default function ChangePasswordPage() {
 
         <button
           disabled={mutation.isPending}
-          className="w-full sm:w-auto min-h-11 sm:min-h-0 mt-6 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+          className="bh-auth-primary w-full mt-6"
         >
           {mutation.isPending ? 'Đang cập nhật...' : 'Đổi mật khẩu'}
         </button>

@@ -35,7 +35,7 @@ export default function GoogleButton({
       onClick={onClick}
       disabled={isDisabled}
       aria-label={isLoading ? 'Đang chuyển hướng đến Google' : children}
-      className="flex h-11 w-full min-w-0 items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 hover:shadow focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-white disabled:hover:shadow-sm"
+      className="bh-auth-google flex min-h-11 w-full min-w-0 items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
     >
       <GoogleIcon />
       <span className="min-w-0">{isLoading ? 'Đang chuyển hướng...' : children}</span>
