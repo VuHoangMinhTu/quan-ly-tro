@@ -262,10 +262,21 @@ class PayOSService
 
     public function processVerifiedWebhook(WebhookData $data, ?int $expectedLandlordId = null, ?int $expectedConfigId = null): ?Payment
     {
-        return DB::transaction(function () use ($data, $expectedLandlordId, $expectedConfigId) {
+        $invoiceId = PayOSPaymentRequest::query()->where('order_code', $data->orderCode)->value('invoice_id');
+        if (! $invoiceId) {
+            Log::warning('payOS webhook has an unknown order code.', ['order_code' => $data->orderCode]);
+
+            return null;
+        }
+
+        return DB::transaction(function () use ($data, $expectedLandlordId, $expectedConfigId, $invoiceId) {
+            $invoice = Invoice::query()->lockForUpdate()->find($invoiceId);
+            if (! $invoice) {
+                return null;
+            }
             $request = PayOSPaymentRequest::query()->where('order_code', $data->orderCode)->lockForUpdate()->first();
 
-            if (! $request) {
+            if (! $request || (int) $request->invoice_id !== (int) $invoiceId) {
                 Log::warning('payOS webhook has an unknown order code.', ['order_code' => $data->orderCode]);
 
                 return null;
@@ -314,7 +325,6 @@ class PayOSService
                 return $existingPayment;
             }
 
-            $invoice = Invoice::query()->lockForUpdate()->findOrFail($request->invoice_id);
             $remaining = (float) $invoice->total_amount - (float) $invoice->paid_amount;
             if ($data->amount <= 0 || $data->amount > $remaining) {
                 Log::error('payOS webhook would overpay an invoice.', [
@@ -345,7 +355,7 @@ class PayOSService
             ]);
 
             return $payment;
-        });
+        }, 3);
     }
 
     public function payload(PayOSPaymentRequest $request): array

@@ -8,6 +8,8 @@ class Payment extends Model
 {
     protected $fillable = [
         'invoice_id',
+        'idempotency_key',
+        'idempotency_fingerprint',
         'amount',
         'payment_method',
         'payment_source',
@@ -22,6 +24,8 @@ class Payment extends Model
         'amount' => 'decimal:2',
         'paid_at' => 'datetime',
     ];
+
+    protected $hidden = ['idempotency_key', 'idempotency_fingerprint'];
 
     public function invoice()
     {
