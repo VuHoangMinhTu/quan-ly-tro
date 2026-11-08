@@ -7,9 +7,10 @@
 Gate chưa đạt:
 
 1. Production có **1 payment MANUAL/CASH, 5.132.000đ không có invoice cha**. Đã xác nhận bằng SELECT; không sửa/xóa/reparent hay suy diễn ledger. Đây là dữ liệu tồn tại trước migration, không phải lỗi do ledger. Cần người phụ trách đối soát và phê duyệt cách xử lý riêng; không dùng migration để che dữ liệu lỗi.
-2. Dump được duyệt ngày 05/11 restore được, nhưng chỉ có 47 bảng và thiếu các migration Billing V2 mà production đã chạy. Cần backup mới, restore rehearsal và so sánh lại với snapshot production trước cửa sổ release. Không coi dump cũ là bản rollback đủ mới.
-3. Tài khoản SSH hiện tại không có sudo không tương tác: chưa kiểm tra được cron root, timer/worker cấu hình riêng cần quyền quản trị. Không suy ra không có writer chỉ từ việc không thấy process.
-4. Production còn **1 PayOS request PENDING**, ngoài 5 CANCELLED và 2 STALE. Cần kiểm chứng phương án giữ/re-deliver/reconcile webhook trong maintenance; không mặc định PayOS tự retry đủ lâu.
+2. Tài khoản SSH hiện tại không có sudo không tương tác: chưa kiểm tra được cron root, timer/worker cấu hình riêng cần quyền quản trị. Không suy ra không có writer chỉ từ việc không thấy process.
+3. Production còn **1 PayOS request PENDING**, ngoài 5 CANCELLED và 2 STALE. Cần kiểm chứng phương án giữ/re-deliver/reconcile webhook trong maintenance; không mặc định PayOS tự retry đủ lâu.
+
+Gate backup/rehearsal hiện thời đã hoàn tất bổ sung bằng snapshot read-only ngày 09/11, 58 bảng, restore vào hai DB local độc lập và migration/resume PASS, xem bằng chứng bên dưới. Vẫn phải lấy backup cuối trong write freeze tại thời điểm thực sự triển khai.
 
 ## Phạm vi commit
 
@@ -55,6 +56,19 @@ Backup SHA-256: `508991b91695cbc06d1dfb9193531688205a4f825c74c23d621d5cc2c9400c7
 | Hai unique index payments, ledger unique, ledger không FK | PASS |
 
 Migration trên 2.000 payment giả lập với 500 key thực sự lưu đã PASS riêng trong 109-test suite, gồm fault injection tại CREATE/index/backfill, fingerprint không hợp lệ và chặn destructive down. Bản backup này không có keyed receipt để kiểm chứng backfill có dữ liệu; không thay thế fixture 500 key hoặc rehearsal với backup hiện thời. Timing trên dữ liệu nhỏ không phải benchmark tải/metadata lock production.
+
+### Bổ sung: rehearsal trên snapshot production hiện thời ngày 09/11
+
+Đã stream `mysqldump --single-transaction --quick --skip-lock-tables --skip-add-locks --no-tablespaces --set-gtid-purged=OFF` qua SSH vào file local trong `tmp` bị Git ignore. Kiểm tra tất cả base table đều InnoDB trước export; không tạo file trên VPS, không thay source/env/service/database production, không dừng traffic. Credentials chỉ truyền trong memory/environment của child process, không in hoặc đưa vào argv/report. Snapshot nhất quán tại thời điểm export, không phải backup cuối tại cutover.
+
+Snapshot SHA-256: `34a3ab83ac3cfc4c585cd0191d8045ab83d24b1c5d3399558056368a76804ab5`, 748.114 bytes, **58 bảng**, bao gồm schema Billing V2 hiện thời. Restore vào `127.0.0.1:13368/beehouse_ledger_restore_1109` và `beehouse_ledger_fault_1109`, mỗi DB mới, không ghi đè DB có sẵn. Restore lần lượt 3,764s và 4,108s.
+
+- Migration đúng thứ tự: **PASS, 0,581s**. Fault sau CREATE TABLE đã commit/chưa ghi migration record rồi resume: **PASS, 0,543s**.
+- SHA-256 toàn bộ row/cột cũ payments, invoices, payos_payment_requests trước/sau không đổi; chạy lại up giữ nguyên snapshot và ledger.
+- Payment vẫn 1 / 5.132.000đ, NULL key, ledger 0; orphan vẫn 1, không sửa hoặc đoán key. Hai unique index payments được giữ, ledger không có FK.
+- Schema hiện thời đã được rehearsal; dữ liệu nhỏ nên timing này không chứng minh tải hoặc lock duration khi traffic đang ghi. Giữ gate freeze writers khi triển khai.
+
+CI frontend của commit code `a9c1755`: **260 PASS, 0 FAIL/SKIP**, build/lint PASS; lint 12 warnings, 0 errors. Workspace QA có thêm test UI không nằm trong PR nên tổng 266, không gộp số đó thành CI của PR. Trạng thái CI cuối theo head PR phải được kiểm tra lại sau mọi commit tài liệu tiếp theo.
 
 ## Runbook sau khi được duyệt merge và deploy
 
