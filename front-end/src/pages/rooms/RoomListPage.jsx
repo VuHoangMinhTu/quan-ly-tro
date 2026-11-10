@@ -7,6 +7,7 @@ import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { roomKeys } from '../../api/roomKeys'
 import { getRoomsByBoardingHouse } from '../../api/roomApi'
 import RoomCard from '../../components/rooms/RoomCard'
+import RoomCompactCard from '../../components/rooms/RoomCompactCard'
 import RoomOrderButton from '../../components/rooms/RoomOrderButton'
 import LoadingState from '../../components/ui/LoadingState'
 
@@ -133,29 +134,34 @@ const floorGroups = groupRoomsByFloor(rooms)
       </div>
 
       {/* Danh sách phòng thuộc tầng */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2 md:gap-4 xl:grid-cols-3">
         {group.rooms.map((room) => (
-          <RoomCard
-            key={room.id}
-            room={room}
-            actions={
-              <div className="flex flex-wrap gap-3 text-sm font-medium">
-                <Link
-                  to={`/rooms/${room.id}`}
-                  className="inline-flex min-h-11 items-center rounded-lg px-2 text-slate-700 hover:text-slate-950 sm:min-h-0"
-                >
-                  Xem
-                </Link>
-
-                <Link
-                  to={`/rooms/${room.id}/edit`}
-                  className="inline-flex min-h-11 items-center rounded-lg px-2 text-slate-700 hover:text-slate-950 sm:min-h-0"
-                >
-                  Sửa
-                </Link>
-              </div>
-            }
-          />
+          <div key={room.id} className="h-full min-w-0">
+            <div className="h-full md:hidden">
+              <RoomCompactCard room={room} />
+            </div>
+            <div className="hidden h-full md:block md:[&>article]:h-full">
+              <RoomCard
+                room={room}
+                actions={
+                  <div className="flex flex-wrap gap-3 text-sm font-medium">
+                    <Link
+                      to={`/rooms/${room.id}`}
+                      className="inline-flex min-h-11 items-center rounded-lg px-2 text-slate-700 hover:text-slate-950 sm:min-h-0"
+                    >
+                      Xem
+                    </Link>
+                    <Link
+                      to={`/rooms/${room.id}/edit`}
+                      className="inline-flex min-h-11 items-center rounded-lg px-2 text-slate-700 hover:text-slate-950 sm:min-h-0"
+                    >
+                      Sửa
+                    </Link>
+                  </div>
+                }
+              />
+            </div>
+          </div>
         ))}
       </div>
     </section>
