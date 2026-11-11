@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Plus } from 'lucide-react'
+import { Building2, Plus } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getBoardingHouse, getBoardingHouses } from '../../api/boardingHouseApi'
 import { boardingHouseKeys } from '../../api/boardingHouseKeys'
@@ -93,7 +93,7 @@ const floorGroups = groupRoomsByFloor(rooms)
           </select>
           {housesQuery.isError && <p className="mt-1 text-sm text-amber-700">Chưa tải được danh sách nhà trọ để chuyển.</p>}
         </div>
-        <div className="flex flex-wrap gap-3"><RoomOrderButton rooms={rooms} boardingHouseId={boardingHouseId} /><Link to={`/boarding-houses/${boardingHouseId}/rooms/new`} className="inline-flex min-h-11 sm:min-h-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3"><RoomOrderButton rooms={rooms} boardingHouseId={boardingHouseId} /><Link to={`/boarding-houses/${boardingHouseId}/rooms/new`} className="inline-flex min-h-11 sm:min-h-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
           <Plus size={17} /> Thêm phòng
         </Link></div>
       </div>
@@ -105,36 +105,31 @@ const floorGroups = groupRoomsByFloor(rooms)
         </div>
       ) : (
  
-<div className="space-y-8">
+<div className="space-y-6">
   {floorGroups.map((group) => (
     <section
       key={group.floorId ?? 'unassigned'}
       className="min-w-0"
     >
       {/* Tiêu đề tầng */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-xl">
-            🏢
-          </div>
-
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">
-              {group.floor?.name ??
-                (group.floorId === null
-                  ? 'Phòng chưa phân tầng'
-                  : `Tầng (ID ${group.floorId})`)}
-            </h3>
-
-            <p className="text-sm text-slate-500">
-              {group.rooms.length} phòng
-            </p>
-          </div>
+      <div className="mb-3 flex min-w-0 items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-700">
+            <Building2 size={18} aria-hidden="true" />
+          </span>
+          <h3 className="min-w-0 break-words text-base font-bold leading-snug text-slate-900">
+            {group.floor?.name ??
+              (group.floorId === null
+                ? 'Phòng chưa phân tầng'
+                : `Tầng (ID ${group.floorId})`)}
+          </h3>
         </div>
+        <span className="shrink-0 rounded-full bg-teal-50 px-2 py-1 text-[11px] font-semibold text-teal-800">
+          {group.rooms.length} phòng
+        </span>
       </div>
-
       {/* Danh sách phòng thuộc tầng */}
-      <div className="grid grid-cols-2 gap-2 md:gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2.5 md:gap-4 xl:grid-cols-3">
         {group.rooms.map((room) => (
           <div key={room.id} className="h-full min-w-0">
             <div className="h-full md:hidden">

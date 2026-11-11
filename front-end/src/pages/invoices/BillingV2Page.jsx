@@ -10,7 +10,14 @@ import UtilityMeterForm from '../../components/forms/UtilityMeterForm'
 import { resolveMeterCycleDefault, suggestedMeterUsageWindow } from './meterCycleDefaults.mjs'
 import { buildMeterPeriodPayload } from './meterPeriodPayload.mjs'
 
-const inputClass = 'mt-1 min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2'
+// Presentation-only classification. All billing mutations still use the full meters array.
+const billingMeterKind = meter => {
+  if (meter.service?.type === 'ELECTRICITY' || /điện/i.test(meter.service?.name || '')) return 'electric'
+  if (meter.service?.type === 'WATER' || /nước/i.test(meter.service?.name || '')) return 'water'
+  return 'other'
+}
+
+const inputClass = 'mt-1 min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 block max-w-full box-border'
 const buttonClass = 'min-h-11 rounded-lg bg-slate-900 px-4 py-2 text-white disabled:opacity-50'
 const at = value => value.replace('T', ' ') + (value.length === 16 ? ':00' : '')
 const suggestedUsageWindow = month => {
@@ -27,6 +34,7 @@ export default function BillingV2Page() {
   const [meterDrafts, setMeterDrafts] = useState({})
   const [meterEdits, setMeterEdits] = useState({})
   const [meterSetup, setMeterSetup] = useState(false)
+  const [selectedBillingMeterKind, setSelectedBillingMeterKind] = useState('electric')
   const [showCorrectionHelp, setShowCorrectionHelp] = useState({})
   const [checkout, setCheckout] = useState({ contract: '', reason: 'MUTUAL_EARLY_END', observed: '', readings: {}, confirmNoHeld: false })
   const [deposit, setDeposit] = useState({ contract: '', event: 'RECEIVED', amount: '', observed: '', key: crypto.randomUUID() })
@@ -65,6 +73,11 @@ export default function BillingV2Page() {
   }
   const contracts = data?.contracts || []
   const meters = data?.meters || []
+  const selectedBillingKey = meters.some(
+    meter => billingMeterKind(meter) === selectedBillingMeterKind
+  )
+    ? selectedBillingMeterKind
+    : (meters[0] ? billingMeterKind(meters[0]) : 'electric')
   const hasElectricMeter = meters.some(m => m.service?.type === 'ELECTRICITY')
   const hasWaterMeter = meters.some(m => m.service?.type === 'WATER')
   const missingMeterTypes = ['ELECTRICITY', 'WATER'].filter(type =>
@@ -147,8 +160,17 @@ export default function BillingV2Page() {
   if (query.isError) return <p role="alert">{getApiErrorMessage(query.error)}</p>
   return <section className="min-w-0 space-y-6">
     <Link to={`/rooms/${roomId}`} className="inline-flex min-h-11 items-center text-sm underline">← Quay lại phòng</Link>
-    <h2 className="text-2xl font-semibold">Quyết toán điện nước V2</h2>
-    <p className="text-sm text-slate-600">Phòng {data.room.room_code}. Mốc chốt theo giờ Việt Nam. Chỉ tính phần điện nước; không tự tính lại tiền phòng, phí cố định hoặc phí theo người.</p>
+    <header className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Phòng {data.room.room_code} · Billing V2</p>
+      <h2 className="mt-1 text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Quyết toán điện và nước</h2>
+      <p className="mt-2 text-sm leading-relaxed text-slate-600">Điện và nước được ghi theo công tơ, ngày giờ riêng. Các khoản khác trong hóa đơn không được thay đổi tại bước này.</p>
+      <nav aria-label="Chuyển nhanh đến các thao tác Billing V2" className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <a href="#billing-v2-meters" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-teal-100 bg-teal-50 px-2 text-center text-xs font-semibold text-teal-800 active:bg-teal-100">Ghi chỉ số</a>
+        <a href="#billing-v2-calculate" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-2 text-center text-xs font-semibold text-slate-700 active:bg-slate-100">Tính khoản thu</a>
+        <a href="#billing-v2-checkout" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-2 text-center text-xs font-semibold text-slate-700 active:bg-slate-100">Trả phòng</a>
+        <a href="#billing-v2-invoices" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-2 text-center text-xs font-semibold text-slate-700 active:bg-slate-100">Hóa đơn</a>
+      </nav>
+    </header>
     <p className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">Chỉ dùng sau khi đối soát mốc bàn giao và kỳ công tơ. Kỳ có hóa đơn cũ hoặc xung đột bảng giá sẽ bị chặn. Giá bán phân bổ cho phần chủ trọ chịu không phải giá vốn thực tế.</p>
     {statusQuery.isError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-red-800">Không xác minh được quyền thao tác V2. Chế độ ghi dữ liệu đang bị khóa an toàn.</p>}
     {statusQuery.isSuccess && !enabled && <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950">Billing V2 đang tạm khóa. Bằng chứng, phân bổ và hóa đơn hiện có vẫn được xem; các thao tác ghi và phát hành đang tắt.</p>}
@@ -156,24 +178,24 @@ export default function BillingV2Page() {
     {invoiceNotice && <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">{invoiceNotice} <Link className="underline" to={`/rooms/${roomId}/invoices`}>Xem hóa đơn của phòng</Link></p>}
     {mutation.isError && <p role="alert" className={`rounded-lg p-3 ${mutation.error?.billingV2Message ? 'bg-amber-50 text-amber-900' : 'bg-red-50 text-red-700'}`}>{mutation.error?.billingV2Message || getApiErrorMessage(mutation.error)}</p>}
     <fieldset disabled={busy || !enabled} className="min-w-0 space-y-6 disabled:opacity-70">
-      <section className="min-w-0 space-y-4 rounded-xl border bg-white p-5" aria-label="Chốt điện nước theo từng công tơ">
+      <section id="billing-v2-meters" className="min-w-0 scroll-mt-24 space-y-4 rounded-2xl border border-slate-200 bg-white p-3.5 sm:p-5" aria-label="Chốt điện nước theo từng công tơ">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-lg font-semibold">Ghi chỉ số đầu kỳ và cuối kỳ</h3>
             <p className="mt-1 text-sm text-slate-600">Điện và nước có thể đo vào các ngày giờ khác nhau. Kết quả bên dưới cập nhật ngay, nhưng chưa phải số tiền đã quyết toán.</p>
           </div>
-          <label className="text-sm">Tháng hóa đơn
+          <label className="block w-full text-sm sm:w-auto sm:min-w-48">Tháng hóa đơn
             <input className={inputClass} type="month" required value={period} onChange={event => {
               setPeriod(event.target.value); setUsageWindow(suggestedUsageWindow(event.target.value)); setMeterDrafts({}); setMeterEdits({}); setInvoiceNotice('')
             }} />
           </label>
         </div>
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p className="flex-1 text-sm text-slate-600">Mỗi đồng hồ vật lý chỉ đăng ký một lần. Khi đã có điện và nước, những tháng sau chỉ cần ghi mốc mới; không tạo lại đồng hồ.</p>
-          {showInitialMeterSetup && <button type="button" className="min-h-11 rounded-md border border-slate-400 bg-white px-3 py-2 text-sm font-semibold" disabled={busy || meterMutation.isPending} onClick={() => setMeterSetup(true)}>
+        <div className="flex min-w-0 w-full flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-start sm:justify-between">
+          <p className="min-w-0 w-full text-sm leading-6 text-slate-600 sm:flex-1">Mỗi đồng hồ vật lý chỉ đăng ký một lần. Khi đã có điện và nước, những tháng sau chỉ cần ghi mốc mới; không tạo lại đồng hồ.</p>
+          {showInitialMeterSetup && <button type="button" className="inline-flex min-h-11 w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-lg border border-slate-300 bg-white px-3 py-2 text-center text-sm font-semibold leading-5 text-slate-800 active:bg-slate-100 sm:w-auto sm:shrink-0" disabled={busy || meterMutation.isPending} onClick={() => setMeterSetup(true)}>
             {meters.length === 0 ? '+ Thiết lập đồng hồ điện/nước' : `+ Bổ sung đồng hồ ${missingMeterTypes.map(type => type === 'ELECTRICITY' ? 'điện' : 'nước').join(', ')}`}
           </button>}
-          {!showInitialMeterSetup && <p className="text-sm font-medium text-emerald-700">Đã có đồng hồ điện và nước.</p>}
+          {!showInitialMeterSetup && <p className="min-w-0 w-full break-words text-sm font-semibold leading-6 text-emerald-700 sm:w-auto sm:max-w-48">Đã có đồng hồ điện và nước.</p>}
         </div>
         {meterSetup && <div role="dialog" aria-modal="true" aria-labelledby="v2-meter-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5 shadow-xl">
@@ -182,8 +204,51 @@ export default function BillingV2Page() {
           </div>
         </div>}
         {historyConflict && <p role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">Lịch sử V1 và mốc V2 đang mâu thuẫn/không rõ giờ đo trên cùng công tơ (ví dụ V1 ngày {historyConflict.reading_date} có số {historyConflict.reading_value}). Tạm khóa tính tiền: hãy đối chiếu lịch sử chỉ số V1 và V2 trước khi tạo hóa đơn. Không sửa số chỉ để qua lỗi.</p>}
+        <div className="grid grid-cols-2 gap-2" aria-label="Các nhóm đồng hồ">
+          {[
+            { kind: 'electric', label: 'Điện', emoji: '⚡', count: meters.filter(meter => billingMeterKind(meter) === 'electric').length },
+            { kind: 'water', label: 'Nước', emoji: '💧', count: meters.filter(meter => billingMeterKind(meter) === 'water').length },
+          ].map(group => group.count > 0 ? (
+            <button
+              key={group.kind}
+              type="button"
+              aria-pressed={selectedBillingKey === group.kind}
+              onClick={() => setSelectedBillingMeterKind(group.kind)}
+              className={selectedBillingKey === group.kind
+                ? 'flex min-h-16 min-w-0 flex-col justify-center rounded-xl border border-teal-500 bg-teal-50 px-3 text-left text-sm font-semibold text-teal-900 ring-1 ring-teal-200 active:bg-teal-100'
+                : 'flex min-h-16 min-w-0 flex-col justify-center rounded-xl border border-slate-200 bg-white px-3 text-left text-sm font-semibold text-slate-900 active:bg-slate-100'}
+            >
+              <span>{group.emoji} {group.label}</span><span className="mt-0.5 text-xs font-normal text-slate-600">{group.count} đồng hồ · Xem chỉ số</span>
+            </button>
+          ) : (
+            <div key={group.kind} className="flex min-h-16 flex-col justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-600">
+              <span>{group.emoji} {group.label}</span><span className="mt-0.5 text-xs font-normal">Chưa có đồng hồ</span>
+            </div>
+          ))}
+        </div>
         {meters.length === 0 && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-950">Chưa có công tơ hoạt động. Hãy đăng ký đồng hồ ở đây nếu dịch vụ điện/nước tính theo chỉ số. Dịch vụ đã bao gồm hoặc theo người không cần công tơ riêng.</p>}
-        {meters.map(meter => {
+        <div className="grid min-w-0 gap-3 2xl:grid-cols-2">
+        {[
+          { key: 'electric', name: 'Điện', emoji: '⚡', description: 'Kỳ ghi điện và chỉ số kWh', meters: meters.filter(meter => billingMeterKind(meter) === 'electric') },
+          { key: 'water', name: 'Nước', emoji: '💧', description: 'Kỳ ghi nước và chỉ số m³', meters: meters.filter(meter => billingMeterKind(meter) === 'water') },
+          { key: 'other', name: 'Đồng hồ khác', emoji: '▦', description: 'Công tơ áp dụng cho phòng', meters: meters.filter(meter => billingMeterKind(meter) === 'other') },
+        ].filter(group => group.meters.length > 0).map(group => (
+          <section
+              key={group.key}
+              id={'billing-v2-' + group.key}
+              className={
+                selectedBillingKey === group.key ||
+                group.key === 'other' ||
+                !enabled
+                  ? 'min-w-0 scroll-mt-24 space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4'
+                  : 'hidden min-w-0 scroll-mt-24 space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4 2xl:block'
+              }
+            >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0"><h4 className="font-bold text-slate-900">{group.emoji} {group.name}</h4><p className="mt-1 text-xs text-slate-600">{group.description}</p></div>
+              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">{group.meters.length} đồng hồ</span>
+            </div>
+            {group.meters.map(meter => {
           const cycle = meterCycle(meter)
           const edit = meterEdits[meter.id]
           const startPoint = savedPoint(meter, cycle.start)
@@ -206,15 +271,16 @@ export default function BillingV2Page() {
           const uniqueBoundaries = checkpoints.filter(item => Number(item.utility_meter_id) === Number(meter.id) && item.kind === 'PERIOD_BOUNDARY')
             .slice().sort((a, b) => a.observed_at.localeCompare(b.observed_at) || a.id - b.id)
           const canRecoverPair = uniqueBoundaries.length === 2 && !editingSaved && !savedMatches
-          const isElectric = meter.service?.type === 'ELECTRICITY' || /điện/i.test(meter.service?.name || '')
-          const unit = meter.service?.unit || (isElectric ? 'kWh' : 'm³')
-          return <article key={meter.id} className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/50 p-4" aria-label={`Công tơ ${meter.meter_code || meter.id}`}>
+          const kind = billingMeterKind(meter)
+          const isElectric = kind === 'electric'
+          const unit = meter.service?.unit || (isElectric ? 'kWh' : kind === 'water' ? 'm³' : 'đơn vị')
+          return <article key={meter.id} className="min-w-0 space-y-4 rounded-xl border border-slate-200 bg-white p-3.5 sm:p-4" aria-label={`Công tơ ${meter.meter_code || meter.id}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h4 className="font-semibold">{isElectric ? '⚡' : '💧'} {meter.service?.name || 'Công tơ'} · {meter.meter_code || '#' + meter.id}</h4>
+              <h4 className="break-words font-semibold">{isElectric ? '⚡' : kind === 'water' ? '💧' : '▦'} {meter.service?.name || 'Công tơ'} · {meter.meter_code || '#' + meter.id}</h4>
               <span className={`rounded-full px-3 py-1 text-xs font-medium ${savedMatches ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-900'}`}>{savedMatches ? 'Đã lưu đủ hai mốc' : 'Chưa lưu đủ mốc đã nhập'}</span>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-3 rounded-lg border bg-white p-3">
+            <div className="grid min-w-0 w-full grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="min-w-0 w-full space-y-3 rounded-xl border border-slate-200 bg-white p-2.5 sm:p-3">
                 <h5 className="font-medium">Mốc đầu kỳ</h5>
                 <label className="block text-sm">Ngày giờ thực tế đọc công tơ
                   <input aria-label={`Đầu kỳ ${meter.meter_code || meter.id}`} type="datetime-local" step="1" required className={inputClass} value={cycle.start} disabled={Boolean(savedMatches) && !editingSaved} onChange={event => setMeterCycle(meter, { start: event.target.value, startReading: editingSaved ? startReading : undefined })} />
@@ -224,7 +290,7 @@ export default function BillingV2Page() {
                 </label>
                 <p className="text-xs text-slate-600">{startPoint ? `Đã xác nhận: ${startPoint.reading_value} ${unit} · ${startPoint.observed_at}` : `Đề xuất: ${suggestion.source}. Kiểm tra thực tế trước khi bấm lưu.`}</p>
               </div>
-              <div className="space-y-3 rounded-lg border bg-white p-3">
+              <div className="min-w-0 w-full space-y-3 rounded-xl border border-slate-200 bg-white p-2.5 sm:p-3">
                 <h5 className="font-medium">Mốc cuối kỳ</h5>
                 <label className="block text-sm">Ngày giờ thực tế đọc công tơ
                   <input aria-label={`Cuối kỳ ${meter.meter_code || meter.id}`} type="datetime-local" step="1" required className={inputClass} value={cycle.end} disabled={Boolean(savedMatches) && !editingSaved} onChange={event => setMeterCycle(meter, { end: event.target.value, endReading: editingSaved ? endReading : undefined })}/>
@@ -236,7 +302,7 @@ export default function BillingV2Page() {
                 {!endPoint && matchingLegacyEnd && <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900"><p>V1 đã ghi {matchingLegacyEnd.reading_value} {unit} ngày {matchingLegacyEnd.reading_date}, nhưng không có giờ đo. Chỉ dùng lại nếu đúng thời điểm chốt thực tế.</p><button type="button" className="mt-2 rounded border border-amber-400 px-2 py-1 font-medium" onClick={() => setMeterCycle(meter, { endReading: String(matchingLegacyEnd.reading_value) })}>Dùng giá trị V1 này để kiểm tra</button></div>}
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-100 p-4">
+            <div className="flex flex-col gap-3 rounded-lg border border-teal-100 bg-teal-50/70 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
               <div><p className="text-sm text-slate-600">Sản lượng tạm tính</p><strong className="text-xl">{usage === null ? 'Chưa hợp lệ' : `${usage.toLocaleString('vi-VN')} ${unit}`}</strong></div>
               {!editingSaved && <button type="button" className={buttonClass} disabled={!enabled || busy || !datesValid || !valuesValid || Boolean(savedMatches)} onClick={() => run(() => confirmBillingPeriodBoundaries(meter.id, {
                 start_observed_at: at(cycle.start), end_observed_at: at(cycle.end), start_reading_value: startReading, end_reading_value: endReading,
@@ -297,19 +363,24 @@ export default function BillingV2Page() {
                 </div>)}{relevantHistory.length === 0 ? <p>Chưa có lịch sử mốc.</p> : relevantHistory.map(item => <p key={item.id} className="rounded bg-white p-2">{item.observed_at} · {item.reading_value} {unit} · phiên bản {item.revision}</p>)}</div>
             </details>
           </article>
-        })}
+            })}
+          </section>
+        ))}
+        </div>
         {meters.length > 1 && new Set(meters.map(meter => `${at(meterCycle(meter).start)}|${at(meterCycle(meter).end)}`)).size > 1 && <p role="status" className="rounded-lg bg-blue-50 p-3 text-sm text-blue-900">Điện và nước có ngày đọc khác nhau. Hệ thống tính riêng theo hai mốc đã xác nhận của từng công tơ, rồi gộp khoản thu vào tháng {period}. Không cộng gộp chỉ số tuyệt đối giữa các đồng hồ.</p>}
         {suggestedWindow.ambiguous && <p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-950">Có nhiều hợp đồng bắt đầu vào các ngày khác nhau trong kỳ. Hãy đối chiếu kỳ công tơ và khoản thu; không tự chọn ngày đầu tháng để tính tiền.</p>}
         {missingData && <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Chưa đủ mốc đầu/cuối khớp thời gian cho tất cả công tơ. Hãy lưu từng công tơ rồi kiểm tra trạng thái “Đã lưu đủ hai mốc”.</p>}
-        <button type="button" className={buttonClass} disabled={meters.length === 0 || missingData || suggestedWindow.ambiguous || Boolean(historyConflict) || busy || Object.keys(meterEdits).length > 0} onClick={calculateCycle}>{busy ? 'Đang xử lý…' : 'Tính khoản thu điện nước đã xác nhận'}</button>
+        <div id="billing-v2-calculate" className="scroll-mt-24 space-y-2 rounded-xl border border-teal-200 bg-teal-50/70 p-3 sm:p-4">
+        <button type="button" className={`${buttonClass} w-full sm:w-auto`} disabled={meters.length === 0 || missingData || suggestedWindow.ambiguous || Boolean(historyConflict) || busy || Object.keys(meterEdits).length > 0} onClick={calculateCycle}>{busy ? 'Đang xử lý…' : 'Tính khoản thu điện nước đã xác nhận'}</button>
         <p className="text-xs text-slate-600">Nút trên quyết toán điện nước, sau đó thử tổng hợp hóa đơn nháp đầy đủ cho đúng phòng này. Không tự phát hành hoặc thu tiền.</p>
+        </div>
       </section>
       <section className="rounded-xl border bg-blue-50 p-4 text-sm text-blue-900">
         <h3 className="font-semibold">Bàn giao điện nước khi nhận phòng</h3>
         <p className="mt-1">CHECK_IN chỉ làm một lần cho mỗi hợp đồng và từng công tơ, không phải thao tác ghi chỉ số hàng tháng. Hãy xác nhận ở trang chi tiết hợp đồng.</p>
         <div className="mt-2 flex flex-wrap gap-3">{contracts.filter(contract => contract.status === 'ACTIVE').map(contract => <Link key={contract.id} className="underline" to={`/contracts/${contract.id}#contract-meter-checkin`}>Bàn giao · {contract.contract_code}</Link>)}</div>
       </section>
-      <form aria-label="Xác nhận trả phòng" onSubmit={event => { event.preventDefault(); run(() => confirmBillingCheckout(checkout.contract, { reason: checkout.reason, actual_ended_at: at(checkout.observed), confirm_no_held_deposit: checkout.confirmNoHeld, readings: meters.map(meter => ({ utility_meter_id: meter.id, reading_value: checkout.readings[meter.id] })) })) }} className="space-y-4 rounded-xl border bg-white p-5">
+      <form id="billing-v2-checkout" aria-label="Xác nhận trả phòng" onSubmit={event => { event.preventDefault(); run(() => confirmBillingCheckout(checkout.contract, { reason: checkout.reason, actual_ended_at: at(checkout.observed), confirm_no_held_deposit: checkout.confirmNoHeld, readings: meters.map(meter => ({ utility_meter_id: meter.id, reading_value: checkout.readings[meter.id] })) })) }} className="space-y-4 rounded-xl border bg-white p-5">
         <h3 className="text-lg font-semibold">Trả phòng và chốt công tơ</h3>
         <div className="grid gap-4 sm:grid-cols-2">
           <label>Hợp đồng trả phòng<select aria-label="Hợp đồng trả phòng" required className={inputClass} value={checkout.contract} onChange={event => setCheckout({ ...checkout, contract: event.target.value })}>{contractOptions}</select></label>
@@ -342,7 +413,7 @@ export default function BillingV2Page() {
       </article>)}
     </section>
     <section className="space-y-3"><h3 className="text-lg font-semibold">Phân bổ kỳ {period}</h3>{data.allocations.length === 0 && <p>Chưa có phân bổ được tính cho kỳ này.</p>}{data.allocations.map(row => <article key={row.id} className="rounded-lg border bg-white p-4"><p>{row.responsible_party === 'TENANT' ? `Hợp đồng #${row.contract_id}` : 'Chủ trọ chịu'} · {row.reason === 'VACANT' ? 'Phòng trống' : row.reason === 'ABANDONMENT' ? 'Bỏ ngang' : 'Đang cư trú'}</p><p>{row.quantity} đơn vị · Giá bán phân bổ {formatCurrency(row.tariff_amount)}</p>{row.responsible_party === 'LANDLORD' && <p className="text-sm text-slate-600">Giá vốn thực tế: {row.supplier_cost === null ? 'Chưa xác nhận' : formatCurrency(row.supplier_cost)}</p>}</article>)}</section>
-    <section className="space-y-2"><h3 className="text-lg font-semibold">Hóa đơn từng hợp đồng</h3><p className="text-sm text-slate-600">Kiểm tra đủ tiền phòng, dịch vụ và điện nước trong hóa đơn tháng trước khi phát hành.</p>{data.invoices.map(row => <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded border bg-white p-3"><Link className="inline-flex min-h-11 items-center underline" to={`/invoices/${row.invoice_id}`}>Hợp đồng #{row.contract_id} — hóa đơn #{row.invoice_id}</Link><span>{row.status === 'DRAFT' ? 'Nháp' : row.status === 'UNPAID' ? 'Chưa thanh toán' : row.status}</span></div>)}</section>
+    <section id="billing-v2-invoices" className="scroll-mt-24 space-y-2"><h3 className="text-lg font-semibold">Hóa đơn từng hợp đồng</h3><p className="text-sm text-slate-600">Kiểm tra đủ tiền phòng, dịch vụ và điện nước trong hóa đơn tháng trước khi phát hành.</p>{data.invoices.map(row => <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded border bg-white p-3"><Link className="inline-flex min-h-11 items-center underline" to={`/invoices/${row.invoice_id}`}>Hợp đồng #{row.contract_id} — hóa đơn #{row.invoice_id}</Link><span>{row.status === 'DRAFT' ? 'Nháp' : row.status === 'UNPAID' ? 'Chưa thanh toán' : row.status}</span></div>)}</section>
     <section className="space-y-2"><h3 className="text-lg font-semibold">Lịch sử cọc đã ghi nhận</h3>{data.deposits.length === 0 && <p>Chưa ghi nhận cọc thực tế.</p>}{data.deposits.map(row => <p className="break-words rounded border bg-white p-3" key={row.id}>Hợp đồng #{row.contract_id} · {({ RECEIVED: 'Nhận cọc', REFUNDED: 'Hoàn cọc', FORFEITED: 'Mất cọc' })[row.event]} · {formatCurrency(row.amount)} · {row.request_key}</p>)}</section>
   </section>
 }

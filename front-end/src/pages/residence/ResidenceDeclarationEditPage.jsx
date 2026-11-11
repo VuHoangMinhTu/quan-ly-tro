@@ -1,6 +1,7 @@
+// BEEHOUSE_NAV_CONTEXT_V1
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom'
 import { createResidenceDeclaration, getResidenceContext, getResidenceDeclaration, getResidenceHouses, getResidenceRooms, residenceKeys, updateResidenceDeclaration, updateResidenceStatus } from '../../api/residenceApi'
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import ResidenceDeclarationForm from '../../components/residence/ResidenceDeclarationForm'
@@ -12,6 +13,7 @@ export default function ResidenceDeclarationEditPage() {
   const [selectedHouse, setSelectedHouse] = useState(null)
   const client = useQueryClient()
   const navigate = useNavigate()
+  const location = useLocation()
   const recordQuery = useQuery({ queryKey: residenceKeys.detail(id), queryFn: () => getResidenceDeclaration(id), enabled: Boolean(id) })
   const original = recordQuery.data?.data?.data
   const roomId = selectedRoom ?? original?.declaration.room_id ?? search.get('room_id') ?? ''
@@ -32,7 +34,7 @@ export default function ResidenceDeclarationEditPage() {
   }, onSuccess: async ({ recordId, finishError, intent }) => {
     await Promise.all([client.invalidateQueries({ queryKey: residenceKeys.list }), client.invalidateQueries({ queryKey: residenceKeys.detail(recordId) })])
     const anchor = intent === 'preview-ct01' ? '#ct01-preview' : intent === 'preview-stay-consent' ? '#stay-consent-preview' : ''
-    navigate(`/residence-declarations/${recordId}${anchor}`, { replace: true, state: finishError ? { finishError } : null })
+    navigate(`/residence-declarations/${recordId}${anchor}`, { replace: true, state: { ...location.state, ...(finishError ? { finishError } : {}), ...(!id && !location.state?.returnTo && roomId ? { returnTo: `/rooms/${roomId}` } : {}) } })
   } })
   if (id && recordQuery.isPending) return <p>Đang tải hồ sơ...</p>
   if (id && recordQuery.isError) return <p className="text-sm text-red-700">{getApiErrorMessage(recordQuery.error)}</p>

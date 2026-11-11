@@ -1,6 +1,8 @@
+// BEEHOUSE_NAV_CONTEXT_V1
+import { currentPagePath } from '../utils/navigationContext'
 import { getApiErrorMessage } from '../api/getApiErrorMessage'
 import { useQuery } from '@tanstack/react-query'
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { getMe } from '../api/authApi'
 import { useEffect, useSyncExternalStore } from 'react'
 import { endSession, getSession, subscribeSession } from '../api/session'
@@ -12,9 +14,10 @@ export default function ProtectedRoute() {
 
 function SessionProtectedRoute({ session }) {
   const token = session.token
+  const location = useLocation()
   const query = useQuery({ queryKey: ['me'], queryFn: getMe, enabled: Boolean(token) })
   const errorMessage = session.errorMessage || (query.isError ? getApiErrorMessage(query.error) : '')
-  const errorState = errorMessage ? { error: errorMessage } : undefined
+  const errorState = { ...(errorMessage ? { error: errorMessage } : {}), returnTo: currentPagePath(location) }
   useEffect(() => { if (query.isError) endSession(session, getApiErrorMessage(query.error)) }, [query.isError, query.error, session])
 
   // The Axios interceptor may already have cleared an expired token.

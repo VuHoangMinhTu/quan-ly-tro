@@ -1,3 +1,5 @@
+// BEEHOUSE_NAV_CONTEXT_V1
+import { backTarget } from '../../utils/navigationContext'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Trash2 } from 'lucide-react'
@@ -21,6 +23,22 @@ import { formatArea, formatCurrency, formatDate } from '../../utils/formatters'
 import { privateRoomTypeLabel, roomTypeLabel } from '../../utils/roomTypes'
 
 const placeholders = []
+
+const roomStatusLabels = {
+  AVAILABLE: 'Còn trống',
+  RENTED: 'Đã thuê',
+  RESERVED: 'Đã đặt',
+  MAINTENANCE: 'Bảo trì',
+  INACTIVE: 'Ngừng sử dụng',
+}
+
+const roomStatusStyles = {
+  AVAILABLE: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  RENTED: 'border-blue-200 bg-blue-50 text-blue-700',
+  RESERVED: 'border-amber-200 bg-amber-50 text-amber-700',
+  MAINTENANCE: 'border-slate-200 bg-slate-100 text-slate-700',
+  INACTIVE: 'border-slate-200 bg-slate-100 text-slate-700',
+}
 
 export default function RoomDetailPage() {
   const { id } = useParams()
@@ -56,66 +74,170 @@ export default function RoomDetailPage() {
   const room = roomQuery.data.data.data
   const contracts = contractsQuery.data?.data?.data || []
   const activeContract = contracts.find((contract) => contract.status === 'ACTIVE')
+  const isDorm = room.room_type === 'DORMITORY'
+  const roomStatus = roomStatusLabels[room.status] || room.status || 'Chưa cập nhật'
+  const roomStatusStyle = roomStatusStyles[room.status] || 'border-slate-200 bg-slate-100 text-slate-700'
   return (
     <section className="min-w-0 w-full max-w-3xl">
-      <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:justify-between">
-        <div className="min-w-0 max-w-full sm:flex-1">
-          <Link to={`/boarding-houses/${room.boarding_house_id}/rooms`} className="text-sm text-slate-600 hover:text-slate-950 inline-flex min-h-11 items-center lg:min-h-0">← Quay lại danh sách phòng</Link>
-          <h2 className="mt-3 break-words text-xl font-bold sm:text-2xl">{room.room_code} {room.room_name ? `– ${room.room_name}` : ''}</h2>
+<header className="mb-4 min-w-0">
+  <Link to={backTarget(location, `/boarding-houses/${room.boarding_house_id}/rooms`)} className="inline-flex min-h-11 items-center text-sm font-medium text-slate-600 underline-offset-4 hover:underline">
+    ← Danh sách phòng
+  </Link>
+  <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-3">
+    <div className="min-w-0 flex-1">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-teal-700">Chi tiết phòng</p>
+      <h2 className="mt-1 break-words text-2xl font-bold tracking-tight text-slate-900">
+        {room.room_code}{room.room_name ? <span className="ml-2 text-base font-medium text-slate-500">{room.room_name}</span> : null}
+      </h2>
+    </div>
+    <Link to={`/rooms/${id}/edit`} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 shadow-sm active:bg-slate-100">
+      <Pencil size={16} aria-hidden="true" /> Sửa
+    </Link>
+  </div>
+  {room.status !== 'INACTIVE' && (
+    <div className="mt-2 flex min-w-0 justify-end">
+      {isConfirmingDelete ? (
+        <div className="w-full rounded-xl border border-red-200 bg-red-50 p-3 text-sm">
+          <p className="mb-3 text-red-800">{room.has_history ? 'Phòng này có dữ liệu lịch sử, chỉ có thể ngừng sử dụng.' : 'Phòng chưa có dữ liệu phát sinh và sẽ bị xóa vĩnh viễn.'}</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending} className="min-h-11 rounded-lg bg-red-700 px-3 font-medium text-white disabled:opacity-60">
+              {deleteMutation.isPending ? 'Đang xử lý...' : room.has_history ? 'Xác nhận ngừng sử dụng' : 'Xác nhận xóa'}
+            </button>
+            <button type="button" onClick={() => setIsConfirmingDelete(false)} className="min-h-11 rounded-lg border border-slate-200 bg-white px-3">Hủy</button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Link to={`/rooms/${id}/edit`} className="inline-flex items-center gap-2 min-h-11 sm:min-h-0 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"><Pencil size={16} /> Sửa</Link>
-          {isConfirmingDelete ? (
-            <span className="flex flex-wrap items-center gap-2"><span className="w-full text-sm text-slate-700">{room.has_history ? 'Phòng này đã có dữ liệu lịch sử nên không thể xóa vĩnh viễn.' : 'Phòng chưa có dữ liệu phát sinh và sẽ bị xóa vĩnh viễn.'}</span><button onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending} className="min-h-11 sm:min-h-0 rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">{deleteMutation.isPending ? 'Đang xử lý...' : room.has_history ? 'Ngừng sử dụng phòng' : 'Xác nhận xóa'}</button><button onClick={() => setIsConfirmingDelete(false)} className="min-h-11 sm:min-h-0 px-2 text-sm text-slate-600">Hủy</button></span>
-          ) : (
-            room.status !== 'INACTIVE' && <button onClick={() => setIsConfirmingDelete(true)} className="inline-flex items-center gap-2 min-h-11 sm:min-h-0 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"><Trash2 size={16} /> {room.has_history ? 'Ngừng sử dụng' : 'Xóa'}</button>
-          )}
-        </div>
-      </div>
-
+      ) : (
+        <button type="button" onClick={() => setIsConfirmingDelete(true)} className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-xs font-medium text-red-700 active:bg-red-50">
+          <Trash2 size={15} aria-hidden="true" /> {room.has_history ? 'Ngừng sử dụng' : 'Xóa phòng'}
+        </button>
+      )}
+    </div>
+  )}
+</header>
       {location.state?.message && <p className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{location.state.message}</p>}
       {deleteError && <p className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{deleteError}</p>}
 
-      <div className="min-w-0 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
-        <h3 className="text-lg font-semibold">Thông tin phòng</h3>
-        <dl className="mt-5 grid gap-5 sm:grid-cols-2">
-          <div><dt className="text-sm text-slate-500">Loại phòng</dt><dd className="mt-1 font-medium">{roomTypeLabel(room.room_type)}</dd></div>
-          {room.room_type !== 'DORMITORY' && <div><dt className="text-sm text-slate-500">Phân loại</dt><dd className="mt-1 font-medium">{privateRoomTypeLabel(room.private_room_type)}</dd></div>}
-          <div><dt className="text-sm text-slate-500">Tầng</dt><dd className="mt-1 font-medium">{room.floor?.name || 'Chưa thiết lập tầng'}</dd></div>
-          {room.room_type !== 'DORMITORY' && <div><dt className="text-sm text-slate-500">Giá thuê</dt><dd className="mt-1 break-words font-medium">{room.monthly_rent == null ? 'Chưa thiết lập giá thuê' : formatCurrency(room.monthly_rent) + '/tháng'}</dd></div>}
-          <div><dt className="text-sm text-slate-500">Diện tích</dt><dd className="mt-1 break-words font-medium">{formatArea(room.area)}</dd></div>
-          {room.room_type !== 'DORMITORY' && <div><dt className="text-sm text-slate-500">Số người tối đa</dt><dd className="mt-1 break-words font-medium">{room.max_tenants || 'Chưa đặt'}</dd></div>}
-          <div><dt className="text-sm text-slate-500">Trạng thái</dt><dd className="mt-1 break-words font-medium">{room.status === 'INACTIVE' ? 'Ngừng sử dụng' : room.status}</dd></div>
-          <div className="sm:col-span-2"><dt className="text-sm text-slate-500">Mô tả</dt><dd className="mt-1 whitespace-pre-wrap break-words">{room.description || 'Chưa có mô tả.'}</dd></div>
-        </dl>
-      </div>
+<section aria-labelledby="room-overview-title" className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+  <div className="flex flex-wrap items-center justify-between gap-2">
+    <h3 id="room-overview-title" className="text-lg font-bold text-slate-900">Tổng quan phòng</h3>
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${roomStatusStyle}`}>{roomStatus}</span>
+  </div>
+  <div className="mt-3 min-w-0 rounded-xl border border-teal-100 bg-teal-50/70 p-3.5">
+    <p className="text-xs font-medium text-teal-800">{isDorm ? 'Quy mô phòng KTX' : 'Giá thuê hằng tháng'}</p>
+    <p className="mt-1 break-words text-xl font-bold tracking-tight text-slate-900 tabular-nums">
+      {isDorm ? `${room.beds_count ?? 0} giường` : room.monthly_rent == null ? 'Chưa thiết lập giá thuê' : formatCurrency(room.monthly_rent)}
+    </p>
+  </div>
+  <dl className="mt-3 grid grid-cols-2 gap-2 sm:gap-3">
+    <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+      <dt className="text-xs text-slate-500">Loại phòng</dt>
+      <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{roomTypeLabel(room.room_type)}</dd>
+    </div>
+    {!isDorm && <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+      <dt className="text-xs text-slate-500">Phân loại</dt>
+      <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{privateRoomTypeLabel(room.private_room_type)}</dd>
+    </div>}
+    <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+      <dt className="text-xs text-slate-500">Tầng</dt>
+      <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{room.floor?.name || 'Chưa phân tầng'}</dd>
+    </div>
+    <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+      <dt className="text-xs text-slate-500">Diện tích</dt>
+      <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{formatArea(room.area)}</dd>
+    </div>
+    {!isDorm && <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+      <dt className="text-xs text-slate-500">Số người tối đa</dt>
+      <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{room.max_tenants || 'Chưa đặt'}</dd>
+    </div>}
+    {room.description && <div className="col-span-2 min-w-0 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+      <dt className="text-xs text-slate-500">Mô tả</dt>
+      <dd className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-800">{room.description}</dd>
+    </div>}
+  </dl>
+</section>
 
-      <div className="mt-6 min-w-0 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
+<nav aria-label="Đi nhanh đến các mục quản lý phòng" className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+  {[
+    ['Dịch vụ', '#room-services'],
+    ['Điện nước', '#room-utilities'],
+    ['Hóa đơn', '#room-invoices'],
+    ['Hợp đồng', '#room-contracts'],
+  ].map(([label, target]) => (
+    <a key={target} href={target} className="inline-flex min-h-11 min-w-0 items-center justify-center rounded-xl border border-teal-100 bg-white px-2 text-center text-xs font-semibold text-teal-800 shadow-sm active:bg-teal-50 focus-visible:outline-2 focus-visible:outline-teal-600">
+      {label}
+    </a>
+  ))}
+</nav>
+      <div id="room-amenities" className="mt-4 min-w-0 scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-semibold">Tiện nghi</h3><button type="button" onClick={() => setIsAmenityEditorOpen(true)} className="min-h-11 sm:min-h-0 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">{room.amenities?.length ? 'Chỉnh sửa tiện nghi' : 'Thêm tiện nghi'}</button></div>
         {room.amenities?.length ? <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{room.amenities.map((amenity) => <div key={amenity.id} className="flex min-w-0 items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700"><AmenityIcon name={amenity.name} icon={amenity.icon} /><span className="min-w-0 break-words">{amenity.name}</span></div>)}</div> : <p className="mt-3 text-sm text-slate-500">Chưa có tiện nghi nào.</p>}
       </div>
 
       {room.room_type === 'DORMITORY' && <RoomBedsSection room={room} />}
-      <RoomOccupantsSection roomId={id} room={room} />
+      <div id="room-occupants" className="min-w-0 scroll-mt-24"><RoomOccupantsSection roomId={id} room={room} /></div>
 
-      <RoomServicesSection key={`room-services-${room.id}`} room={room} />
-      <section className="mt-6 min-w-0 rounded-xl bg-white p-4 shadow-sm sm:p-6"><h3 className="text-lg font-semibold">Khai báo cư trú</h3><p className="mt-1 text-sm text-slate-500">Tự điền CT01 từ hồ sơ những người đang ở trong phòng.</p><div className="mt-3 flex flex-wrap gap-3"><Link to={`/residence-declarations/new?room_id=${room.id}`} className="inline-flex min-h-11 items-center rounded-lg bg-slate-900 px-3 text-sm text-white">Tạo hồ sơ tạm trú</Link><Link to={`/residence-declarations?room_id=${room.id}`} className="inline-flex min-h-11 items-center rounded-lg border px-3 text-sm">Xem hồ sơ của phòng</Link></div></section>
+      <div id="room-services" className="min-w-0 scroll-mt-24"><RoomServicesSection key={`room-services-${room.id}`} room={room} /></div>
+<section className="mt-4 min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6" aria-label="Khai báo cư trú">
+  <h3 className="text-lg font-semibold">Khai báo cư trú</h3>
+  <p className="mt-1 text-sm leading-6 text-slate-500">Tự điền CT01 từ hồ sơ những người đang ở trong phòng.</p>
+  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+    <Link to={`/residence-declarations/new?room_id=${room.id}`} state={{ returnTo: location.pathname + location.search, returnLabel: 'Phòng' }} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-900 px-3 text-center text-sm font-semibold text-white active:opacity-90">Tạo hồ sơ tạm trú</Link>
+    <Link to={`/residence-declarations?room_id=${room.id}`} state={{ returnTo: location.pathname + location.search, returnLabel: 'Phòng' }} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-center text-sm font-semibold text-slate-800 active:bg-slate-50">Xem hồ sơ của phòng</Link>
+  </div>
+</section>
+      <div id="room-utilities" className="min-w-0 scroll-mt-24"><RoomUtilitiesSection room={room} /></div>
 
-      <RoomUtilitiesSection room={room} />
-
-      <div className="mt-6 min-w-0 rounded-xl bg-white p-4 sm:p-6 shadow-sm"><div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between"><h3 className="text-lg font-semibold">Hóa đơn</h3><div className="flex flex-wrap items-center gap-3"><Link to={`/rooms/${id}/invoices/new`} className="inline-flex min-h-11 min-w-11 items-center justify-center break-words text-sm underline lg:min-h-0 lg:min-w-0">Tạo hóa đơn</Link><Link to={`/rooms/${id}/invoices`} className="inline-flex min-h-11 min-w-11 items-center justify-center break-words text-sm underline lg:min-h-0 lg:min-w-0">Xem tất cả hóa đơn</Link></div></div>{invoicesQuery.isError&&<p className="mt-3 text-sm text-red-600">{getApiErrorMessage(invoicesQuery.error)}</p>}{(invoicesQuery.data?.data?.data?.items||[]).slice(0,3).map(invoice=><div key={invoice.id} className="mt-3 flex flex-col items-start gap-2 rounded border p-3 text-sm sm:flex-row sm:items-center sm:justify-between"><Link to={`/invoices/${invoice.id}`} className="inline-flex min-h-11 min-w-0 items-center break-words lg:min-h-0">{invoice.billing_period?.slice(5,7)}/{invoice.billing_period?.slice(0,4)} · {formatCurrency(invoice.total_amount)}</Link><InvoiceStatusBadge status={invoice.status}/></div>)}{!invoicesQuery.isPending&&!invoicesQuery.isError&&(invoicesQuery.data?.data?.data?.items||[]).length===0&&<p className="mt-3 text-sm text-slate-500">Phòng này chưa có hóa đơn.</p>}</div>
-
-      <div className="mt-6 min-w-0 rounded-xl bg-white p-4 sm:p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-semibold">Hợp đồng</h3><button type="button" onClick={() => setIsContractPickerOpen(true)} className="min-h-11 sm:min-h-0 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white">Thêm hợp đồng</button></div>
-        {contractsQuery.isPending ? <p className="mt-3 text-sm text-slate-500">Đang tải hợp đồng...</p> : contractsQuery.isError ? <p className="mt-3 text-sm text-red-600">{getApiErrorMessage(contractsQuery.error)}</p> : activeContract ? <div className="mt-4 rounded-lg bg-green-50 p-4"><div className="flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0 break-words sm:flex-1"><p className="font-medium">{activeContract.contract_code}</p><p className="mt-1 text-sm text-slate-600">Người thuê: {activeContract.tenant?.full_name || 'Chưa cập nhật'}</p></div><ContractStatusBadge status={activeContract.status} /></div><p className="mt-3 text-sm">{formatDate(activeContract.start_date)} - {formatDate(activeContract.end_date)}</p><p className="mt-1 text-sm font-medium">{formatCurrency(activeContract.monthly_rent)}/tháng</p><div className="mt-3 flex flex-wrap items-center gap-3"><Link to={`/contracts/${activeContract.id}`} className="inline-flex min-h-11 min-w-11 items-center justify-center break-words text-sm underline lg:min-h-0 lg:min-w-0">Xem</Link><Link to={`/contracts/${activeContract.id}/edit`} className="inline-flex min-h-11 min-w-11 items-center justify-center break-words text-sm underline lg:min-h-0 lg:min-w-0">Sửa</Link></div></div> : <p className="mt-3 text-sm text-slate-500">{contracts.length > 0 ? 'Hiện không có hợp đồng đang hiệu lực.' : 'Phòng này chưa có hợp đồng.'}</p>}
-        {contracts.length > 0 && <Link to={`/rooms/${id}/contracts`} className="mt-4 inline-flex min-h-11 sm:min-h-0 items-center text-sm font-medium underline">Xem lịch sử hợp đồng</Link>}
+<section id="room-invoices" aria-label="Hóa đơn" className="mt-4 min-w-0 scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+  <h3 className="text-lg font-semibold">Hóa đơn</h3>
+  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+    <Link to={`/rooms/${id}/invoices/new`} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-900 px-3 text-center text-sm font-semibold text-white active:opacity-90">Tạo hóa đơn</Link>
+    <Link to={`/rooms/${id}/invoices`} state={{ returnTo: location.pathname + location.search, returnLabel: 'Phòng' }} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 px-3 text-center text-sm font-semibold text-slate-800 active:bg-slate-50">Danh sách hóa đơn</Link>
+  </div>
+  {invoicesQuery.isPending && <p className="mt-3 text-sm text-slate-500">Đang tải hóa đơn…</p>}
+  {invoicesQuery.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(invoicesQuery.error)}</p>}
+  {(invoicesQuery.data?.data?.data?.items || []).slice(0, 3).map((invoice) => (
+    <div key={invoice.id} className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3 text-sm">
+      <Link to={`/invoices/${invoice.id}`} state={{ returnTo: location.pathname + location.search, returnLabel: 'Phòng' }} className="inline-flex min-h-11 min-w-0 items-center break-words font-semibold text-teal-800 underline-offset-4 hover:underline">
+        {invoice.billing_period?.slice(5, 7)}/{invoice.billing_period?.slice(0, 4)} · {formatCurrency(invoice.total_amount)}
+      </Link>
+      <InvoiceStatusBadge status={invoice.status} />
+    </div>
+  ))}
+  {!invoicesQuery.isPending && !invoicesQuery.isError && (invoicesQuery.data?.data?.data?.items || []).length === 0 && (
+    <p className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">Phòng này chưa có hóa đơn.</p>
+  )}
+</section>
+<section id="room-contracts" aria-label="Hợp đồng" className="mt-4 min-w-0 scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <h3 className="text-lg font-semibold">Hợp đồng</h3>
+    <button type="button" onClick={() => setIsContractPickerOpen(true)} className="min-h-11 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white active:opacity-90">Thêm hợp đồng</button>
+  </div>
+  {contractsQuery.isPending ? <p className="mt-3 text-sm text-slate-500">Đang tải hợp đồng…</p>
+    : contractsQuery.isError ? <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(contractsQuery.error)}</p>
+    : activeContract ? (
+      <div className="mt-3 min-w-0 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="break-words text-sm font-bold text-slate-900">{activeContract.contract_code}</p>
+            <p className="mt-1 text-sm text-slate-600">Người thuê: {activeContract.tenant?.full_name || 'Chưa cập nhật'}</p>
+          </div>
+          <ContractStatusBadge status={activeContract.status} />
+        </div>
+        <p className="mt-2 break-words text-xs text-slate-600">{formatDate(activeContract.start_date)} – {formatDate(activeContract.end_date)}</p>
+        <p className="mt-1 break-words text-sm font-semibold tabular-nums text-slate-900">{formatCurrency(activeContract.monthly_rent)}/tháng</p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Link to={`/contracts/${activeContract.id}`} state={{ returnTo: location.pathname + location.search, returnLabel: 'Phòng' }} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-800 active:bg-slate-100">Xem</Link>
+          <Link to={`/contracts/${activeContract.id}/edit`} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-800 active:bg-slate-100">Sửa</Link>
+        </div>
       </div>
-
+    ) : <p className="mt-3 text-sm text-slate-500">{contracts.length > 0 ? 'Hiện không có hợp đồng đang hiệu lực.' : 'Phòng này chưa có hợp đồng.'}</p>}
+  {contracts.length > 0 && <Link to={`/rooms/${id}/contracts`} state={{ returnTo: location.pathname + location.search, returnLabel: 'Phòng' }} className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-teal-800 underline-offset-4 hover:underline">Xem lịch sử hợp đồng</Link>}
+</section>
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         {placeholders.map((title) => <div key={title} className="rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500">{title} sẽ được triển khai ở phase tiếp theo.</div>)}
       </div>
 
-      {isContractPickerOpen && <div role="dialog" aria-modal="true" aria-labelledby="contract-picker-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4"><div className="max-h-[90dvh] w-full max-w-2xl overscroll-contain overflow-y-auto min-w-0 rounded-xl bg-white p-4 sm:p-6 shadow-xl"><div className="flex items-start justify-between gap-4"><div className="min-w-0 break-words"><h3 id="contract-picker-title" className="text-lg font-semibold">Chọn hợp đồng</h3><p className="mt-1 text-sm text-slate-600">Chỉ hiển thị hợp đồng của phòng {room.room_code}.</p></div><button type="button" aria-label="Đóng" onClick={() => setIsContractPickerOpen(false)} className="flex size-11 shrink-0 items-center justify-center rounded-lg text-lg text-slate-500 hover:bg-slate-100 hover:text-slate-950">✕</button></div>{contractsQuery.isPending ? <p className="mt-5 text-sm text-slate-500">Đang tải hợp đồng...</p> : contractsQuery.isError ? <p className="mt-5 text-sm text-red-600">{getApiErrorMessage(contractsQuery.error)}</p> : contracts.length === 0 ? <div className="mt-5 rounded-lg border border-dashed p-6 text-center"><p className="text-sm text-slate-600">Chưa có hợp đồng nào cho phòng này.</p><Link to={`/rooms/${id}/contracts/new`} className="mt-4 inline-flex min-h-11 sm:min-h-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Tạo hợp đồng mới</Link></div> : <><div className="mt-5 space-y-3">{contracts.map((contract) => <div key={contract.id} className="rounded-lg border border-slate-200 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 break-words"><p className="font-medium">{contract.contract_code}</p><p className="mt-1 text-sm text-slate-600">{contract.tenant?.full_name || 'Chưa cập nhật người thuê'}</p><p className="mt-2 text-sm text-slate-600">{formatDate(contract.start_date)} - {formatDate(contract.end_date)}</p></div><div className="flex flex-wrap items-center gap-3 sm:flex-col sm:items-end"><ContractStatusBadge status={contract.status} /><Link to={`/contracts/${contract.id}`} className="inline-flex min-h-11 sm:min-h-0 items-center rounded border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-50">Chọn</Link></div></div></div>)}</div><Link to={`/rooms/${id}/contracts/new`} className="mt-5 inline-flex min-h-11 sm:min-h-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">+ Tạo hợp đồng mới</Link></>}</div></div>}
+      {isContractPickerOpen && <div role="dialog" aria-modal="true" aria-labelledby="contract-picker-title" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4"><div className="max-h-[90dvh] w-full max-w-2xl overscroll-contain overflow-y-auto min-w-0 rounded-xl bg-white p-4 sm:p-6 shadow-xl"><div className="flex items-start justify-between gap-4"><div className="min-w-0 break-words"><h3 id="contract-picker-title" className="text-lg font-semibold">Chọn hợp đồng</h3><p className="mt-1 text-sm text-slate-600">Chỉ hiển thị hợp đồng của phòng {room.room_code}.</p></div><button type="button" aria-label="Đóng" onClick={() => setIsContractPickerOpen(false)} className="flex size-11 shrink-0 items-center justify-center rounded-lg text-lg text-slate-500 hover:bg-slate-100 hover:text-slate-950">✕</button></div>{contractsQuery.isPending ? <p className="mt-5 text-sm text-slate-500">Đang tải hợp đồng...</p> : contractsQuery.isError ? <p className="mt-5 text-sm text-red-600">{getApiErrorMessage(contractsQuery.error)}</p> : contracts.length === 0 ? <div className="mt-5 rounded-lg border border-dashed p-6 text-center"><p className="text-sm text-slate-600">Chưa có hợp đồng nào cho phòng này.</p><Link to={`/rooms/${id}/contracts/new`} state={{ returnTo: location.pathname + location.search, returnLabel: 'Phòng' }} className="mt-4 inline-flex min-h-11 sm:min-h-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Tạo hợp đồng mới</Link></div> : <><div className="mt-5 space-y-3">{contracts.map((contract) => <div key={contract.id} className="rounded-lg border border-slate-200 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 break-words"><p className="font-medium">{contract.contract_code}</p><p className="mt-1 text-sm text-slate-600">{contract.tenant?.full_name || 'Chưa cập nhật người thuê'}</p><p className="mt-2 text-sm text-slate-600">{formatDate(contract.start_date)} - {formatDate(contract.end_date)}</p></div><div className="flex flex-wrap items-center gap-3 sm:flex-col sm:items-end"><ContractStatusBadge status={contract.status} /><Link to={`/contracts/${contract.id}`} state={{ returnTo: location.pathname + location.search, returnLabel: 'Phòng' }} className="inline-flex min-h-11 sm:min-h-0 items-center rounded border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-50">Chọn</Link></div></div></div>)}</div><Link to={`/rooms/${id}/contracts/new`} state={{ returnTo: location.pathname + location.search, returnLabel: 'Phòng' }} className="mt-5 inline-flex min-h-11 sm:min-h-0 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">+ Tạo hợp đồng mới</Link></>}</div></div>}
       {isAmenityEditorOpen && <RoomAmenitiesModal key={`room-amenities-${room.id}`} room={room} onClose={() => setIsAmenityEditorOpen(false)} />}
     </section>
   )

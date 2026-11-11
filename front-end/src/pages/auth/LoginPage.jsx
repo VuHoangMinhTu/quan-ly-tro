@@ -1,3 +1,5 @@
+// BEEHOUSE_NAV_CONTEXT_V1
+import { safeReturnTo } from '../../utils/navigationContext'
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { completeLogin } from '../../api/authSession'
 import { getSession, isCurrentSession } from '../../api/session'
@@ -28,7 +30,7 @@ export default function LoginPage() {
       const response = await login(data)
       return completeLogin(response.data.data.token, previousSession)
     },
-    onSuccess: session => { if (isCurrentSession(session)) navigate('/dashboard') },
+    onSuccess: session => { if (isCurrentSession(session)) navigate(safeReturnTo(location.state?.returnTo, '/dashboard'), { replace: true }) },
     onError: (error) => applyApiFieldErrors(error, form.setError),
   })
 

@@ -1,0 +1,60 @@
+/* BeeHouse mobile shell polish. Screen-only: no invoice/contract print changes. */
+@media screen and (max-width: 1023px) {
+  .bh-mobile-topbar {
+    min-height: 66px;
+    background: rgb(255 255 255 / 0.96);
+    border-bottom: 1px solid #e4eaf1;
+    box-shadow: 0 3px 14px rgb(22 40 60 / 0.045);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+
+  .bh-mobile-navigation {
+    border-radius: 0 20px 20px 0;
+    background: #14213d;
+    box-shadow: 18px 0 50px rgb(15 23 42 / 0.22);
+  }
+
+  .bh-mobile-navigation::backdrop {
+    background: rgb(15 23 42 / 0.55);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+  }
+
+  .bh-mobile-navigation .bh-primary-nav { margin-top: 18px; }
+  .bh-mobile-navigation .bh-primary-nav::before {
+    content: 'ĐIỀU HƯỚNG';
+    padding-left: 12px;
+    padding-bottom: 10px;
+    letter-spacing: 0.09em;
+    color: #a7b8d1;
+  }
+  .bh-mobile-navigation .bh-nav-link {
+    min-height: 48px;
+    margin-bottom: 5px;
+    padding-inline: 13px;
+    border-radius: 12px;
+    color: #d7e1ee;
+  }
+  .bh-mobile-navigation .bh-nav-link[aria-current='page'] {
+    color: #0b5f59 !important;
+    background: #e9f7f3 !important;
+    border-color: #d8f0eb;
+  }
+  .bh-mobile-navigation .bh-nav-link[aria-current='page']::before { display: none; }
+}
+
+@media screen and (max-width: 359px) {
+  .bh-mobile-subtitle { display: none; }
+}
+
+/* Touch-first room cards: hover highlights only when a precise pointer exists. */
+@media (hover: hover) and (pointer: fine) {
+  .bh-room-compact:hover {
+    border-color: #99e3d9;
+    box-shadow: 0 8px 22px rgb(22 40 60 / 0.09);
+  }
+  .bh-room-compact .bh-room-title-link:hover { color: #0f766e; }
+  .bh-room-compact .bh-room-action-view:hover { background-color: #e9eef3; }
+  .bh-room-compact .bh-room-action-edit:hover { background-color: #dcf5ee; }
+}

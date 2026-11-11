@@ -9,6 +9,7 @@
 @import '@fontsource/be-vietnam-pro/latin-700.css';
 @import './styles/design-system.css';
 @import './styles/workspace.css';
+@import './styles/mobile-ui-polish.css';
 body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; color: #0f172a; }
 
 /* Screen-only rules keep the invoice's independent print layout untouched. */
