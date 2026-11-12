@@ -1,3 +1,5 @@
+// BEEHOUSE_NAV_CONTEXT_V1
+import { currentPagePath } from '../../utils/navigationContext'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Eye, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
@@ -109,8 +111,8 @@ export default function TenantListPage() {
   const rooms = roomsQuery.data?.data?.data || []
 
   const renderActions = (tenant) => <div className="flex flex-wrap items-center gap-2">
-    <Link to={'/tenants/' + tenant.id} className="inline-flex min-h-11 sm:min-h-0 items-center gap-1 rounded-lg border border-slate-200 px-3 text-sm hover:bg-slate-50"><Eye size={15} /> Xem</Link>
-    <Link to={'/tenants/' + tenant.id + '/edit'} className="inline-flex min-h-11 sm:min-h-0 items-center gap-1 rounded-lg border border-slate-200 px-3 text-sm hover:bg-slate-50"><Pencil size={15} /> Sửa</Link>
+    <Link to={'/tenants/' + tenant.id} state={{ returnTo: currentPagePath(location), returnLabel: 'Người thuê' }} className="inline-flex min-h-11 sm:min-h-0 items-center gap-1 rounded-lg border border-slate-200 px-3 text-sm hover:bg-slate-50"><Eye size={15} /> Xem</Link>
+    <Link to={'/tenants/' + tenant.id + '/edit'} state={{ returnTo: currentPagePath(location), returnLabel: 'Người thuê' }} className="inline-flex min-h-11 sm:min-h-0 items-center gap-1 rounded-lg border border-slate-200 px-3 text-sm hover:bg-slate-50"><Pencil size={15} /> Sửa</Link>
     {confirmingId === tenant.id ? <><button type="button" onClick={() => mutation.mutate(tenant.id)} disabled={mutation.isPending || query.isPlaceholderData} className="min-h-11 sm:min-h-0 rounded-lg px-3 text-sm font-medium text-red-700 disabled:opacity-60">{mutation.isPending ? 'Đang xóa...' : 'Xác nhận'}</button><button type="button" onClick={() => setConfirmingId(null)} className="min-h-11 sm:min-h-0 rounded-lg px-3 text-sm">Hủy</button></>
       : <button type="button" disabled={query.isPlaceholderData} onClick={() => { setDeleteError(''); setConfirmingId(tenant.id) }} className="inline-flex min-h-11 sm:min-h-0 items-center gap-1 rounded-lg px-3 text-sm text-red-700 hover:bg-red-50 disabled:opacity-60"><Trash2 size={15} /> Xóa</button>}
   </div>

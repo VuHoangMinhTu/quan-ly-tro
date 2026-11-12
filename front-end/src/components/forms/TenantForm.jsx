@@ -22,7 +22,7 @@ const schema = z.object({
   identity_issue_date: optionalDate,
   permanent_address: z.string({ error: 'Địa chỉ thường trú phải là nội dung văn bản.' }).max(500, 'Địa chỉ thường trú tối đa 500 ký tự.').optional(),
 })
-const emptyValues = { full_name: '', phone: '', email: '', date_of_birth: '', gender: '', identity_number: '', identity_issue_place: '', identity_issue_date: '', permanent_address: '' }
+const emptyValues = { full_name: '', phone: '', email: '', date_of_birth: '', gender: '', identity_number: '', identity_issue_place: 'Cục Cảnh sát QLHC về TTXH', identity_issue_date: '', permanent_address: '' }
 
 export default function TenantForm({ initialValues = emptyValues, onSubmit, submitLabel }) {
   const [submitError, setSubmitError] = useState('')
@@ -34,7 +34,9 @@ export default function TenantForm({ initialValues = emptyValues, onSubmit, subm
       phone: toFormString(initialValues.phone),
       email: toFormString(initialValues.email),
       identity_number: toFormString(initialValues.identity_number),
-      identity_issue_place: toFormString(initialValues.identity_issue_place),
+      identity_issue_place:
+  toFormString(initialValues.identity_issue_place) ||
+  'Cục Cảnh sát QLHC về TTXH',
       permanent_address: toFormString(initialValues.permanent_address),
       date_of_birth: formatDateForDisplay(initialValues.date_of_birth),
       identity_issue_date: formatDateForDisplay(initialValues.identity_issue_date),

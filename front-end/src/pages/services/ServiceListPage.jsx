@@ -1,7 +1,9 @@
+// BEEHOUSE_NAV_CONTEXT_V1
+import { backTarget } from '../../utils/navigationContext'
 import { getApiErrorMessage, getApiFieldErrors } from '../../api/getApiErrorMessage'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useLocation } from 'react-router-dom'
 import { createService, deleteService, getServices, updateService } from '../../api/serviceApi'
 import { createServicePriceTier, deleteServicePriceTier, getServicePriceTiers } from '../../api/servicePriceTierApi'
 import { serviceKeys } from '../../api/serviceKeys'
@@ -42,6 +44,7 @@ function Tiers({ service }) {
 
 export default function ServiceListPage() {
   const { boardingHouseId } = useParams()
+  const location = useLocation()
   const client = useQueryClient()
   const [editing, setEditing] = useState(null)
   const query = useQuery({ queryKey: serviceKeys.byBoardingHouse(boardingHouseId), queryFn: () => getServices(boardingHouseId) })
@@ -50,7 +53,7 @@ export default function ServiceListPage() {
   const services = query.data?.data?.data || []
 
   return <section className="bh-workspace min-w-0">
-    <Link to={`/boarding-houses/${boardingHouseId}`} className="text-sm text-slate-600 inline-flex min-h-11 items-center">← Quay lại nhà trọ</Link>
+    <Link to={backTarget(location, `/boarding-houses/${boardingHouseId}`)} className="text-sm text-slate-600 inline-flex min-h-11 items-center">← Quay lại nhà trọ</Link>
     <PageHeader title="Dịch vụ" eyebrow="DANH MỤC & ĐƠN GIÁ" description="Thiết lập khoản thu rõ ràng cho từng nhu cầu vận hành."><button onClick={() => setEditing({})} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white"><Plus size={17} aria-hidden="true" />Thêm dịch vụ</button></PageHeader>
     {deleteMutation.isError && <p role="alert" className="mb-3 text-sm text-red-600">{getApiErrorMessage(deleteMutation.error)}</p>}
     {query.isPending ? <LoadingState label="Đang tải dịch vụ…" /> : query.isError ? <p role="alert" className="text-sm text-red-600">{getApiErrorMessage(query.error)}</p> : services.length === 0 ? <EmptyState icon={Gauge} title="Nhà trọ này chưa có dịch vụ nào." description="Thêm dịch vụ và chọn cách tính phù hợp trước khi áp dụng cho phòng." /> : <div className="bh-service-list">{services.map(service => <article key={service.id} className="bh-service-card"><div className="bh-service-card-top"><div className="min-w-0"><span className="bh-label mb-4">{service.is_active ? 'ĐANG ÁP DỤNG' : 'TẠM NGƯNG'}</span><h3>{service.name}</h3><p className="bh-service-card-meta">{SERVICE_TYPE_LABELS[service.type] || service.type} · {BILLING_METHOD_LABELS[service.billing_method] || service.billing_method}</p><p className="bh-service-price">{service.billing_method === 'TIERED' ? 'Theo bậc giá' : formatCurrency(service.base_price)}{service.billing_method !== 'TIERED' && service.unit && <small> / {service.unit}</small>}</p></div><div className="bh-service-actions"><button onClick={() => setEditing(service)}>Sửa</button><button onClick={() => window.confirm('Bạn có chắc muốn xóa dịch vụ này?') && deleteMutation.mutate(service.id)} className="text-red-700">Xóa</button></div></div>{service.billing_method === 'TIERED' && <Tiers service={service} />}</article>)}</div>}

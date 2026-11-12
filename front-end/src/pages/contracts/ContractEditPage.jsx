@@ -1,6 +1,7 @@
+// BEEHOUSE_NAV_CONTEXT_V1
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { getContract, getContractContext, updateContract } from '../../api/contractApi'
 import { contractKeys } from '../../api/contractKeys'
 import ContractWizard from '../../components/contracts/ContractWizard'
@@ -18,6 +19,7 @@ function InternalNote({ contract, save }) {
 export default function ContractEditPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const client = useQueryClient()
   const query = useQuery({ queryKey: contractKeys.detail(id), queryFn: () => getContract(id) })
   const contract = query.data?.data?.data
@@ -28,7 +30,7 @@ export default function ContractEditPage() {
   const submit = async payload => {
     await update.mutateAsync(payload)
     await Promise.all([client.invalidateQueries({ queryKey: contractKeys.detail(id) }), client.invalidateQueries({ queryKey: contractKeys.byRoom(contract.room_id) }), client.invalidateQueries({ queryKey: roomKeys.detail(contract.room_id) }), client.invalidateQueries({ queryKey: contractKeys.context(contract.room_id) }), client.invalidateQueries({ queryKey: ['room-tenants'] }), client.invalidateQueries({ queryKey: ['residence-context'] })])
-    navigate(`/contracts/${id}`, { replace: true })
+    navigate(`/contracts/${id}`, { replace: true, state: location.state })
   }
-  return <section className="min-w-0 max-w-5xl space-y-4"><Link to={`/contracts/${id}`} className="inline-flex min-h-11 items-center text-sm underline">← Quay lại hợp đồng</Link><h2 className="text-xl font-bold sm:text-2xl">Sửa hợp đồng</h2>{contract.status === 'DRAFT' ? <><ContractDraftRoomSelector key={`room-${id}-${contract.room_id}`} contract={contract} /><ContractWizard key={`${id}-${contract.room_id}`} context={context.data.data.data} initial={contract} onSubmit={submit} /></> : contract.status === 'ACTIVE' ? <InternalNote key={id} contract={contract} save={submit} /> : <p>Hợp đồng đã kết thúc chỉ được xem.</p>}</section>
+  return <section className="min-w-0 max-w-5xl space-y-4"><Link to={`/contracts/${id}`} state={location.state} className="inline-flex min-h-11 items-center text-sm underline">← Quay lại hợp đồng</Link><h2 className="text-xl font-bold sm:text-2xl">Sửa hợp đồng</h2>{contract.status === 'DRAFT' ? <><ContractDraftRoomSelector key={`room-${id}-${contract.room_id}`} contract={contract} /><ContractWizard key={`${id}-${contract.room_id}`} context={context.data.data.data} initial={contract} onSubmit={submit} /></> : contract.status === 'ACTIVE' ? <InternalNote key={id} contract={contract} save={submit} /> : <p>Hợp đồng đã kết thúc chỉ được xem.</p>}</section>
 }

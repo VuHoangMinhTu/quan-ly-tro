@@ -1,10 +1,12 @@
+// BEEHOUSE_NAV_CONTEXT_V1
+import { backTarget, safeReturnTo, forwardContext } from '../../utils/navigationContext'
 ﻿import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
 import MonthlyDraftUpdatePanel from './MonthlyDraftUpdatePanel'
 import MonthlyEvidenceSummary from './MonthlyEvidenceSummary'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Controller, useForm } from 'react-hook-form'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { deleteInvoice, generateInvoice, getInvoice } from '../../api/invoiceApi'
 import { createInvoiceItem, deleteInvoiceItem, updateInvoiceItem } from '../../api/invoiceItemApi'
@@ -61,6 +63,7 @@ export default function InvoiceDetailPage() {
   const { id } = useParams()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const location = useLocation()
   const [item, setItem] = useState(null)
   const [payment, setPayment] = useState(null)
   const [payosRequest, setPayosRequest] = useState(null)
@@ -77,7 +80,7 @@ export default function InvoiceDetailPage() {
   const paymentMutation = useMutation({ mutationFn: (payload) => payment?.id ? updatePayment(payment.id, payload) : createPayment(id, payload), onSuccess: () => { setPayment(null); invalidatePaymentData() } })
   const deletePaymentMutation = useMutation({ mutationFn: deletePayment, onSuccess: invalidatePaymentData })
   const payosMutation = useMutation({ mutationFn: () => createPayOSPaymentRequest(id), onSuccess: (response) => { setPayosRequest(response.data.data.payment_request); queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(id) }) } })
-  const deleteInvoiceMutation = useMutation({ mutationFn: deleteInvoice, onSuccess: () => navigate(`/rooms/${invoiceQuery.data.data.data.room_id}/invoices`) })
+  const deleteInvoiceMutation = useMutation({ mutationFn: deleteInvoice, onSuccess: () => navigate(backTarget(location, `/rooms/${invoiceQuery.data.data.data.room_id}/invoices`), { replace: true }) })
   const generateMutation = useMutation({ mutationFn: () => generateInvoice(id), onSuccess: () => { setGenerateMessage('Đã tạo các khoản thu tự động.'); queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(id) }); queryClient.invalidateQueries({ queryKey: invoiceKeys.byRoom(invoiceQuery.data.data.data.room_id) }) }, onError: (error) => setGenerateMessage(getApiErrorMessage(error)) })
 
   const issueMutation = useMutation({
@@ -146,7 +149,7 @@ export default function InvoiceDetailPage() {
       <MonthlyEvidenceSummary invoice={invoice} />
       {canManage && invoice.status === 'DRAFT' && <MonthlyDraftUpdatePanel contractId={invoice.monthly_evidence?.snapshot?.engine === 'DORM_BED_V3' ? invoice.contract_id : undefined} roomId={invoice.room_id} period={invoice.billing_period?.slice(0, 10)} initialUsageStartAt={invoiceUsageWindow(invoice.monthly_evidence.snapshot).start} initialUsageEndAt={invoiceUsageWindow(invoice.monthly_evidence.snapshot).end} />}
     </>}
-    <div className="print-hide min-w-0"><Link to={canManage ? `/rooms/${invoice.room_id}/invoices` : '/dashboard'} className="inline-flex min-h-11 items-center">← Quay lại</Link>
+    <div className="print-hide min-w-0"><Link to={backTarget(location, canManage ? `/rooms/${invoice.room_id}/invoices` : '/dashboard')} state={location.state?.parentReturnTo ? { returnTo: safeReturnTo(location.state.parentReturnTo, `/rooms/${invoice.room_id}`) } : undefined} className="inline-flex min-h-11 items-center">← Quay lại</Link>
     {issueError && <p role="alert" className="mt-3 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">{issueError}</p>}
     {deleteInvoiceMutation.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(deleteInvoiceMutation.error)}</p>}
     {deleteItemMutation.isError && <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(deleteItemMutation.error)}</p>}
@@ -154,7 +157,7 @@ export default function InvoiceDetailPage() {
     {paymentsQuery.isError && <p className="mt-3 text-sm text-red-600">{getApiErrorMessage(paymentsQuery.error)}</p>}
     <div className="my-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0"><h2 className="break-words text-xl font-bold sm:text-2xl">{invoice.invoice_code}</h2><p className="mt-1 flex flex-wrap items-center gap-2">Kỳ {invoice.billing_period?.slice(5, 7)}/{invoice.billing_period?.slice(0, 4)} · <InvoiceStatusBadge status={invoice.status} /></p></div>
-      <div className="flex shrink-0 flex-wrap gap-3"><Link to={`/invoices/${id}/print`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center underline">In hóa đơn</Link>{canManage && <Link to={invoice.billing_engine_version === 2 ? `/rooms/${invoice.room_id}/billing-v2` : `/invoices/${id}/edit`} className="inline-flex min-h-11 min-w-11 items-center justify-center underline lg:min-w-0">{invoice.billing_engine_version === 2 ? 'Quyết toán V2' : 'Sửa'}</Link>}{canIssueV2 && <button type="button" disabled={issueMutation.isPending} onClick={confirmIssueV2} className="inline-flex min-h-11 items-center justify-center rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-60">{issueMutation.isPending ? 'Đang phát hành...' : 'Phát hành hóa đơn'}</button>}{draft && <button onClick={() => window.confirm('Bạn có chắc muốn xóa hóa đơn này?') && deleteInvoiceMutation.mutate(id)} className="min-h-11 px-2 text-red-700">Xóa</button>}</div>
+      <div className="flex shrink-0 flex-wrap gap-3"><Link to={`/invoices/${id}/print`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center underline">In hóa đơn</Link>{canManage && <Link to={invoice.billing_engine_version === 2 ? `/rooms/${invoice.room_id}/billing-v2` : `/invoices/${id}/edit`} state={forwardContext(location, `/rooms/${invoice.room_id}/invoices`)} className="inline-flex min-h-11 min-w-11 items-center justify-center underline lg:min-w-0">{invoice.billing_engine_version === 2 ? 'Quyết toán V2' : 'Sửa'}</Link>}{canIssueV2 && <button type="button" disabled={issueMutation.isPending} onClick={confirmIssueV2} className="inline-flex min-h-11 items-center justify-center rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-60">{issueMutation.isPending ? 'Đang phát hành...' : 'Phát hành hóa đơn'}</button>}{draft && <button onClick={() => window.confirm('Bạn có chắc muốn xóa hóa đơn này?') && deleteInvoiceMutation.mutate(id)} className="min-h-11 px-2 text-red-700">Xóa</button>}</div>
     </div>
     <dl className="bh-invoice-total" aria-label="Tổng quan thanh toán"><div><dt>Tổng hóa đơn</dt><dd>{formatCurrency(invoice.total_amount)}</dd></div><div><dt>Đã thanh toán</dt><dd>{formatCurrency(invoice.paid_amount)}</dd></div><div className="bh-balance"><dt>Còn phải thu</dt><dd>{formatCurrency(remaining)}</dd></div></dl>
     <div className="grid min-w-0 gap-5 md:grid-cols-2">

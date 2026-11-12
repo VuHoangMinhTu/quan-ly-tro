@@ -1,3 +1,4 @@
+// BEEHOUSE_NAV_CONTEXT_V1
 import { useEffect, useRef, useState } from 'react'
 import { getApiErrorMessage } from '../api/getApiErrorMessage'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -16,7 +17,7 @@ const menus = [
   ['Hợp đồng', '/contracts', FileText, (p) => p === '/contracts' || /^\/contracts\//.test(p) || /^\/rooms\/[^/]+\/contracts/.test(p)],
   ['Mẫu hợp đồng', '/contract-templates', FileText, (p) => p.startsWith('/contract-templates')],
   ['Dịch vụ', '/services', Gauge, (p) => p === '/services' || /^\/services\//.test(p) || /^\/boarding-houses\/[^/]+\/services/.test(p)],
-  ['Điện nước', '/utilities', Gauge, (p) => p === '/utilities' || /^\/utility-meters\//.test(p)],
+  ['Điện nước', '/utilities', Gauge, (p) => p === '/utilities' || /^\/utility-meters\//.test(p) || /^\/rooms\/[^/]+\/billing-v2$/.test(p)],
   ['Hóa đơn', '/invoices', Receipt, (p) => p === '/invoices' || /^\/invoices\//.test(p) || /^\/rooms\/[^/]+\/invoices/.test(p)],
   ['Khai báo cư trú', '/residence-declarations', FileText, (p) => p.startsWith('/residence-declarations')],
 ]
@@ -49,6 +50,7 @@ export default function MainLayout() {
   const drawerRef = useRef(null)
   const userMenuRef = useRef(null)
   const userButtonRef = useRef(null)
+  const previousPathRef = useRef(pathname)
   const me = client.getQueryData(['me'])?.data?.data
   const userName = me?.user?.name || 'bạn'
   const session = getSession()
@@ -92,6 +94,14 @@ export default function MainLayout() {
     }
   }, [userMenuOpen])
 
+  // Keep drawer and account menu in sync with programmatic navigation.
+  useEffect(() => {
+    if (previousPathRef.current === pathname) return
+    previousPathRef.current = pathname
+    setDrawerOpen(false)
+    setUserMenuOpen(false)
+  }, [pathname])
+
   const closeMenus = () => { setDrawerOpen(false); setUserMenuOpen(false) }
   const logoutFromMenu = () => { setUserMenuOpen(false); mutation.mutate() }
   const menuKeys = (event) => {
@@ -118,21 +128,22 @@ export default function MainLayout() {
     }} onClick={(event) => {
       const bounds = event.currentTarget.getBoundingClientRect()
       if (event.target === event.currentTarget && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)) setDrawerOpen(false)
-    }} className="mobile-navigation bh-mobile-navigation m-0 h-dvh max-h-none w-[min(280px,85vw)] max-w-none border-0 bg-slate-900 p-0 text-white shadow-xl backdrop:bg-black/40 lg:hidden">
+    }} className="mobile-navigation bh-mobile-navigation m-0 h-dvh max-h-none w-[min(300px,88vw)] max-w-none overflow-hidden border-0 bg-slate-900 p-0 text-white shadow-2xl lg:hidden">
       <div className="flex h-full flex-col p-4 [padding-top:max(1rem,env(safe-area-inset-top))] [padding-bottom:max(1rem,env(safe-area-inset-bottom))]">
-        <div className="flex items-center justify-between gap-2"><Brand /><button type="button" onClick={() => setDrawerOpen(false)} aria-label="Đóng menu" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-white"><X size={22} /></button></div>
-        <div className="min-h-0 flex-1 overflow-y-auto"><Navigation pathname={pathname} onNavigate={closeMenus} canManageTemplates={Boolean(me?.landlord)} /></div>
+        <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-4"><Brand /><button type="button" onClick={() => setDrawerOpen(false)} aria-label="Đóng menu" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-white"><X size={22} /></button></div>
+        <div className="min-h-0 flex-1 overflow-y-auto pt-1"><Navigation pathname={pathname} onNavigate={closeMenus} canManageTemplates={Boolean(me?.landlord)} /></div>
+        <p className="border-t border-white/10 pt-3 text-xs text-slate-400">BeeHouse · Quản lý nhà trọ</p>
       </div>
     </dialog>
     <section className="min-w-0 flex-1">
-      <header className="bh-topbar sticky top-0 z-30 flex min-h-16 items-center justify-between gap-3 bg-white px-4 py-2 shadow-sm [padding-top:max(.5rem,env(safe-area-inset-top))] lg:static lg:min-h-0 lg:p-4">
+      <header className="bh-topbar bh-mobile-topbar sticky top-0 z-30 flex min-h-16 items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-4 py-2 backdrop-blur-xl [padding-top:max(.5rem,env(safe-area-inset-top))] lg:static lg:min-h-0 lg:p-4">
         <div className="flex min-w-0 items-center gap-2 lg:hidden">
-          <button type="button" aria-label="Mở menu" aria-controls="mobile-navigation" aria-expanded={drawerOpen} onClick={() => { setUserMenuOpen(false); setDrawerOpen(true) }} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-slate-900"><Menu size={23} /></button>
-          <Link to="/dashboard" onClick={closeMenus} className="flex min-h-11 min-w-0 items-center gap-2"><img src={beeHouseLogo} width="32" height="32" alt="" className="h-8 w-8 shrink-0 object-contain" /><span className="truncate text-lg font-bold text-slate-900">{APP_NAME}</span></Link>
+          <button type="button" aria-label="Mở menu" aria-controls="mobile-navigation" aria-expanded={drawerOpen} onClick={() => { setUserMenuOpen(false); setDrawerOpen(true) }} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-teal-700"><Menu size={23} /></button>
+          <Link to="/dashboard" onClick={closeMenus} className="flex min-h-11 min-w-0 items-center gap-2.5"><img src={beeHouseLogo} width="34" height="34" alt="" className="h-9 w-9 shrink-0 rounded-lg bg-white object-contain" /><span className="flex min-w-0 flex-col"><span className="truncate text-base font-bold leading-tight tracking-tight text-slate-900">{APP_NAME}</span><span className="bh-mobile-subtitle truncate text-[10px] font-medium leading-4 text-slate-500">Quản lý nhà trọ</span></span></Link>
         </div>
         <span className="hidden min-w-0 break-words lg:block">Xin chào, {userName}</span>
         <div ref={userMenuRef} className="relative shrink-0">
-          <button ref={userButtonRef} type="button" aria-label="Menu tài khoản" aria-haspopup="menu" aria-expanded={userMenuOpen} aria-controls="mobile-user-menu" onClick={() => setUserMenuOpen((open) => !open)} className="bh-account-trigger flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-700 focus-visible:ring-2 focus-visible:ring-slate-900 lg:w-auto lg:gap-2 lg:rounded-lg lg:px-3"><UserRound size={21} /><span className="hidden max-w-48 truncate text-sm lg:block">{userName}</span><span aria-hidden="true" className="hidden lg:block">▾</span></button>
+          <button ref={userButtonRef} type="button" aria-label="Menu tài khoản" aria-haspopup="menu" aria-expanded={userMenuOpen} aria-controls="mobile-user-menu" onClick={() => setUserMenuOpen((open) => !open)} className="bh-account-trigger flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 focus-visible:ring-2 focus-visible:ring-teal-700 lg:w-auto lg:gap-2 lg:rounded-lg lg:px-3"><UserRound size={21} /><span className="hidden max-w-48 truncate text-sm lg:block">{userName}</span><span aria-hidden="true" className="hidden lg:block">▾</span></button>
           {userMenuOpen && <div id="mobile-user-menu" role="menu" onKeyDown={menuKeys} className="bh-account-menu absolute right-0 top-full mt-2 w-[min(256px,calc(100vw-32px))] rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
             <p className="border-b border-slate-100 px-3 py-3 text-sm font-semibold [overflow-wrap:anywhere]">{userName}</p>
             {me?.landlord && <Link role="menuitem" to="/payment-settings" onClick={closeMenus} className="mt-1 flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-slate-100"><CreditCard size={18} />Cài đặt thanh toán</Link>}
