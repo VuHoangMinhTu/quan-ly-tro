@@ -1,3 +1,4 @@
+// BEEHOUSE_CI_PR6_TEST_FIX
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
@@ -8,6 +9,7 @@ import { QueryObserver, QueryClientProvider, useQuery } from '@tanstack/react-qu
 import { renderToStaticMarkup } from 'react-dom/server'
 import { endSession, getSession, isCurrentSession, replaceSession, subscribeSession } from './session.js'
 import { installSessionInterceptors } from './sessionTransport.js'
+import { currentPagePath } from '../utils/navigationContext.js'
 
 async function component(path, name, bindings) {
   bindings = { AuthLayout: 'auth-layout', ...bindings }
@@ -209,7 +211,9 @@ test('observers and private route gate cannot display A while B data is pending,
     a.queryClient.setQueryData(['tenants'], [{ full_name: 'Private A' }])
     const Gate = await component('../routes/ProtectedRoute.jsx', 'ProtectedRoute', {
       useSyncExternalStore: (_subscribe, snapshot) => snapshot(), useEffect: React.useEffect, subscribeSession, getSession, endSession, useQuery,
-      getMe: async () => ({}), getApiErrorMessage: () => '', Navigate: () => React.createElement('p', null, 'login'),
+      getMe: async () => ({}), getApiErrorMessage: () => '',
+      useLocation: () => ({ pathname: '/tenants', search: '', hash: '', state: null }), currentPagePath,
+      Navigate: () => React.createElement('p', null, 'login'),
       Outlet: () => React.createElement('p', null, getSession().queryClient.getQueryData(['tenants'])?.[0]?.full_name ?? 'empty'),
     })
     const render = session => renderToStaticMarkup(React.createElement(QueryClientProvider, { client: session.queryClient }, React.createElement(Gate)))

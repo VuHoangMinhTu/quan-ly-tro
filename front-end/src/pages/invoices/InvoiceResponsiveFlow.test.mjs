@@ -1,3 +1,4 @@
+// BEEHOUSE_CI_PR6_TEST_FIX
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
@@ -9,6 +10,7 @@ import { canEditInvoiceFinancials } from '../../utils/invoiceFinancials.js'
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage.js'
 import { invoiceStatusLabels } from '../../utils/invoiceStatus.js'
 import { invoiceUsageWindow } from '../../utils/invoiceUsageWindow.js'
+import { backTarget, safeReturnTo, forwardContext, currentPagePath } from '../../utils/navigationContext.js'
 
 function elements(node) {
   if (Array.isArray(node)) return node.flatMap(elements)
@@ -40,6 +42,7 @@ async function pageHarness(path, { invoice = invoiceFixture, payments = [] } = {
     MonthlyEvidenceSummary: () => null,
     invoiceUsageWindow,
     invoiceKeys, paymentKeys, canEditInvoiceFinancials, applyApiFieldErrors, getApiErrorMessage, invoiceStatusLabels,
+    backTarget, safeReturnTo, forwardContext, currentPagePath,
     useState: (initial) => {
       const index = stateCursor++
       if (!(index in states)) states[index] = initial
@@ -49,6 +52,7 @@ async function pageHarness(path, { invoice = invoiceFixture, payments = [] } = {
     useParams: () => ({ id: '1', roomId: '2' }),
     useSearchParams: () => [new URLSearchParams(), () => {}],
     useNavigate: () => () => {},
+    useLocation: () => ({ pathname: '/rooms/2/invoices', search: '', hash: '', state: null }),
     useQueryClient: () => ({ invalidateQueries: () => {} }),
     useQuery: ({ queryKey }) => ({ data: { data: { data: queryKey[0] === 'payments' ? payments : queryKey[0] === 'invoices' ? { items: [invoice], pagination: { current_page: 1, last_page: 1 } } : invoice } } }),
     useMutation: (options) => {
@@ -69,7 +73,7 @@ async function pageHarness(path, { invoice = invoiceFixture, payments = [] } = {
     createPayment: () => {}, deletePayment: () => {}, getPayments: () => {}, updatePayment: () => {}, createPayOSPaymentRequest: () => {},
     window: { confirm: () => true },
   }
-  const source = (await readFile(new URL(path, import.meta.url), 'utf8')).replace(/^\uFEFF/, '').replace(/^import .*$/gm, '').replace('export default function ', 'function ')
+  const source = (await readFile(new URL(path, import.meta.url), 'utf8')).replace(/^\uFEFF/gm, '').replace(/^import .*$/gm, '').replace('export default function ', 'function ')
   const name = source.match(/function (InvoiceDetailPage|InvoiceListPage)\(/)[1]
   const { code } = await transformWithOxc(source, `${name}.jsx`, { jsx: { runtime: 'classic' } })
   const Page = new Function('React', ...Object.keys(bindings), `${code}\nreturn ${name}`)(React, ...Object.values(bindings))
