@@ -1,3 +1,4 @@
+// BEEHOUSE_CI_PR6_TEST_FIX
 import { handleFormSubmit, notifyInvalidSubmit } from '../../notifications/formFeedback.js'
 import { privateRoomTypeLabel, roomTypeLabel } from '../../utils/roomTypes.js'
 import assert from 'node:assert/strict'
@@ -12,11 +13,12 @@ import { utilityKeys } from '../../api/utilityKeys.js'
 import { serviceKeys } from '../../api/serviceKeys.js'
 import { contractKeys } from '../../api/contractKeys.js'
 import { invoiceKeys } from '../../api/invoiceKeys.js'
+import { backTarget, currentPagePath } from '../../utils/navigationContext.js'
 
 // These component checks complement the browser viewport matrix. They protect
 // the shared mobile/desktop handlers without calling an API or adding a dependency.
 async function loadComponent(path, bindings = {}) {
-  bindings = { PageHeader: 'page-header', EmptyState: 'empty-state', LoadingState: 'loading-state', Gauge: 'svg', Plus: 'svg', handleFormSubmit, notifyInvalidSubmit, privateRoomTypeLabel, roomTypeLabel, RoomBedsSection: () => null, ...bindings }
+  bindings = { PageHeader: 'page-header', EmptyState: 'empty-state', LoadingState: 'loading-state', Gauge: 'svg', Plus: 'svg', handleFormSubmit, notifyInvalidSubmit, privateRoomTypeLabel, roomTypeLabel, RoomBedsSection: () => null, backTarget, currentPagePath, ...bindings }
   let source = await readFile(new URL(path, import.meta.url), 'utf8')
   const name = source.match(/export default function (\w+)\(/)[1]
   source = source.replace(/^import .*$/gm, '').replace('export default function ', 'function ')
@@ -29,6 +31,20 @@ function elements(node) {
   if (!React.isValidElement(node)) return []
   if (typeof node.type === 'function') return elements(node.type(node.props))
   return [node, ...elements(node.props.children)]
+}
+function collectRawElements(node) {
+  if (Array.isArray(node)) {
+    return node.flatMap(collectRawElements)
+  }
+
+  if (!React.isValidElement(node)) {
+    return []
+  }
+
+  return [
+    node,
+    ...collectRawElements(node.props.children),
+  ]
 }
 
 function text(node) {
@@ -64,13 +80,23 @@ test('room amenities dialog and service section keep distinct room-scoped React 
   for (const id of [1, 2]) {
     room = { ...room, id }
     stateIndex = 0
-    const children = Component().props.children.filter(React.isValidElement)
-    const services = children.find((element) => element.type === Services)
-    const amenities = children.find((element) => element.type === Amenities)
-    assert.notEqual(services.key, amenities.key)
-    assert.equal(services.key, `room-services-${id}`)
-    assert.equal(amenities.key, `room-amenities-${id}`)
-    assert.equal(amenities.props.room.id, id)
+    const children = collectRawElements(Component())
+
+const services = children.find(
+  (element) => element.type === Services
+)
+
+const amenities = children.find(
+  (element) => element.type === Amenities
+)
+
+assert.ok(services, 'Không tìm thấy RoomServicesSection')
+assert.ok(amenities, 'Không tìm thấy RoomAmenitiesModal')
+
+assert.notEqual(services.key, amenities.key)
+assert.equal(services.key, `room-services-${id}`)
+assert.equal(amenities.key, `room-amenities-${id}`)
+assert.equal(amenities.props.room.id, id)
   }
 })
 
@@ -153,6 +179,7 @@ test('service editor dialog scrolls internally instead of growing beyond mobile 
     useState: (initial) => [initial === null ? {} : initial, () => {}],
     useQueryClient: () => queryClient, useQuery: () => ({ data: { data: { data: [] } } }),
     useMutation: () => ({ isPending: false }), useParams: () => ({ boardingHouseId: '7' }),
+    useLocation: () => ({ pathname: '/boarding-houses/7/services', search: '', hash: '', state: null }),
     serviceKeys, Link, ServiceForm: () => React.createElement('form'), MoneyInput: () => React.createElement('input'),
     getApiErrorMessage: () => 'API error', getApiFieldErrors: () => ({}), formatCurrency: String,
     BILLING_METHOD_LABELS: {}, SERVICE_TYPE_LABELS: {},

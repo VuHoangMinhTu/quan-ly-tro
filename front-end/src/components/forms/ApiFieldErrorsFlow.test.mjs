@@ -1,3 +1,4 @@
+// BEEHOUSE_CI_PR6_TEST_FIX
 import { handleFormSubmit, notifyInvalidSubmit } from '../../notifications/formFeedback.js'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
@@ -15,6 +16,7 @@ import * as dates from '../../utils/date.js'
 import { toFormString } from '../../utils/form.js'
 import * as serviceHelpers from '../../utils/service.js'
 import * as validation from '../../utils/formValidation.js'
+import { currentPagePath } from '../../utils/navigationContext.js'
 
 function elements(node) {
   if (Array.isArray(node)) return node.flatMap(elements)
@@ -55,6 +57,7 @@ async function harness(path, props = {}, extraBindings = {}) {
     useWatch: ({ name }) => form.getValues(name),
     useMutation: (options) => { mutation = options; return {} },
     useNavigate: () => () => {},
+    useLocation: () => ({ pathname: '/tenants', search: '', hash: '', state: null }), currentPagePath,
     useForm: (options) => {
       if (!form) {
         form = createFormControl(options)
@@ -191,7 +194,9 @@ test('tenant normalizes every nullable text field and submits empty fields as nu
   const fields = ['phone', 'email', 'identity_number', 'identity_issue_place', 'permanent_address']
   let payload
   const page = await harness('./TenantForm.jsx', { initialValues: { full_name: 'Nguyễn Văn A', ...Object.fromEntries(fields.map(field => [field, null])) }, onSubmit: async values => { payload = values } })
-  for (const field of fields) assert.equal(page.form.getValues(field), '')
+  for (const field of fields) assert.equal(page.form.getValues(field), field === 'identity_issue_place' ? 'Cục Cảnh sát QLHC về TTXH' : '')
+  // Suggested issuer is editable: explicitly clearing it must submit null.
+  page.form.setValue('identity_issue_place', '')
   await page.submit()
   assert.ok(payload)
   for (const field of fields) assert.equal(payload[field], null)
