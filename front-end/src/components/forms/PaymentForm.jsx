@@ -1,20 +1,24 @@
 import { handleFormSubmit } from '../../notifications/formFeedback'
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { paymentFormSchema } from '../../utils/formValidation'
 import { formatCurrency } from '../../utils/formatters'
+import { paymentDateTime } from '../../utils/paymentDateTime'
 import MoneyInput from '../ui/MoneyInput'
 
-export default function PaymentForm({ remaining, initialValues = {}, onSubmit, label }) {
+const emptyInitialValues = {}
+
+export default function PaymentForm({ remaining, initialValues = emptyInitialValues, onSubmit, label }) {
+  const submissionKey = useRef(null)
   const form = useForm({
     resolver: zodResolver(paymentFormSchema(remaining)),
     mode: 'onSubmit',
     defaultValues: {
       amount: remaining,
       payment_method: 'CASH',
-      paid_at: new Date().toISOString().slice(0, 16),
+      paid_at: paymentDateTime(),
       reference_code: '',
       note: '',
     },
@@ -25,7 +29,7 @@ export default function PaymentForm({ remaining, initialValues = {}, onSubmit, l
     form.reset({
       amount: initialValues.amount ?? remaining,
       payment_method: initialValues.payment_method || 'CASH',
-      paid_at: initialValues.paid_at?.slice(0, 16) || new Date().toISOString().slice(0, 16),
+      paid_at: initialValues.paid_at ? paymentDateTime(initialValues.paid_at) : paymentDateTime(),
       reference_code: initialValues.reference_code || '',
       note: initialValues.note || '',
     })
@@ -35,14 +39,17 @@ export default function PaymentForm({ remaining, initialValues = {}, onSubmit, l
     setError('')
 
     try {
+      if (!initialValues.id && !submissionKey.current) submissionKey.current = crypto.randomUUID()
       await onSubmit({
         ...values,
+        ...(!initialValues.id ? { idempotency_key: submissionKey.current } : {}),
         amount: Number(values.amount),
         reference_code: values.reference_code || null,
         note: values.note || null,
       })
+      submissionKey.current = null
     } catch (requestError) {
-      if (!applyApiFieldErrors(requestError, form.setError)) setError(getApiErrorMessage(requestError))
+      if (!applyApiFieldErrors(requestError, form.setError, field => ['amount', 'payment_method', 'paid_at', 'reference_code', 'note'].includes(field) ? field : null)) setError(getApiErrorMessage(requestError))
     }
   }
 
@@ -57,7 +64,7 @@ export default function PaymentForm({ remaining, initialValues = {}, onSubmit, l
       <input type="datetime-local" className="min-h-11 sm:min-h-0 w-full min-w-0 rounded border p-2" {...form.register('paid_at')} />{form.formState.errors.paid_at && <p className="mt-1 text-sm text-red-600">{form.formState.errors.paid_at.message}</p>}
       <input placeholder="Mã tham chiếu" className="min-h-11 sm:min-h-0 w-full min-w-0 rounded border p-2" {...form.register('reference_code')} />{form.formState.errors.reference_code && <p className="mt-1 text-sm text-red-600">{form.formState.errors.reference_code.message}</p>}
       <textarea placeholder="Ghi chú" className="min-h-11 sm:min-h-0 w-full min-w-0 rounded border p-2" {...form.register('note')} />{form.formState.errors.note && <p className="mt-1 text-sm text-red-600">{form.formState.errors.note.message}</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       <button disabled={form.formState.isSubmitting} className="w-full sm:w-auto min-h-11 sm:min-h-0 rounded bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">{form.formState.isSubmitting ? 'Đang lưu...' : label}</button>
     </form>
   )
