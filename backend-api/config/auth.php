@@ -38,6 +38,7 @@ return [
     */
 
     'guards' => [
+        'dashboard-read-only' => ['driver' => 'dashboard-read-only'],
         'web' => [
             'driver' => 'session',
             'provider' => 'users',

@@ -67,6 +67,11 @@ Route::get('/email/verify/{id}/{hash}', function (int $id, string $hash) {
     return redirect()->away(rtrim(config('app.frontend_url'), '/').'/email-verified?status=success');
 })->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
 
+Route::middleware('auth:dashboard-read-only')->prefix('dashboard')->group(function (): void {
+    Route::get('/summary', [DashboardController::class, 'summary']);
+    Route::get('/analytics', [DashboardController::class, 'analytics']);
+});
+
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::middleware([SigningPrivacy::class, 'throttle:signing-public'])->group(function (): void {
         Route::get('/contracts/{id}/signing', [ContractSigningController::class, 'status']);
