@@ -23,6 +23,20 @@ async function load(path, name, extra = {}) {
 }
 const Revenue = await load('./RevenueChart.jsx', 'RevenueChart')
 const Content = await load('./DashboardContent.jsx', 'DashboardContent', { RevenueChart: Revenue })
+
+test('revenue renders only amounts returned for each month, preserving zeros and gaps', () => {
+  const months = [
+    { month: '2026-06', label: '06/2026', amount: '987654' },
+    { month: '2026-07', label: '07/2026', amount: '0' },
+    { month: '2026-08', label: '08/2026', amount: null },
+    { month: '2026-09', label: '09/2026', amount: '31000' },
+  ]
+  const html = renderToStaticMarkup(React.createElement(Revenue, { months }))
+  assert.match(html, /06\/2026: 987\.654 đ/)
+  assert.match(html, /07\/2026: 0 đ/)
+  assert.match(html, /09\/2026: 31\.000 đ/)
+  assert.doesNotMatch(html, /08\/2026/)
+})
 const fixture = {
   viewer: { name: 'Minh Tú', can_create_boarding_house: true, owned_boarding_houses: 1, managed_boarding_houses: 0 },
   period: { label: '10/2026', month: '2026-10' },

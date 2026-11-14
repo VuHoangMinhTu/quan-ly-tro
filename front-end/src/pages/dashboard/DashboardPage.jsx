@@ -5,6 +5,7 @@ import { dashboardRefetchInterval } from '../../api/dashboardPolicy'
 import DashboardContent from '../../components/dashboard/DashboardContent'
 import DashboardFilters from '../../components/dashboard/DashboardFilters.jsx'
 import { filterFromSearch } from '../../components/dashboard/dashboardFilters'
+import './dashboard-premium.css'
 
 export default function DashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -14,5 +15,5 @@ export default function DashboardPage() {
   if (query.isError) return <section role="alert" className="space-y-4 rounded-xl bg-white p-5 shadow-sm"><p className="text-sm text-slate-700">Không thể tải dữ liệu tổng quan. Vui lòng thử lại.</p><button type="button" disabled={query.isFetching} onClick={() => query.refetch()} className="min-h-11 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">Thử lại</button></section>
   const data = query.data.data.data
   const updateFilter = next => { const params = new URLSearchParams(); params.set('period', next.preset); if (next.houseId) params.set('house', next.houseId); if (next.compare) params.set('compare', '1'); if (next.preset === 'day') params.set('date', next.start); if (next.preset === 'custom') { params.set('start', next.start); params.set('end', next.end) } setSearchParams(params, { replace: true }) }
-  return <section className="dashboard-screen min-w-0 space-y-5"><DashboardFilters filter={filter} houses={data.boarding_houses} onChange={updateFilter} onReset={() => setSearchParams({}, { replace: true })}/><DashboardContent data={data} filter={filter} /></section>
+  return <section className="dashboard-screen bh-premium min-w-0"><DashboardContent data={data} filter={filter} controls={<DashboardFilters filter={filter} houses={data.boarding_houses} onChange={updateFilter} onReset={() => setSearchParams({}, { replace: true })}/>} /></section>
 }

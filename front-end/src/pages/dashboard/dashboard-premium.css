@@ -1,0 +1,138 @@
+.bh-premium {
+  --dashboard-blue: #2459a9;
+  --dashboard-blue-soft: #eaf2ff;
+  --dashboard-amber: #935407;
+  --dashboard-amber-soft: #fff4df;
+  --dashboard-gap: 18px;
+}
+.bh-premium .bh-dashboard { gap: var(--dashboard-gap); }
+.bh-premium-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--bh-line);
+}
+.app-content .bh-premium-header h2 { font-size: clamp(28px, 4vw, 42px); letter-spacing: -.045em; }
+.bh-premium-header p { margin-top: 5px; color: var(--bh-ink-soft); font-size: 13px; }
+.bh-premium .bh-dashboard-filters {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: end;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.bh-premium .bh-filter-controls { display: flex; gap: 8px; }
+.bh-premium .bh-filter-controls label { min-width: 0; width: clamp(114px, 13vw, 176px); }
+.bh-premium-advanced summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--bh-line);
+  border-radius: var(--bh-radius-sm);
+  background: var(--bh-surface);
+  cursor: pointer;
+  font-size: 13px;
+}
+.bh-premium-options {
+  position: absolute;
+  z-index: 5;
+  inset-inline-end: 0;
+  width: min(420px, 100%);
+  margin-top: 6px;
+  padding: 14px;
+  border: 1px solid var(--bh-line);
+  border-radius: var(--bh-radius);
+  background: var(--bh-surface);
+  box-shadow: var(--bh-shadow-lg);
+}
+.bh-premium .bh-premium-filter-note { flex-basis: 100%; text-align: right; font-size: 11px; }
+.bh-premium-section { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-bottom: 10px; }
+.bh-premium-section h3 { font-size: 17px; font-weight: 650; }
+.bh-premium-section span { color: var(--bh-ink-soft); font-size: 12px; }
+.bh-premium .bh-dashboard-kpi { min-height: 118px; padding: 14px 16px; }
+.bh-premium .bh-dashboard-kpi > div { align-items: center; }
+.bh-premium .bh-dashboard-kpi > p:first-of-type { margin: 8px 0 4px; font-size: clamp(22px, 2.6vw, 35px); font-variant-numeric: tabular-nums; }
+.bh-premium .bh-dashboard-kpi small { font-size: 12px; }
+.bh-premium .bh-dashboard-kpi:nth-child(2) .bh-dashboard-kpi-icon { background: var(--dashboard-blue-soft); color: var(--dashboard-blue); }
+.bh-premium .bh-dashboard-kpi[data-tone='positive'] { border-color: #a9d8cf; background: #f3fbf8; }
+.bh-premium-rooms { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+.bh-premium-finance { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+.bh-premium-bottom { display: grid; gap: var(--dashboard-gap); grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr) minmax(0, 1.2fr); }
+.bh-premium-bottom .bh-house-grid { grid-template-columns: 1fr; }
+.bh-premium .bh-dashboard-panel { padding: clamp(14px, 1.6vw, 23px); }
+.bh-premium .bh-dashboard-panel > header { margin-bottom: 14px; padding-bottom: 11px; }
+.bh-premium .bh-dashboard-panel h3 { font-size: 17px; }
+.bh-premium .bh-invoice-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 14px;
+  gap: 10px;
+}
+.bh-premium .bh-invoice-metrics > div { padding: 10px 12px; background: var(--bh-canvas); border-radius: var(--bh-radius-sm); }
+.bh-premium .bh-invoice-metrics dd { font-size: 16px; overflow-wrap: anywhere; }
+.bh-premium-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--bh-primary-strong); font-size: 13px; text-decoration: underline; }
+.bh-premium-empty { padding: 22px 14px; border-radius: var(--bh-radius-sm); background: var(--bh-canvas); color: var(--bh-ink-soft); text-align: center; font-size: 13px; }
+.bh-cash-chart { margin: 0; }
+.bh-cash-chart figcaption { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+.bh-cash-chart figcaption > span { width: 10px; height: 10px; border-radius: 3px; background: var(--bh-primary); }
+.bh-cash-chart figcaption small { margin-left: auto; color: var(--bh-ink-soft); }
+.bh-cash-plot { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px; margin-top: 22px; }
+.bh-cash-axis { display: flex; flex-direction: column; justify-content: space-between; height: 181px; color: var(--bh-ink-soft); font-size: 11px; text-align: right; transform: translateY(-7px); }
+.bh-cash-series { display: grid; grid-template-columns: repeat(var(--months), minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+.bh-cash-series li { min-width: 0; text-align: center; }
+.bh-cash-point {
+  position: relative;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  width: 100%;
+  height: 170px;
+  border-bottom: 1px solid var(--bh-line);
+  background: repeating-linear-gradient(to bottom, var(--bh-line) 0 1px, transparent 1px 25%);
+}
+.bh-cash-bar { width: min(55%, 70px); border-radius: 5px 5px 0 0; background: var(--bh-primary); }
+.bh-cash-point:is(:hover, :focus-visible) .bh-cash-bar { background: var(--bh-primary-strong); }
+.bh-cash-tooltip {
+  position: absolute;
+  z-index: 2;
+  top: 6px;
+  inset-inline-start: 50%;
+  display: none;
+  min-width: max-content;
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: var(--bh-sidebar);
+  color: white;
+  font-size: 11px;
+  text-align: left;
+  transform: translateX(-50%);
+}
+.bh-cash-series li:first-child .bh-cash-tooltip { inset-inline-start: 0; transform: none; }
+.bh-cash-series li:last-child .bh-cash-tooltip { inset-inline: auto 0; transform: none; }
+.bh-cash-point:is(:hover, :focus) .bh-cash-tooltip { display: grid; }
+.bh-cash-month { display: block; margin-top: 7px; color: var(--bh-ink-soft); font-size: 11px; overflow-wrap: anywhere; }
+@media (min-width: 1024px) {
+  .bh-premium .bh-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 960px) {
+  .bh-premium-header { flex-direction: column; }
+  .bh-premium .bh-dashboard-filters { justify-content: start; }
+  .bh-premium .bh-premium-filter-note { text-align: start; }
+  .bh-premium-bottom { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .bh-premium-rooms, .bh-premium-finance, .bh-premium-bottom { grid-template-columns: minmax(0, 1fr); }
+  .bh-premium .bh-room-status { align-items: center; }
+  .bh-premium .bh-room-status figcaption { align-self: stretch; }
+  .bh-premium .bh-dashboard-kpi { padding: 11px; }
+  .bh-premium .bh-dashboard-kpi > p:first-of-type { font-size: clamp(18px, 5.7vw, 23px); }
+  .bh-premium .bh-dashboard-kpi h3 { font-size: 12px; }
+}
