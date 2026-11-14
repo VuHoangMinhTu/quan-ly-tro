@@ -84,7 +84,8 @@
 .bh-cash-chart figcaption { display: flex; align-items: center; gap: 7px; font-size: 13px; }
 .bh-cash-chart figcaption > span { width: 10px; height: 10px; border-radius: 3px; background: var(--bh-primary); }
 .bh-cash-chart figcaption small { margin-left: auto; color: var(--bh-ink-soft); }
-.bh-area-frame, .bh-series-frame { min-width: 0; height: 252px; margin-top: 12px; }
+.bh-area-frame, .bh-series-frame { min-width: 0; height: 240px; margin-top: 10px; }
+.bh-series-frame { height: 206px; }
 .bh-chart-ring { position: relative; flex: 0 0 155px; width: 155px; height: 155px; }
 .bh-ring-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
 .bh-ring-center strong { font-size: 28px; line-height: 1; }
@@ -106,7 +107,10 @@
 .bh-chart-values { margin-top: 8px; color: var(--bh-ink-soft); font-size: 12px; }
 .bh-chart-values summary { cursor: pointer; width: fit-content; }
 .bh-chart-values li { margin-top: 4px; }
-.bh-demo-banner { position: sticky; top: 0; z-index: 10; padding: 10px 14px; margin-bottom: 16px; border: 1px solid #eac98d; border-radius: 10px; background: #fff2d6; color: #744508; font-size: 13px; font-weight: 700; }
+.bh-demo-banner { display: inline-block; padding: 4px 8px; margin-bottom: 6px; border: 1px solid #eac98d; border-radius: 6px; background: #fff2d6; color: #744508; font-size: 11px; font-weight: 700; }
+.bh-premium-finance, .bh-premium-bottom { align-items: start; }
+.bh-occupancy-link { color: var(--bh-primary-strong); font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
+.bh-occupancy-list article > div:first-child { flex-wrap: wrap; }
 @media (prefers-reduced-motion: no-preference) {
   .bh-area-frame .recharts-area, .bh-series-frame .recharts-bar, .bh-series-frame .recharts-line { animation: bh-chart-appear 220ms ease-out; }
   @keyframes bh-chart-appear { from { opacity: .45; } to { opacity: 1; } }
@@ -121,6 +125,8 @@
   .bh-premium-bottom { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 720px) {
+  .bh-area-frame { height: 192px; }
+  .bh-series-frame { height: 184px; }
   .bh-premium-rooms, .bh-premium-finance, .bh-premium-bottom { grid-template-columns: minmax(0, 1fr); }
   .bh-premium .bh-room-status { align-items: center; }
   .bh-premium .bh-room-status figcaption { align-self: stretch; }

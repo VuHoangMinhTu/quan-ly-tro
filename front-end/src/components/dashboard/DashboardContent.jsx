@@ -10,7 +10,7 @@ function Kpi({ label, value, description, icon: Icon, tone = 'default' }) { retu
 function Panel({ title, children, subtitle }) { return <section className="bh-dashboard-panel"><header><div><h3>{title}</h3>{subtitle && <p>{subtitle}</p>}</div></header>{children}</section> }
 function Unavailable({ children }) { return <div className="bh-unavailable"><AlertCircle size={19} aria-hidden="true" /><p>{children}</p></div> }
 
-export default function DashboardContent({ data, filter, controls, invoiceChart, expenseChart, contractChart }) {
+export default function DashboardContent({ data, filter, controls, headerLabel, invoiceChart, expenseChart, contractChart }) {
   const { viewer, summary, invoice_summary: invoices, boarding_houses: allHouses, revenue_chart: months, recent_unpaid_invoices: recent, expiring_contracts: contracts, period } = data
   const received = months?.find(month => month.month === period.month || month.label === period.label)?.amount
   const houses = filter?.houseId ? allHouses.filter(house => String(house.id) === String(filter.houseId)) : allHouses
@@ -20,7 +20,7 @@ export default function DashboardContent({ data, filter, controls, invoiceChart,
   if (summary.total_boarding_houses === 0) return <section className="bh-empty-state"><h2>Bạn chưa có nhà trọ.</h2><p>Tạo nhà trọ đầu tiên để bắt đầu quản lý phòng, hợp đồng và hóa đơn. Nếu bạn là quản lý, hãy nhờ chủ workspace phân công nhà trọ.</p>{viewer.can_create_boarding_house && <Link to="/boarding-houses/new" className="bh-primary-button">Tạo nhà trọ đầu tiên</Link>}</section>
   return <div className="bh-dashboard">
     <header className="bh-premium-header">
-      <div><h2>Tổng quan</h2><p>Theo dõi phòng thuê, dòng tiền và các việc cần xử lý.</p></div>
+      <div>{headerLabel}<h2>Tổng quan</h2><p>Theo dõi phòng thuê, dòng tiền và các việc cần xử lý.</p></div>
       {controls}
     </header>
     {summary.total_rooms === 0 && <div className="bh-empty-state"><h3>Nhà trọ chưa có phòng.</h3><p>{firstOwnedHouse ? 'Thêm phòng để bắt đầu theo dõi tình hình vận hành.' : 'Vui lòng liên hệ chủ workspace để bổ sung phòng.'}</p>{firstOwnedHouse && <Link to={`/boarding-houses/${firstOwnedHouse.id}/rooms/new`} className="bh-primary-button">Thêm phòng</Link>}</div>}
