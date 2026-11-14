@@ -11,8 +11,9 @@ import { dashboardRefetchInterval } from '../../api/dashboardPolicy.js'
 const Icon = () => React.createElement('svg', { 'aria-hidden': true })
 const Link = ({ to, children, ...props }) => React.createElement('a', { href: to, ...props }, children)
 const bindings = { formatCurrency: value => `${Number(value).toLocaleString('vi-VN')} đ`, formatDate: formatDateForDisplay, invoiceStatusLabels, Link,
-  Building2: Icon, DoorOpen: Icon, Users: Icon, FileText: Icon, Receipt: Icon, Wallet: Icon, CircleDollarSign: Icon, Clock3: Icon,
+  Building2: Icon, DoorOpen: Icon, Users: Icon, FileText: Icon, Receipt: Icon, WalletCards: Icon, CircleDollarSign: Icon, ChartNoAxesCombined: Icon, AlertCircle: Icon,
   InvoiceStatusBadge: ({ status }) => React.createElement('span', null, invoiceStatusLabels[status]),
+  RoomStatusChart: () => React.createElement('div'), OccupancyByHouse: () => React.createElement('div'),
 }
 async function load(path, name, extra = {}) {
   const source = (await readFile(new URL(path, import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
@@ -35,11 +36,10 @@ const fixture = {
 
 test('dashboard renders KPI/house figures, Vietnamese dates, cash chart and correct navigation', () => {
   const html = renderToStaticMarkup(React.createElement(Content, { data: fixture }))
-  for (const value of ['35.000.000 đ', '27.000.000 đ', '8.000.000 đ', '4.200.000 đ', '70%', '15/10/2026', '31/10/2026', 'Tiền đã thu 6 tháng gần đây', 'Thanh toán một phần']) assert.ok(html.includes(value), value)
+  for (const value of ['27.000.000 đ', '8.000.000 đ', '70%', '15/10/2026', '31/10/2026', 'Thực thu theo thời gian', 'Thanh toán một phần']) assert.ok(html.includes(value), value)
   assert.match(html, /href="\/invoices\/4"/)
   assert.match(html, /href="\/contracts\/7"/)
-  assert.match(html, /grid-cols-2/)
-  assert.match(html, /lg:grid-cols-4/)
+  assert.match(html, /bh-kpi-grid/)
   assert.doesNotMatch(html, /<table|min-w-\[|overflow-x-auto/)
   assert.doesNotMatch(html, />PARTIALLY_PAID</)
 })
@@ -67,11 +67,11 @@ test('dashboard loading does not flash zero and API failure is friendly with ret
   let state = { isPending: true }
   let queryOptions
   let retried = false
-  const Page = await load('../../pages/dashboard/DashboardPage.jsx', 'DashboardPage', { DashboardContent: Content, dashboardRefetchInterval, dashboardKey: ['dashboard'], getDashboard: () => {}, useQuery: options => { queryOptions = options; return state } })
+  const Page = await load('../../pages/dashboard/DashboardPage.jsx', 'DashboardPage', { DashboardContent: Content, DashboardFilters: () => React.createElement('div'), filterFromSearch: () => ({ preset: 'month', start: '2026-10-01', end: '2026-10-31', houseId: '', compare: false }), dashboardRefetchInterval, dashboardKey: filters => ['dashboard', filters], getDashboard: () => {}, useSearchParams: () => [new URLSearchParams(), () => {}], useQuery: options => { queryOptions = options; return state } })
   const loading = renderToStaticMarkup(React.createElement(Page))
   assert.match(loading, /role="status"/)
   assert.doesNotMatch(loading, />0</)
-  assert.deepEqual(queryOptions.queryKey, ['dashboard'])
+  assert.equal(queryOptions.queryKey[0], 'dashboard')
   assert.equal(queryOptions.refetchOnWindowFocus, true)
   assert.equal(queryOptions.refetchInterval, dashboardRefetchInterval)
   state = { isError: true, error: new Error('AxiosError SQL secret'), refetch: () => { retried = true } }
