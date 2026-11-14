@@ -36,6 +36,17 @@ body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; color: #0
 }
 
 /* Analytics dashboard: intentional data-first layout, scoped to the dashboard only. */
+.bh-revenue-chart .bh-revenue-bars { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.bh-revenue-column:focus-visible { outline: 2px solid var(--bh-primary); outline-offset: 2px; }
+.bh-invoice-metrics { display: flex; flex-wrap: wrap; gap: 12px 28px; font-size: 13px; }
+.bh-invoice-metrics dd { margin-top: 4px; font-weight: 700; }
+.bh-filter-controls :is(input, select) { width: 100%; min-width: 0; border: 1px solid var(--bh-line); }
+.bh-dashboard-kpi-icon { flex-shrink: 0; }
+.bh-tenant-summary strong { margin-inline-end: 8px; }
+@media screen and (max-width: 680px) {
+  .bh-revenue-chart .bh-revenue-bars { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 16px; }
+  .bh-dashboard .bh-dashboard-kpi > p { font-size: 20px; }
+}
 @media screen {
   .bh-dashboard { display: grid; gap: 20px; }
   .bh-dashboard-filters { display: grid; gap: 16px; padding: 18px 20px; border: 1px solid var(--bh-line, #e1e8f0); border-radius: 16px; background: linear-gradient(110deg, #fff 0%, #f4fbfa 100%); }

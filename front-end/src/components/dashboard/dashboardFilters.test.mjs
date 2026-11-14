@@ -16,3 +16,11 @@ test('keeps valid custom periods and rejects a reversed date range', () => {
   const invalid = filterFromSearch('period=custom&start=2026-03-02&end=2026-03-01', '2026-11-14')
   assert.deepEqual([invalid.start, invalid.end], ['2026-11-14', '2026-11-14'])
 })
+
+test('invalid calendar dates in bookmarked URLs cannot break the dashboard', () => {
+  for (const date of ['2026-02-30', '2026-99-99']) {
+    const filter = filterFromSearch('period=day&date=' + date, '2026-11-14')
+    assert.equal(filter.start, '2026-11-14')
+    assert.doesNotThrow(() => filterLabel(filter))
+  }
+})

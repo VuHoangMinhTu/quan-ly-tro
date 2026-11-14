@@ -67,7 +67,7 @@ test('dashboard loading does not flash zero and API failure is friendly with ret
   let state = { isPending: true }
   let queryOptions
   let retried = false
-  const Page = await load('../../pages/dashboard/DashboardPage.jsx', 'DashboardPage', { DashboardContent: Content, DashboardFilters: () => React.createElement('div'), filterFromSearch: () => ({ preset: 'month', start: '2026-10-01', end: '2026-10-31', houseId: '', compare: false }), dashboardRefetchInterval, dashboardKey: filters => ['dashboard', filters], getDashboard: () => {}, useSearchParams: () => [new URLSearchParams(), () => {}], useQuery: options => { queryOptions = options; return state } })
+  const Page = await load('../../pages/dashboard/DashboardPage.jsx', 'DashboardPage', { DashboardContent: Content, DashboardFilters: () => React.createElement('div'), filterFromSearch: () => ({ preset: 'month', start: '2026-10-01', end: '2026-10-31', houseId: '', compare: false }), dashboardRefetchInterval, dashboardKey: ['dashboard'], getDashboard: () => {}, useSearchParams: () => [new URLSearchParams(), () => {}], useQuery: options => { queryOptions = options; return state } })
   const loading = renderToStaticMarkup(React.createElement(Page))
   assert.match(loading, /role="status"/)
   assert.doesNotMatch(loading, />0</)
@@ -87,4 +87,14 @@ test('manager house cards do not link to owner-only house detail and free text i
   const html = renderToStaticMarkup(React.createElement(Content, { data: { ...fixture, viewer: { ...fixture.viewer, name: '<script>alert(1)</script>' }, boarding_houses: [{ ...fixture.boarding_houses[0], operational_role: 'MANAGER' }] } }))
   assert.doesNotMatch(html, /href="\/boarding-houses\/1"|<script>/)
   assert.match(html, /Được phân công quản lý/)
+})
+
+test('house selection scopes room KPIs and keeps received payments distinct from invoice totals', () => {
+  const other = { ...fixture.boarding_houses[0], id: 2, name: 'Cơ sở thứ hai', total_rooms: 4, occupied_rooms: 1, occupancy_rate: '25.00' }
+  const data = { ...fixture, boarding_houses: [...fixture.boarding_houses, other] }
+  const html = renderToStaticMarkup(React.createElement(Content, { data, filter: { houseId: '2' } }))
+  assert.match(html, /Tổng số phòng.*?<p>4<\/p>/)
+  assert.match(html, /Thực thu tháng.*?<p>5\.000\.000 đ<\/p>/)
+  assert.match(html, /Giá trị hóa đơn<\/dt><dd>35\.000\.000 đ/)
+  assert.doesNotMatch(html, /BeeHouse Dĩ An.*Xem nhà trọ/)
 })
