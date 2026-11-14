@@ -84,41 +84,33 @@
 .bh-cash-chart figcaption { display: flex; align-items: center; gap: 7px; font-size: 13px; }
 .bh-cash-chart figcaption > span { width: 10px; height: 10px; border-radius: 3px; background: var(--bh-primary); }
 .bh-cash-chart figcaption small { margin-left: auto; color: var(--bh-ink-soft); }
-.bh-cash-plot { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px; margin-top: 22px; }
-.bh-cash-axis { display: flex; flex-direction: column; justify-content: space-between; height: 181px; color: var(--bh-ink-soft); font-size: 11px; text-align: right; transform: translateY(-7px); }
-.bh-cash-series { display: grid; grid-template-columns: repeat(var(--months), minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
-.bh-cash-series li { min-width: 0; text-align: center; }
-.bh-cash-point {
-  position: relative;
-  display: flex;
-  align-items: end;
-  justify-content: center;
-  width: 100%;
-  height: 170px;
-  border-bottom: 1px solid var(--bh-line);
-  background: repeating-linear-gradient(to bottom, var(--bh-line) 0 1px, transparent 1px 25%);
+.bh-area-frame, .bh-series-frame { min-width: 0; height: 252px; margin-top: 12px; }
+.bh-chart-ring { position: relative; flex: 0 0 155px; width: 155px; height: 155px; }
+.bh-ring-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
+.bh-ring-center strong { font-size: 28px; line-height: 1; }
+.bh-ring-center span { margin-top: 4px; color: var(--bh-ink-soft); font-size: 12px; }
+.bh-occupancy-chart { height: 12px; }
+.bh-premium .bh-occupancy-list { gap: 17px; }
+.bh-premium .bh-room-status { align-items: center; }
+.bh-chart-tooltip {
+  padding: 10px 12px;
+  border: 1px solid var(--bh-line);
+  border-radius: 10px;
+  background: var(--bh-surface);
+  color: var(--bh-ink);
+  box-shadow: var(--bh-shadow-sm);
+  font-size: 12px;
 }
-.bh-cash-bar { width: min(55%, 70px); border-radius: 5px 5px 0 0; background: var(--bh-primary); }
-.bh-cash-point:is(:hover, :focus-visible) .bh-cash-bar { background: var(--bh-primary-strong); }
-.bh-cash-tooltip {
-  position: absolute;
-  z-index: 2;
-  top: 6px;
-  inset-inline-start: 50%;
-  display: none;
-  min-width: max-content;
-  padding: 7px 9px;
-  border-radius: 7px;
-  background: var(--bh-sidebar);
-  color: white;
-  font-size: 11px;
-  text-align: left;
-  transform: translateX(-50%);
+.bh-chart-tooltip dl > div { display: flex; justify-content: space-between; gap: 12px; }
+.bh-chart-tooltip dd { font-weight: 700; }
+.bh-chart-values { margin-top: 8px; color: var(--bh-ink-soft); font-size: 12px; }
+.bh-chart-values summary { cursor: pointer; width: fit-content; }
+.bh-chart-values li { margin-top: 4px; }
+.bh-demo-banner { position: sticky; top: 0; z-index: 10; padding: 10px 14px; margin-bottom: 16px; border: 1px solid #eac98d; border-radius: 10px; background: #fff2d6; color: #744508; font-size: 13px; font-weight: 700; }
+@media (prefers-reduced-motion: no-preference) {
+  .bh-area-frame .recharts-area, .bh-series-frame .recharts-bar, .bh-series-frame .recharts-line { animation: bh-chart-appear 220ms ease-out; }
+  @keyframes bh-chart-appear { from { opacity: .45; } to { opacity: 1; } }
 }
-.bh-cash-series li:first-child .bh-cash-tooltip { inset-inline-start: 0; transform: none; }
-.bh-cash-series li:last-child .bh-cash-tooltip { inset-inline: auto 0; transform: none; }
-.bh-cash-point:is(:hover, :focus) .bh-cash-tooltip { display: grid; }
-.bh-cash-month { display: block; margin-top: 7px; color: var(--bh-ink-soft); font-size: 11px; overflow-wrap: anywhere; }
 @media (min-width: 1024px) {
   .bh-premium .bh-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }

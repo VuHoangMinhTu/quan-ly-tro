@@ -7,6 +7,7 @@ import { transformWithOxc } from 'vite'
 import { formatDateForDisplay } from '../../utils/date.js'
 import { invoiceStatusLabels } from '../../utils/invoiceStatus.js'
 import { dashboardRefetchInterval } from '../../api/dashboardPolicy.js'
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 const Icon = () => React.createElement('svg', { 'aria-hidden': true })
 const Link = ({ to, children, ...props }) => React.createElement('a', { href: to, ...props }, children)
@@ -21,7 +22,10 @@ async function load(path, name, extra = {}) {
   const scope = { ...bindings, ...extra }
   return new Function('React', ...Object.keys(scope), `${code}\nreturn ${name}`)(React, ...Object.values(scope))
 }
-const Revenue = await load('./RevenueChart.jsx', 'RevenueChart')
+const Revenue = await load('./RevenueChart.jsx', 'RevenueChart', {
+  Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  useId: React.useId, ChartTooltip: () => null, moneyTick: String,
+})
 const Content = await load('./DashboardContent.jsx', 'DashboardContent', { RevenueChart: Revenue })
 
 test('revenue renders only amounts returned for each month, preserving zeros and gaps', () => {

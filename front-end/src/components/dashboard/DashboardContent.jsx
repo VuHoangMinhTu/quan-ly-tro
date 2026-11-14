@@ -10,7 +10,7 @@ function Kpi({ label, value, description, icon: Icon, tone = 'default' }) { retu
 function Panel({ title, children, subtitle }) { return <section className="bh-dashboard-panel"><header><div><h3>{title}</h3>{subtitle && <p>{subtitle}</p>}</div></header>{children}</section> }
 function Unavailable({ children }) { return <div className="bh-unavailable"><AlertCircle size={19} aria-hidden="true" /><p>{children}</p></div> }
 
-export default function DashboardContent({ data, filter, controls }) {
+export default function DashboardContent({ data, filter, controls, invoiceChart, expenseChart, contractChart }) {
   const { viewer, summary, invoice_summary: invoices, boarding_houses: allHouses, revenue_chart: months, recent_unpaid_invoices: recent, expiring_contracts: contracts, period } = data
   const received = months?.find(month => month.month === period.month || month.label === period.label)?.amount
   const houses = filter?.houseId ? allHouses.filter(house => String(house.id) === String(filter.houseId)) : allHouses
@@ -38,6 +38,9 @@ export default function DashboardContent({ data, filter, controls }) {
     <Panel title="Thực thu theo thời gian" subtitle="Thanh toán ghi nhận theo tháng · Tất cả cơ sở được cấp quyền">
       <RevenueChart months={months} />
     </Panel>
+    <Panel title="Hóa đơn và công nợ theo kỳ" subtitle="Giá trị hóa đơn, đã thanh toán và còn phải thu">
+      {invoiceChart ?? <p className="bh-premium-empty">Chưa có lịch sử hóa đơn theo kỳ. Số liệu tháng hiện tại nằm trong mục Thu — chi.</p>}
+    </Panel>
     <div className="bh-dashboard-split bh-premium-finance">
       <Panel title="Thu — chi" subtitle={`Tất cả cơ sở · Tháng ${period.label}`}>
         <dl className="bh-invoice-metrics">
@@ -46,9 +49,9 @@ export default function DashboardContent({ data, filter, controls }) {
           <div><dt>Đã thanh toán cho hóa đơn kỳ này</dt><dd>{formatCurrency(invoices.paid_amount)}</dd></div>
           <div><dt>Còn phải thu của kỳ</dt><dd>{formatCurrency(invoices.outstanding_amount)}</dd></div>
         </dl>
-        <Unavailable>Chưa có dữ liệu chi phí. Chênh lệch thu — chi chưa khả dụng.</Unavailable>
+        {expenseChart ?? <Unavailable>Chưa có dữ liệu chi phí. Biểu đồ thu — chi chưa khả dụng.</Unavailable>}
       </Panel>
-      <Panel title="Hợp đồng sắp hết hạn" subtitle={`Hợp đồng hiệu lực, kết thúc trong ${summary.expiring_window_days} ngày tới; hiển thị tối đa 5 hợp đồng.`}>{contracts.length ? <ul className="bh-action-list">{contracts.map(contract => <li key={contract.id}><Link to={`/contracts/${contract.id}`} state={{ returnTo: '/dashboard', returnLabel: 'Dashboard' }}><strong>Phòng {contract.room_code} · {contract.contract_code}</strong><p>{contract.tenant_name || 'Người thuê không còn trong danh mục'}</p><div><span>Hết hạn: {formatDate(contract.end_date)}</span><span>{contract.days_remaining === 0 ? 'Hết hạn hôm nay' : `Còn ${contract.days_remaining} ngày`}</span></div></Link></li>)}</ul> : <p className="bh-chart-empty">Không có hợp đồng sắp hết hạn.</p>}</Panel>
+      <Panel title="Hợp đồng sắp hết hạn" subtitle={`Hợp đồng hiệu lực, kết thúc trong ${summary.expiring_window_days} ngày tới; hiển thị tối đa 5 hợp đồng.`}>{contractChart ?? <p className="bh-chart-empty">Chưa có thống kê hết hạn theo khoảng.</p>}{contracts.length ? <ul className="bh-action-list">{contracts.map(contract => <li key={contract.id}><Link to={`/contracts/${contract.id}`} state={{ returnTo: '/dashboard', returnLabel: 'Dashboard' }}><strong>Phòng {contract.room_code} · {contract.contract_code}</strong><p>{contract.tenant_name || 'Người thuê không còn trong danh mục'}</p><div><span>Hết hạn: {formatDate(contract.end_date)}</span><span>{contract.days_remaining === 0 ? 'Hết hạn hôm nay' : `Còn ${contract.days_remaining} ngày`}</span></div></Link></li>)}</ul> : <p className="bh-chart-empty">Không có hợp đồng sắp hết hạn.</p>}</Panel>
     </div>
     <div className="bh-premium-bottom">
       <Panel title="Tình hình cơ sở" subtitle="Danh sách theo bộ lọc cơ sở."><div className="bh-house-grid">{houses.map(house => <article key={house.id}><div><h4>{house.name}</h4><p>{house.operational_role === 'OWNER' ? 'Nhà trọ của bạn' : 'Được phân công quản lý'}</p></div><dl><div><dt>Đang thuê</dt><dd>{house.occupied_rooms}/{house.total_rooms}</dd></div><div><dt>Lấp đầy</dt><dd>{Number(house.occupancy_rate).toLocaleString('vi-VN')}%</dd></div><div><dt>Còn phải thu*</dt><dd>{formatCurrency(house.outstanding_amount)}</dd></div></dl>{house.operational_role === 'OWNER' && <Link to={`/boarding-houses/${house.id}`}>Xem nhà trọ</Link>}</article>)}</div><p className="bh-footnote">* Còn phải thu tính cho kỳ hóa đơn API trả về ({period.label}).</p></Panel>
