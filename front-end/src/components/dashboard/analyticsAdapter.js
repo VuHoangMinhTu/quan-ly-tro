@@ -1,6 +1,12 @@
 const presets = { last7: 'last_7_days', last30: 'last_30_days' }
 const calendar = ['day', 'week', 'month', 'quarter', 'year']
 const epoch = value => Date.parse(value + 'T00:00:00Z')
+
+export function visibleDashboardHouses(houses, houseId, ...errors) {
+  return houseId && errors.some(error => error?.response?.status === 404)
+    ? houses.filter(house => String(house.id) !== String(houseId))
+    : houses
+}
 const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value ?? '') &&
   Number.isFinite(epoch(value)) && new Date(epoch(value)).toISOString().slice(0, 10) === value
 

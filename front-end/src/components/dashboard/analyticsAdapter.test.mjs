@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { analyticsParams, periodLabel } from './analyticsAdapter.js'
+import { analyticsParams, periodLabel, visibleDashboardHouses } from './analyticsAdapter.js'
+
+test('a scoped 404 hides the revoked house even while legacy options are cached', () => {
+  const houses = [{ id: 7, name: 'Revoked' }, { id: 8, name: 'Assigned' }]
+  assert.deepEqual(visibleDashboardHouses(houses, '7', { response: { status: 404 } }), [houses[1]])
+  assert.deepEqual(visibleDashboardHouses(houses, '7', { response: { status: 500 } }), houses)
+})
 
 test('analytics request preserves calendar selection and property scope', () => {
   assert.deepEqual(analyticsParams({ preset: 'week', houseId: '7', compare: true },

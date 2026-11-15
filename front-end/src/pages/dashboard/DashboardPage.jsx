@@ -5,7 +5,7 @@ import { dashboardRefetchInterval } from '../../api/dashboardPolicy'
 import DashboardContent from '../../components/dashboard/DashboardContent'
 import DashboardFilters from '../../components/dashboard/DashboardFilters.jsx'
 import { filterFromSearch } from '../../components/dashboard/dashboardFilters'
-import { adaptDashboard, analyticsParams } from '../../components/dashboard/analyticsAdapter'
+import { adaptDashboard, analyticsParams, visibleDashboardHouses } from '../../components/dashboard/analyticsAdapter'
 import { ContractExpiryChart, InvoiceHistoryChart, ContractPeriodChart } from '../../components/dashboard/DashboardSeriesCharts'
 import './dashboard-premium.css'
 
@@ -31,7 +31,8 @@ function DashboardAnalyticsView({ legacy, filter, searchParams, setSearchParams 
     end: searchParams.get('end') ?? filter.end,
     anchor: searchParams.get('anchor') ?? '', group: searchParams.get('group') ?? '',
   }}
-    houses={legacy.boarding_houses} onChange={updateFilter} onReset={() => setSearchParams({}, { replace: true })} />
+    houses={visibleDashboardHouses(legacy.boarding_houses, filter.houseId, summary.error, analytics.error)}
+    onChange={updateFilter} onReset={() => setSearchParams({}, { replace: true })} />
   const frame = children => <section className="dashboard-screen bh-premium min-w-0">{children}</section>
   if (!params) return frame(<>{controls}<p role="alert">Bộ lọc không hợp lệ. Hãy kiểm tra ngày và khoảng tối đa 366 ngày.</p></>)
   if (summary.isError || analytics.isError) return frame(<>{controls}<p role="alert">Không thể tải thống kê đã chọn.</p>
