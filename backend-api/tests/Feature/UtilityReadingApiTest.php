@@ -84,7 +84,7 @@ class UtilityReadingApiTest extends TestCase
     private function meter(Landlord $l, float $initial = 0): UtilityMeter
     {
         $b = BoardingHouse::create(['landlord_id' => $l->id, 'name' => 'H'.BoardingHouse::count(), 'address' => 'A']);
-        $r = Room::create(['boarding_house_id' => $b->id, 'room_code' => 'P'.Room::count(), 'monthly_rent' => 1, 'status' => 'AVAILABLE']);
+        $r = Room::create(['boarding_house_id' => $b->id, 'room_code' => 'P'.Room::count(), 'monthly_rent' => 1, 'status' => 'AVAILABLE', 'room_type' => 'DORMITORY']);
         $s = Service::create(['boarding_house_id' => $b->id, 'name' => 'E'.Service::count(), 'type' => 'ELECTRICITY', 'billing_method' => 'PER_UNIT', 'base_price' => 1]);
 
         return UtilityMeter::create(['room_id' => $r->id, 'service_id' => $s->id, 'initial_reading' => $initial]);
@@ -98,5 +98,31 @@ class UtilityReadingApiTest extends TestCase
     private function payload(array $a = []): array
     {
         return ['reading_date' => '2026-10-01', 'reading_value' => 150, 'note' => 'n', ...$a];
+    }
+
+    public function test_private_room_history_remains_readable_but_cannot_be_written_when_v2_is_off(): void
+    {
+        config(['billing.v2_enabled' => false]);
+        $owner = $this->landlord();
+        $meter = $this->meter($owner);
+        $meter->room->update(['room_type' => 'PRIVATE_ROOM']);
+        $reading = $meter->readings()->create(['reading_date' => '2026-09-01', 'reading_value' => 100]);
+        $this->auth($owner)->getJson("/api/utility-meters/$meter->id/readings")->assertOk()->assertJsonPath('data.0.id', $reading->id);
+        $this->postJson("/api/utility-meters/$meter->id/readings", $this->payload())->assertUnprocessable();
+        $this->putJson("/api/utility-readings/$reading->id", $this->payload())->assertUnprocessable();
+        $this->deleteJson("/api/utility-readings/$reading->id")->assertUnprocessable();
+        $this->assertDatabaseCount('utility_readings', 1);
+    }
+
+    public function test_assigned_manager_cannot_use_legacy_dormitory_writer(): void
+    {
+        $meter = $this->meter($this->landlord());
+        $manager = User::factory()->create();
+        $meter->room->boardingHouse->managers()->attach($manager);
+
+        $this->withToken($manager->createToken('manager')->plainTextToken)
+            ->postJson("/api/utility-meters/$meter->id/readings", $this->payload())
+            ->assertNotFound();
+        $this->assertDatabaseCount('utility_readings', 0);
     }
 }

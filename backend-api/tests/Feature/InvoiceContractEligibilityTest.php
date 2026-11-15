@@ -7,10 +7,12 @@ use App\Models\Room;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\TestWith;
+use Tests\ExercisesLegacyBillingCalculation;
 use Tests\TestCase;
 
 class InvoiceContractEligibilityTest extends TestCase
 {
+    use ExercisesLegacyBillingCalculation;
     use RefreshDatabase;
 
     private function contract(array $attributes = [], array $occupancy = []): Contract
@@ -176,7 +178,7 @@ class InvoiceContractEligibilityTest extends TestCase
         foreach ([$first, $second] as $contract) {
             $this->postJson("/api/rooms/{$room->id}/invoices", $this->payload($contract))->assertCreated();
             $invoice = $contract->invoices()->firstOrFail();
-            $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+            $this->postLegacyCalculation($invoice->id)->assertOk();
             $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'RENT', 'amount' => $contract->monthly_rent]);
             $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $invoice->id, 'amount' => 9000000]);
             $this->postJson("/api/rooms/{$room->id}/invoices", $this->payload($contract))->assertUnprocessable()->assertJsonValidationErrors('billing_period');
@@ -208,7 +210,7 @@ class InvoiceContractEligibilityTest extends TestCase
         $invoice->recalculateTotals();
         $before = $invoice->fresh()->getAttributes();
 
-        $this->postJson("/api/invoices/{$invoice->id}/generate")->assertUnprocessable()->assertJsonValidationErrors('contract_id');
+        $this->postLegacyCalculation($invoice->id)->assertUnprocessable()->assertJsonValidationErrors('contract_id');
 
         $this->assertModelExists($item);
         $this->assertSame($before, $invoice->fresh()->getAttributes());
