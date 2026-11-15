@@ -13,6 +13,21 @@ class DashboardAnalyticsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_expired_bearer_is_rejected_and_legacy_route_still_works(): void
+    {
+        $user = User::factory()->create();
+        $this->withToken($user->createToken('expired', ['dashboard:read'], now()->subMinute())->plainTextToken)
+            ->getJson('/api/dashboard/analytics')->assertUnauthorized();
+        $this->app['auth']->forgetGuards();
+        $this->withToken($user->createToken('current', ['dashboard:read'], now()->addMinute())->plainTextToken)
+            ->getJson('/api/dashboard')->assertOk()->assertJsonPath('success', true);
+        $this->app['auth']->forgetGuards();
+        $this->getJson('/api/dashboard/summary')->assertOk();
+        $token = $this->app['auth']->guard('dashboard-read-only')->user()->currentAccessToken();
+        $this->assertTrue($token->can('dashboard:read'));
+        $this->assertFalse($token->can('dashboard:write'));
+    }
+
     public function test_auth_scope_revocation_and_select_only_requests(): void
     {
         $this->getJson('/api/dashboard/summary')->assertUnauthorized();
