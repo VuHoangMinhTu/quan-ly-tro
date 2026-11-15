@@ -68,7 +68,9 @@ export function adaptDashboard(legacy, snapshot, analytics) {
       paid_amount: analytics.totals.invoice_paid_current,
       outstanding_amount: analytics.totals.invoice_due_current,
     },
-    revenue_chart: rows.map(row => ({ month: row.from, label: row.label, amount: row.cash_received })),
+    revenue_chart: analytics.availability?.cash === 'supported'
+      ? rows.map(row => ({ month: row.from, label: row.label, amount: row.cash_received }))
+      : [],
     analytics: { ...analytics, rows },
     expiry_buckets: snapshot.contracts.expiry_buckets,
   }

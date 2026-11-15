@@ -77,7 +77,7 @@ test('house without rooms gets a useful CTA and an empty payment chart has no in
   const html = renderToStaticMarkup(React.createElement(Content, { data }))
   assert.match(html, /Nhà trọ chưa có phòng/)
   assert.match(html, /href="\/boarding-houses\/1\/rooms\/new"/)
-  assert.match(html, /Chưa ghi nhận thanh toán/)
+  assert.match(html, /Thống kê thực thu theo thời gian đang được hoàn thiện/)
   assert.doesNotMatch(html, /NaN|Infinity/)
 })
 
@@ -112,7 +112,20 @@ test('house selection scopes room KPIs and keeps received payments distinct from
   const data = { ...fixture, boarding_houses: [...fixture.boarding_houses, other] }
   const html = renderToStaticMarkup(React.createElement(Content, { data, filter: { houseId: '2' } }))
   assert.match(html, /Tổng số phòng.*?<p>4<\/p>/)
-  assert.match(html, /Thực thu tháng.*?<p>5\.000\.000 đ<\/p>/)
+  assert.doesNotMatch(html, />5\.000\.000 đ<|Thực thu trong kỳ|Thực thu tháng/)
   assert.match(html, /Giá trị hóa đơn<\/dt><dd>35\.000\.000 đ/)
   assert.doesNotMatch(html, /BeeHouse Dĩ An.*Xem nhà trọ/)
+})
+
+test('unsupported cash hides current and previous metrics even with cached cash values', () => {
+  const data = { ...fixture, analytics: { availability: { cash: 'unsupported' }, totals: { cash_received: '0.00' },
+    previous: { from: '2026-09-01', to_exclusive: '2026-10-01', totals: {
+      cash_received: '1234567.00', invoice_value: '35000000.00', invoice_paid_current: '27000000.00', invoice_due_current: '8000000.00',
+    } },
+  } }
+  const html = renderToStaticMarkup(React.createElement(Content, { data }))
+  assert.match(html, /Thống kê thực thu theo thời gian đang được hoàn thiện để đảm bảo độ chính xác của dữ liệu\./)
+  assert.match(html, /Kỳ trước/)
+  assert.match(html, /27\.000\.000 đ/)
+  assert.doesNotMatch(html, />1\.234\.567 đ<|>5\.000\.000 đ<|<dd>0 đ<\/dd>|Thực thu trong kỳ|Thực thu tháng/)
 })

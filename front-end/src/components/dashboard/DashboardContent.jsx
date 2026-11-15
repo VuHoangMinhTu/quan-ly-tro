@@ -10,10 +10,13 @@ function Kpi({ label, value, description, icon: Icon, tone = 'default' }) { retu
 function Panel({ title, children, subtitle }) { return <section className="bh-dashboard-panel"><header><div><h3>{title}</h3>{subtitle && <p>{subtitle}</p>}</div></header>{children}</section> }
 function Unavailable({ children }) { return <div className="bh-unavailable"><AlertCircle size={19} aria-hidden="true" /><p>{children}</p></div> }
 
-export default function DashboardContent({ data, filter, controls, headerLabel, invoiceChart, expenseChart, contractChart, contractPeriodChart }) {
+export default function DashboardContent({ data, filter, controls, headerLabel, invoiceChart, expenseChart, contractChart, contractPeriodChart, demoCash = false }) {
   const { viewer, summary, invoice_summary: invoices, boarding_houses: allHouses, revenue_chart: months, recent_unpaid_invoices: recent, expiring_contracts: contracts, period } = data
   const analytics = data.analytics
-  const received = analytics ? analytics.totals.cash_received : months?.find(month => month.month === period.month || month.label === period.label)?.amount
+  const cashSupported = demoCash || analytics?.availability?.cash === 'supported'
+  const received = demoCash
+    ? months?.find(month => month.month === period.month || month.label === period.label)?.amount
+    : analytics?.totals.cash_received
   const houses = filter?.houseId ? allHouses.filter(house => String(house.id) === String(filter.houseId)) : allHouses
   const firstOwnedHouse = allHouses.find(house => house.operational_role === 'OWNER')
   const scopedOccupied = houses.reduce((sum, house) => sum + Number(house.occupied_rooms), 0)
@@ -30,31 +33,31 @@ export default function DashboardContent({ data, filter, controls, headerLabel, 
       <Kpi icon={Building2} label="Đang thuê" value={scopedOccupied} description="Có người đang cư trú" />
       <Kpi icon={DoorOpen} label="Phòng chưa có người" value={scopedTotal - scopedOccupied} description="Có thể đang đặt hoặc bảo trì" />
       <Kpi icon={ChartNoAxesCombined} label="Tỷ lệ lấp đầy" value={`${Number((scopedTotal ? scopedOccupied / scopedTotal * 100 : 0).toFixed(2)).toLocaleString('vi-VN')}%`} description={`${scopedOccupied}/${scopedTotal} phòng đang có người`} />
-      <Kpi icon={WalletCards} label={analytics ? 'Thực thu trong kỳ' : 'Thực thu tháng'} value={received == null ? '—' : formatCurrency(received)} description={`Thanh toán ghi nhận trong ${period.label}`} tone="positive" />
+      {cashSupported && <Kpi icon={WalletCards} label={analytics ? 'Thực thu trong kỳ' : 'Thực thu tháng'} value={received == null ? '—' : formatCurrency(received)} description={`Thanh toán ghi nhận trong ${period.label}`} tone="positive" />}
       <Kpi icon={CircleDollarSign} label="Còn phải thu" value={formatCurrency(invoices.outstanding_amount)} description={`Công nợ hóa đơn ${period.label}`} tone={Number(invoices.outstanding_amount) ? 'warning' : 'default'} />
       <Kpi icon={Receipt} label="Hóa đơn chưa thanh toán" value={invoices.unpaid_invoice_count} description={`${invoices.overdue_invoice_count} quá hạn · mọi cơ sở, mọi kỳ`} tone={invoices.overdue_invoice_count ? 'danger' : 'default'} />
       <Kpi icon={FileText} label="Hợp đồng sắp hết hạn" value={summary.expiring_soon_contracts} description={`Trong ${summary.expiring_window_days} ngày tới`} tone={summary.expiring_soon_contracts ? 'warning' : 'default'} />
     </div></section>
     <div className="bh-dashboard-split bh-premium-rooms"><Panel title="Tình trạng phòng" subtitle="Tình trạng hiện tại trong phạm vi được phép xem."><RoomStatusChart occupied={scopedOccupied} total={scopedTotal} /></Panel><Panel title="Tỷ lệ lấp đầy theo cơ sở" subtitle="Số phòng có người ở trên tổng số phòng."><OccupancyByHouse houses={houses} /></Panel></div>
-    <Panel title="Thực thu theo thời gian" subtitle={analytics ? 'Theo ngày thanh toán · ' + period.label : 'Thanh toán ghi nhận theo tháng · Tất cả cơ sở được cấp quyền'}>
-      <RevenueChart months={months} timeLabel={analytics ? 'khoảng' : 'tháng'} />
+    <Panel title="Thực thu theo thời gian" subtitle={cashSupported && analytics ? 'Theo ngày thanh toán · ' + period.label : undefined}>
+      {cashSupported ? <RevenueChart months={months} timeLabel={analytics ? 'khoảng' : 'tháng'} /> : <p className="bh-premium-empty">Thống kê thực thu theo thời gian đang được hoàn thiện để đảm bảo độ chính xác của dữ liệu.</p>}
     </Panel>
     <Panel title="Hóa đơn và công nợ theo kỳ" subtitle={analytics ? 'Theo ngày ghi trên kỳ hóa đơn · ' + period.label : 'Giá trị hóa đơn, đã thanh toán và còn phải thu'}>
-      {invoiceChart ?? <p className="bh-premium-empty">Chưa có lịch sử hóa đơn theo kỳ. Số liệu tháng hiện tại nằm trong mục Thu — chi.</p>}
+      {invoiceChart ?? <p className="bh-premium-empty">Chưa có lịch sử hóa đơn theo kỳ. Xem tổng hợp hóa đơn bên dưới.</p>}
     </Panel>
     {contractPeriodChart && <Panel title="Bắt đầu và kết thúc hợp đồng" subtitle={'Theo ngày ghi trong hợp đồng · ' + period.label}>{contractPeriodChart}</Panel>}
     {analytics?.previous && <Panel title="Kỳ trước" subtitle={formatDate(analytics.previous.from) + ' đến trước ' + formatDate(analytics.previous.to_exclusive)}>
-      <dl className="bh-invoice-metrics"><div><dt>Thực thu</dt><dd>{formatCurrency(analytics.previous.totals.cash_received)}</dd></div><div><dt>Giá trị hóa đơn</dt><dd>{formatCurrency(analytics.previous.totals.invoice_value)}</dd></div><div><dt>Đã thanh toán cho hóa đơn</dt><dd>{formatCurrency(analytics.previous.totals.invoice_paid_current)}</dd></div><div><dt>Công nợ hiện tại của kỳ trước</dt><dd>{formatCurrency(analytics.previous.totals.invoice_due_current)}</dd></div></dl>
+      <dl className="bh-invoice-metrics">{cashSupported && <div><dt>Thực thu</dt><dd>{formatCurrency(analytics.previous.totals.cash_received)}</dd></div>}<div><dt>Giá trị hóa đơn</dt><dd>{formatCurrency(analytics.previous.totals.invoice_value)}</dd></div><div><dt>Đã thanh toán cho hóa đơn</dt><dd>{formatCurrency(analytics.previous.totals.invoice_paid_current)}</dd></div><div><dt>Công nợ hiện tại của kỳ trước</dt><dd>{formatCurrency(analytics.previous.totals.invoice_due_current)}</dd></div></dl>
     </Panel>}
     <div className="bh-dashboard-split bh-premium-finance">
-      <Panel title="Thu — chi" subtitle={analytics ? period.label : `Tất cả cơ sở · Tháng ${period.label}`}>
+      <Panel title={cashSupported ? 'Thu — chi' : 'Tổng hợp hóa đơn'} subtitle={analytics ? period.label : `Tất cả cơ sở · Tháng ${period.label}`}>
         <dl className="bh-invoice-metrics">
-          <div><dt>{analytics ? 'Thực thu trong kỳ' : 'Thực thu tháng'}</dt><dd>{received == null ? '—' : formatCurrency(received)}</dd></div>
+          {cashSupported && <div><dt>{analytics ? 'Thực thu trong kỳ' : 'Thực thu tháng'}</dt><dd>{received == null ? '—' : formatCurrency(received)}</dd></div>}
           <div><dt>Giá trị hóa đơn</dt><dd>{formatCurrency(invoices.invoice_total)}</dd></div>
           <div><dt>Đã thanh toán cho hóa đơn kỳ này</dt><dd>{formatCurrency(invoices.paid_amount)}</dd></div>
           <div><dt>Còn phải thu của kỳ</dt><dd>{formatCurrency(invoices.outstanding_amount)}</dd></div>
         </dl>
-        {expenseChart ?? <Unavailable>Chưa có dữ liệu chi phí. Biểu đồ thu — chi chưa khả dụng.</Unavailable>}
+        {cashSupported && (expenseChart ?? <Unavailable>Chưa có dữ liệu chi phí. Biểu đồ thu — chi chưa khả dụng.</Unavailable>)}
       </Panel>
       <Panel title="Hợp đồng sắp hết hạn" subtitle={`Hợp đồng hiệu lực, kết thúc trong ${summary.expiring_window_days} ngày tới; danh sách bên dưới gồm tối đa 5 mục từ mọi cơ sở được cấp quyền.`}>{contractChart ?? <p className="bh-chart-empty">Chưa có thống kê hết hạn theo khoảng.</p>}{contracts.length ? <ul className="bh-action-list">{contracts.map(contract => <li key={contract.id}><Link to={`/contracts/${contract.id}`} state={{ returnTo: '/dashboard', returnLabel: 'Dashboard' }}><strong>Phòng {contract.room_code} · {contract.contract_code}</strong><p>{contract.tenant_name || 'Người thuê không còn trong danh mục'}</p><div><span>Hết hạn: {formatDate(contract.end_date)}</span><span>{contract.days_remaining === 0 ? 'Hết hạn hôm nay' : `Còn ${contract.days_remaining} ngày`}</span></div></Link></li>)}</ul> : <p className="bh-chart-empty">Không có hợp đồng sắp hết hạn.</p>}</Panel>
     </div>

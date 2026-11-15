@@ -12,7 +12,7 @@ createRoot(document.getElementById('root')).render(
     <main className="app-shell app-content bh-premium" onClick={event => {
       if (event.target.closest('a')) event.preventDefault()
     }}>
-      <DashboardContent data={demoDashboard}
+      <DashboardContent data={demoDashboard} demoCash
         headerLabel={<span className="bh-demo-banner">DỮ LIỆU MINH HỌA</span>}
         invoiceChart={<InvoiceHistoryChart rows={demoSeries.invoices} />}
         expenseChart={<IncomeExpenseChart rows={demoSeries.cash} />}

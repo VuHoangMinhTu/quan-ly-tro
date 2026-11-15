@@ -89,16 +89,19 @@ final class DashboardAnalytics
         $house = isset($input['boarding_house_id']) ? (int) $input['boarding_house_id'] : null;
         $rooms = $this->rooms($this->houses($user, $house))->select('rooms.id');
         $invoices = Invoice::query()->whereIn('room_id', $rooms)->whereIn('status', self::INVOICES);
-        $payments = Payment::query()->whereIn('invoice_id', (clone $invoices)->select('invoices.id'));
+        $cashEnabled = config('dashboard.cash_series_enabled') === true;
         $contracts = Contract::query()->whereIn('room_id', $rooms)->where('is_demo', false)
             ->whereIn('status', ['ACTIVE', 'EXPIRED', 'TERMINATED']);
         $sources = [
-            [$payments, 'paid_at', ['cash_received' => 'amount']],
             [$invoices, 'billing_period', ['invoice_count' => '1', 'invoice_value' => 'total_amount',
                 'invoice_paid_current' => 'paid_amount', 'invoice_due_current' => 'total_amount - paid_amount']],
             [$contracts, 'start_date', ['contracts_started' => '1']],
             [$contracts, 'end_date', ['contracts_ended' => '1']],
         ];
+        if ($cashEnabled) {
+            $payments = Payment::query()->whereIn('invoice_id', (clone $invoices)->select('invoices.id'));
+            $sources[] = [$payments, 'paid_at', ['cash_received' => 'amount']];
+        }
         $buckets = DashboardPeriod::buckets($start, $end, $group);
         [$totals, $series] = $this->aggregate($sources, $buckets);
         $comparison = null;
@@ -111,7 +114,7 @@ final class DashboardAnalytics
             'as_of' => $now->toIso8601String(), 'timezone' => DashboardPeriod::ZONE, 'currency' => 'VND',
             'scope' => ['boarding_house_id' => $house],
             'period' => [...$this->bounds($start, $end), 'group_by' => $group],
-            'availability' => ['cash' => 'supported', 'invoices' => 'supported', 'contracts' => 'supported',
+            'availability' => ['cash' => $cashEnabled ? 'supported' : 'unsupported', 'invoices' => 'supported', 'contracts' => 'supported',
                 'tenant_movements' => 'unsupported', 'expenses' => 'unsupported', 'historical_occupancy' => 'unsupported', 'net_refunds' => 'unsupported'],
             'totals' => $totals, 'series' => $series, 'previous' => $comparison,
         ];

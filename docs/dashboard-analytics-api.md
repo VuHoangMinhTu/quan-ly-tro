@@ -2,6 +2,8 @@
 
 ## Quy ước triển khai
 
+Bản release giảm phạm vi mặc định trả `availability.cash=unsupported` và bỏ `cash_received` khỏi totals, series và kỳ trước. Không chạy Payment aggregate trong hai endpoint mới khi tắt. Dashboard mới tải danh sách qua `GET /api/dashboard?include_revenue=0`; client cũ bỏ tham số vẫn nhận hợp đồng cũ. Chỉ bật lại `DASHBOARD_CASH_SERIES_ENABLED` sau khi đạt các điều kiện trong [kế hoạch Payment Timezone Fix](payment-timezone-fix-plan.md). Các ví dụ cash bên dưới mô tả hợp đồng khi capability được bật.
+
 - Hai endpoint dùng guard Sanctum riêng tắt cập nhật `last_used_at`; API cũ dùng guard hiện tại. GET chỉ đọc.
 - Summary trả `contracts.expiry_buckets` gồm `from_day,to_day,count` cho 0–7, 8–14, 15–21 và 22–30 ngày. Ngày ghi trong hợp đồng không phải ngày chuyển đi.
 - Payment MySQL là DATETIME. Form Request nhận ngày hợp lệ, PaymentController lưu qua cast Eloquent datetime; PayOSService parse timestamp rồi lưu bằng Eloquent, nguồn PAYOS_WEBHOOK, còn migration mặc định MANUAL. Không có điều kiện trạng thái Payment đủ căn cứ áp dụng cho toàn bộ lịch sử. Fixture dùng datetime không offset. Analytics diễn giải giờ lưu theo `app.timezone` (APP_TIMEZONE, mặc định UTC), sau đó đặt biên kỳ theo giờ Việt Nam; đây là quy ước đọc, không xác nhận mọi timestamp legacy có cùng timezone. Kiểm tra APP_TIMEZONE và mẫu bản ghi của hai writer ở staging trước merge.

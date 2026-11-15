@@ -20,7 +20,9 @@ class DashboardAnalyticsTest extends TestCase
             ->getJson('/api/dashboard/analytics')->assertUnauthorized();
         $this->app['auth']->forgetGuards();
         $this->withToken($user->createToken('current', ['dashboard:read'], now()->addMinute())->plainTextToken)
-            ->getJson('/api/dashboard')->assertOk()->assertJsonPath('success', true);
+            ->getJson('/api/dashboard')->assertOk()->assertJsonPath('success', true)->assertJsonCount(6, 'data.revenue_chart');
+        $this->app['auth']->forgetGuards();
+        $this->getJson('/api/dashboard?include_revenue=0')->assertOk()->assertJsonPath('data.revenue_chart', []);
         $this->app['auth']->forgetGuards();
         $this->getJson('/api/dashboard/summary')->assertOk();
         $token = $this->app['auth']->guard('dashboard-read-only')->user()->currentAccessToken();
@@ -48,12 +50,16 @@ class DashboardAnalyticsTest extends TestCase
             $this->getJson("/api/dashboard/analytics?boarding_house_id=$id&preset=day&anchor_date=2024-02-29&compare=1")
                 ->assertOk()->assertJsonPath('data.period.to_exclusive', '2024-03-01')
                 ->assertJsonPath('data.previous.from', '2024-02-28')
-                ->assertJsonPath('data.series.0.cash_received', '0.00');
+                ->assertJsonPath('data.availability.cash', 'unsupported')
+                ->assertJsonMissingPath('data.totals.cash_received')
+                ->assertJsonMissingPath('data.series.0.cash_received')
+                ->assertJsonMissingPath('data.previous.totals.cash_received');
             $queries = DB::getQueryLog();
             DB::disableQueryLog();
             $this->assertLessThanOrEqual(20, count($queries));
             foreach ($queries as $query) {
                 $this->assertMatchesRegularExpression('/^select\b/i', $query['query']);
+                $this->assertDoesNotMatchRegularExpression('/\bpayments\b/i', $query['query']);
             }
             $this->app['auth']->forgetGuards();
             $this->withToken($manager->createToken('analytics')->plainTextToken)
@@ -71,7 +77,7 @@ class DashboardAnalyticsTest extends TestCase
 
     public function test_billing_cohort_and_actual_payment_have_independent_dates(): void
     {
-        config(['app.timezone' => 'Asia/Ho_Chi_Minh']);
+        config(['app.timezone' => 'Asia/Ho_Chi_Minh', 'dashboard.cash_series_enabled' => true]);
         $contract = Contract::factory()->create();
         $room = $contract->room;
         $invoice = $room->invoices()->create([
@@ -157,9 +163,8 @@ class DashboardAnalyticsTest extends TestCase
         $this->assertCount(count($single), $multiple);
         $this->assertLessThanOrEqual(7, count($multiple));
         if (DB::getDriverName() === 'mysql') {
-            $financial = array_filter($multiple, fn ($query) => str_contains($query['query'], ' AS cash_received')
-                || str_contains($query['query'], ' AS invoice_due_current'));
-            $this->assertCount(2, $financial);
+            $financial = array_filter($multiple, fn ($query) => str_contains($query['query'], ' AS invoice_due_current'));
+            $this->assertCount(1, $financial);
             foreach ($financial as $query) {
                 $plan = DB::select('EXPLAIN '.$query['query'], $query['bindings']);
                 $this->assertNotEmpty($plan);

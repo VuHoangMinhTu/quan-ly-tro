@@ -30,6 +30,10 @@ class DashboardController extends Controller
 
     public function __invoke(Request $request, DashboardService $dashboard): JsonResponse
     {
-        return ApiResponse::success($dashboard->summary($request->user()), 'Lấy dữ liệu tổng quan thành công.');
+        $data = $request->query('include_revenue') === '0'
+            ? $dashboard->summaryWithoutRevenue($request->user())
+            : $dashboard->summary($request->user());
+
+        return ApiResponse::success($data, 'Lấy dữ liệu tổng quan thành công.');
     }
 }
