@@ -134,8 +134,11 @@ final class DashboardAnalytics
             $query = (clone $source)->where($column, '>=', $date($buckets[0][0]))
                 ->where($column, '<', $date($buckets[array_key_last($buckets)][1]));
             $storageZone = config('app.timezone');
+            // Vietnam's historical offsets varied. Keep exact Carbon boundaries for older UTC data.
+            $localDayKnown = $column !== 'paid_at' || $storageZone === DashboardPeriod::ZONE
+                || ($storageZone === 'UTC' && $buckets[0][0]->year >= 1976);
             $grouped = $query->getConnection()->getDriverName() === 'mysql'
-                && ($column !== 'paid_at' || in_array($storageZone, ['UTC', DashboardPeriod::ZONE], true))
+                && $localDayKnown
                 && count($buckets) > 1;
             if ($grouped) {
                 $day = $column === 'paid_at' && $storageZone === 'UTC'
