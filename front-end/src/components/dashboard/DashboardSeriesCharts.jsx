@@ -36,3 +36,8 @@ export function ContractExpiryChart({ rows }) {
   return <SeriesChart rows={rows} label="Hợp đồng sắp hết hạn theo khoảng"
     bars={[[ 'count', 'Hợp đồng sắp hết hạn', '#316bb2' ]]} count />
 }
+
+export function ContractPeriodChart({ rows }) {
+  return <SeriesChart rows={rows} label="Hợp đồng theo kỳ" count
+    bars={[['contracts_started', 'Bắt đầu', '#087e70'], ['contracts_ended', 'Kết thúc', '#316bb2']]} />
+}

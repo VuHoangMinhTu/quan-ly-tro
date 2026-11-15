@@ -3,7 +3,7 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import { formatCurrency } from '../../utils/formatters'
 import { ChartTooltip, moneyTick } from './chartPresentation'
 
-export default function RevenueChart({ months = [] }) {
+export default function RevenueChart({ months = [], timeLabel = 'tháng' }) {
   const fillId = useId()
   const points = (months ?? []).map(month => ({
     ...month,
@@ -12,12 +12,12 @@ export default function RevenueChart({ months = [] }) {
       : Number(month.amount),
   }))
   const reported = points.filter(point => point.amount !== null)
-  if (!reported.length) return <p className="bh-premium-empty">Chưa có dữ liệu thực thu theo tháng.</p>
+  if (!reported.length) return <p className="bh-premium-empty">Chưa có dữ liệu thực thu.</p>
   if (reported.every(point => point.amount === 0)) {
     return <p className="bh-premium-empty">Chưa ghi nhận thanh toán trong khoảng thời gian này.</p>
   }
 
-  return <figure className="bh-cash-chart" aria-label="Tiền thực thu theo tháng">
+  return <figure className="bh-cash-chart" aria-label={'Tiền thực thu theo ' + timeLabel}>
     <figcaption><span aria-hidden="true" /> Thực thu <small>Đơn vị: VND</small></figcaption>
     <div className="bh-area-frame">
       <ResponsiveContainer width="100%" height="100%">
@@ -36,7 +36,7 @@ export default function RevenueChart({ months = [] }) {
         </AreaChart>
       </ResponsiveContainer>
     </div>
-    <details className="bh-chart-values"><summary>Xem số liệu từng tháng</summary>
+    <details className="bh-chart-values"><summary>Xem số liệu từng {timeLabel}</summary>
       <ul>{reported.map(point => <li key={point.month}>{point.label}: {formatCurrency(point.amount)}</li>)}</ul>
     </details>
   </figure>
