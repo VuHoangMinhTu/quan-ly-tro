@@ -35,7 +35,7 @@ try {
    await page.screenshot({ path: resolve(output, `${name}-${width}.png`), fullPage: true })
   }
   await page.goto(server.origin + '/register'); await page.getByRole('heading', { name: 'Đăng ký tài khoản', exact: true }).waitFor(); await shot('register')
-  await page.goto(server.origin + '/login'); await page.getByLabel('Email', { exact: true }).fill(accounts.A.user.email); await page.getByLabel('Mật khẩu', { exact: true }).fill(accounts.A.password); await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click(); await page.getByRole('heading', { name: 'Tổng quan vận hành', exact: true }).waitFor()
+  await page.goto(server.origin + '/login'); await page.getByLabel('Email', { exact: true }).fill(accounts.A.user.email); await page.getByLabel('Mật khẩu', { exact: true }).fill(accounts.A.password); await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click(); await page.getByRole('heading', { name: 'Tổng quan', exact: true }).waitFor()
   for (const [path, name] of [['/contract-templates', 'templates'], ['/contract-templates/31', 'template-detail'], ['/rooms/101/invoices', 'invoices'], ['/invoices/101', 'invoice-detail'], ['/boarding-houses/101/services', 'services'], ['/utility-meters/71', 'utilities'], ['/residence-declarations', 'residence'], ['/change-password', 'account']]) {
    await page.goto(server.origin + path); await page.locator('main h2').first().waitFor(); await page.waitForTimeout(180); await shot(name)
    if (name === 'invoice-detail') { await page.getByRole('button', { name: 'Ghi nhận tiền mặt', exact: true }).click(); await page.getByRole('dialog').waitFor(); await shot('payment-modal'); await page.getByRole('button', { name: 'Đóng', exact: true }).click() }

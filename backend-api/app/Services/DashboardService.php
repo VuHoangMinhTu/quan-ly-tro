@@ -47,6 +47,16 @@ class DashboardService
 
     public function summary(User $user): array
     {
+        return $this->buildSummary($user, true);
+    }
+
+    public function summaryWithoutRevenue(User $user): array
+    {
+        return $this->buildSummary($user, false);
+    }
+
+    private function buildSummary(User $user, bool $includeRevenue): array
+    {
         $today = CarbonImmutable::today(config('app.timezone'));
         $start = $today->startOfMonth();
         $end = $start->addMonth();
@@ -116,7 +126,7 @@ class DashboardService
                 'unpaid_invoice_count' => (int) $collectionStats->unpaid_invoice_count, 'unpaid_amount' => $this->money($collectionStats->unpaid_amount),
                 'overdue_invoice_count' => (int) $collectionStats->overdue_invoice_count, 'overdue_amount' => $this->money($collectionStats->overdue_amount),
                 'statuses' => ['PAID' => (int) $invoiceStats->paid_count, 'UNPAID' => (int) $invoiceStats->unpaid_count, 'PARTIALLY_PAID' => (int) $invoiceStats->partially_paid_count]],
-            'revenue_chart' => $this->payments($user, $start), 'boarding_houses' => $houseData,
+            'revenue_chart' => $includeRevenue ? $this->payments($user, $start) : [], 'boarding_houses' => $houseData,
             'recent_unpaid_invoices' => $recent->map(fn (Invoice $invoice) => [
                 'id' => $invoice->id, 'invoice_code' => $invoice->invoice_code, 'room_code' => $invoice->room->room_code,
                 'boarding_house_name' => $houseNames->get($invoice->room->boarding_house_id) ?? $invoice->room->boardingHouse->name,

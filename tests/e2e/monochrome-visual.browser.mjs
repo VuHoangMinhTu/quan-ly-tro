@@ -31,13 +31,13 @@ try {
   await page.screenshot({path:resolve(output,`landing-hero-${width}.png`)})
   await page.goto(server.origin+'/login');await page.getByLabel('Email',{exact:true}).fill(accounts.A.user.email);await page.getByLabel('Mật khẩu',{exact:true}).fill(accounts.A.password)
   await page.screenshot({path:resolve(output,`login-${width}.png`),fullPage:true})
-  await page.getByRole('button',{name:'Đăng nhập',exact:true}).click();await page.getByRole('heading',{name:'Tổng quan vận hành',exact:true}).waitFor()
+  await page.getByRole('button',{name:'Đăng nhập',exact:true}).click();await page.getByRole('heading',{name:'Tổng quan',exact:true}).waitFor()
   for(const [path,name] of [['/dashboard','dashboard'],['/boarding-houses','houses'],['/boarding-houses/101/rooms','rooms'],['/tenants','tenants']]){
    await page.goto(server.origin+path);await page.locator('main h2').first().waitFor();await page.waitForTimeout(150)
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${name} ${width}`)
    await page.screenshot({path:resolve(output,`${name}-${width}.png`),fullPage:true})
   }
-  await page.goto(server.origin+'/');await page.getByRole('heading',{name:'Tổng quan vận hành',exact:true}).waitFor()
+  await page.goto(server.origin+'/');await page.getByRole('heading',{name:'Tổng quan',exact:true}).waitFor()
   assert.deepEqual(errors,[]);results.push({width,guestLanding:true,login:true,authenticatedRoot:true,noOverflow:true,errors});await context.close()
  }
  await writeFile(resolve(output,'results.json'),JSON.stringify(results,null,2));console.log(JSON.stringify(results))

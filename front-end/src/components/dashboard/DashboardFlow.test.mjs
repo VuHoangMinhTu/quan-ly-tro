@@ -7,12 +7,14 @@ import { transformWithOxc } from 'vite'
 import { formatDateForDisplay } from '../../utils/date.js'
 import { invoiceStatusLabels } from '../../utils/invoiceStatus.js'
 import { dashboardRefetchInterval } from '../../api/dashboardPolicy.js'
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 const Icon = () => React.createElement('svg', { 'aria-hidden': true })
 const Link = ({ to, children, ...props }) => React.createElement('a', { href: to, ...props }, children)
 const bindings = { formatCurrency: value => `${Number(value).toLocaleString('vi-VN')} đ`, formatDate: formatDateForDisplay, invoiceStatusLabels, Link,
-  Building2: Icon, DoorOpen: Icon, Users: Icon, FileText: Icon, Receipt: Icon, Wallet: Icon, CircleDollarSign: Icon, Clock3: Icon,
+  Building2: Icon, DoorOpen: Icon, Users: Icon, FileText: Icon, Receipt: Icon, WalletCards: Icon, CircleDollarSign: Icon, ChartNoAxesCombined: Icon, AlertCircle: Icon,
   InvoiceStatusBadge: ({ status }) => React.createElement('span', null, invoiceStatusLabels[status]),
+  RoomStatusChart: () => React.createElement('div'), OccupancyByHouse: () => React.createElement('div'),
 }
 async function load(path, name, extra = {}) {
   const source = (await readFile(new URL(path, import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
@@ -20,8 +22,25 @@ async function load(path, name, extra = {}) {
   const scope = { ...bindings, ...extra }
   return new Function('React', ...Object.keys(scope), `${code}\nreturn ${name}`)(React, ...Object.values(scope))
 }
-const Revenue = await load('./RevenueChart.jsx', 'RevenueChart')
+const Revenue = await load('./RevenueChart.jsx', 'RevenueChart', {
+  Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  useId: React.useId, ChartTooltip: () => null, moneyTick: String,
+})
 const Content = await load('./DashboardContent.jsx', 'DashboardContent', { RevenueChart: Revenue })
+
+test('revenue renders only amounts returned for each month, preserving zeros and gaps', () => {
+  const months = [
+    { month: '2026-06', label: '06/2026', amount: '987654' },
+    { month: '2026-07', label: '07/2026', amount: '0' },
+    { month: '2026-08', label: '08/2026', amount: null },
+    { month: '2026-09', label: '09/2026', amount: '31000' },
+  ]
+  const html = renderToStaticMarkup(React.createElement(Revenue, { months }))
+  assert.match(html, /06\/2026: 987\.654 đ/)
+  assert.match(html, /07\/2026: 0 đ/)
+  assert.match(html, /09\/2026: 31\.000 đ/)
+  assert.doesNotMatch(html, /08\/2026/)
+})
 const fixture = {
   viewer: { name: 'Minh Tú', can_create_boarding_house: true, owned_boarding_houses: 1, managed_boarding_houses: 0 },
   period: { label: '10/2026', month: '2026-10' },
@@ -35,11 +54,10 @@ const fixture = {
 
 test('dashboard renders KPI/house figures, Vietnamese dates, cash chart and correct navigation', () => {
   const html = renderToStaticMarkup(React.createElement(Content, { data: fixture }))
-  for (const value of ['35.000.000 đ', '27.000.000 đ', '8.000.000 đ', '4.200.000 đ', '70%', '15/10/2026', '31/10/2026', 'Tiền đã thu 6 tháng gần đây', 'Thanh toán một phần']) assert.ok(html.includes(value), value)
+  for (const value of ['27.000.000 đ', '8.000.000 đ', '70%', '15/10/2026', '31/10/2026', 'Thực thu theo thời gian', 'Thanh toán một phần']) assert.ok(html.includes(value), value)
   assert.match(html, /href="\/invoices\/4"/)
   assert.match(html, /href="\/contracts\/7"/)
-  assert.match(html, /grid-cols-2/)
-  assert.match(html, /lg:grid-cols-4/)
+  assert.match(html, /bh-kpi-grid/)
   assert.doesNotMatch(html, /<table|min-w-\[|overflow-x-auto/)
   assert.doesNotMatch(html, />PARTIALLY_PAID</)
 })
@@ -59,7 +77,7 @@ test('house without rooms gets a useful CTA and an empty payment chart has no in
   const html = renderToStaticMarkup(React.createElement(Content, { data }))
   assert.match(html, /Nhà trọ chưa có phòng/)
   assert.match(html, /href="\/boarding-houses\/1\/rooms\/new"/)
-  assert.match(html, /Chưa ghi nhận thanh toán/)
+  assert.match(html, /Thống kê thực thu theo thời gian đang được hoàn thiện/)
   assert.doesNotMatch(html, /NaN|Infinity/)
 })
 
@@ -67,11 +85,11 @@ test('dashboard loading does not flash zero and API failure is friendly with ret
   let state = { isPending: true }
   let queryOptions
   let retried = false
-  const Page = await load('../../pages/dashboard/DashboardPage.jsx', 'DashboardPage', { DashboardContent: Content, dashboardRefetchInterval, dashboardKey: ['dashboard'], getDashboard: () => {}, useQuery: options => { queryOptions = options; return state } })
+  const Page = await load('../../pages/dashboard/DashboardPage.jsx', 'DashboardPage', { DashboardContent: Content, DashboardFilters: () => React.createElement('div'), filterFromSearch: () => ({ preset: 'month', start: '2026-10-01', end: '2026-10-31', houseId: '', compare: false }), dashboardRefetchInterval, dashboardKey: ['dashboard'], getDashboard: () => {}, useSearchParams: () => [new URLSearchParams(), () => {}], useQuery: options => { queryOptions = options; return state } })
   const loading = renderToStaticMarkup(React.createElement(Page))
   assert.match(loading, /role="status"/)
   assert.doesNotMatch(loading, />0</)
-  assert.deepEqual(queryOptions.queryKey, ['dashboard'])
+  assert.equal(queryOptions.queryKey[0], 'dashboard')
   assert.equal(queryOptions.refetchOnWindowFocus, true)
   assert.equal(queryOptions.refetchInterval, dashboardRefetchInterval)
   state = { isError: true, error: new Error('AxiosError SQL secret'), refetch: () => { retried = true } }
@@ -87,4 +105,27 @@ test('manager house cards do not link to owner-only house detail and free text i
   const html = renderToStaticMarkup(React.createElement(Content, { data: { ...fixture, viewer: { ...fixture.viewer, name: '<script>alert(1)</script>' }, boarding_houses: [{ ...fixture.boarding_houses[0], operational_role: 'MANAGER' }] } }))
   assert.doesNotMatch(html, /href="\/boarding-houses\/1"|<script>/)
   assert.match(html, /Được phân công quản lý/)
+})
+
+test('house selection scopes room KPIs and keeps received payments distinct from invoice totals', () => {
+  const other = { ...fixture.boarding_houses[0], id: 2, name: 'Cơ sở thứ hai', total_rooms: 4, occupied_rooms: 1, occupancy_rate: '25.00' }
+  const data = { ...fixture, boarding_houses: [...fixture.boarding_houses, other] }
+  const html = renderToStaticMarkup(React.createElement(Content, { data, filter: { houseId: '2' } }))
+  assert.match(html, /Tổng số phòng.*?<p>4<\/p>/)
+  assert.doesNotMatch(html, />5\.000\.000 đ<|Thực thu trong kỳ|Thực thu tháng/)
+  assert.match(html, /Giá trị hóa đơn<\/dt><dd>35\.000\.000 đ/)
+  assert.doesNotMatch(html, /BeeHouse Dĩ An.*Xem nhà trọ/)
+})
+
+test('unsupported cash hides current and previous metrics even with cached cash values', () => {
+  const data = { ...fixture, analytics: { availability: { cash: 'unsupported' }, totals: { cash_received: '0.00' },
+    previous: { from: '2026-09-01', to_exclusive: '2026-10-01', totals: {
+      cash_received: '1234567.00', invoice_value: '35000000.00', invoice_paid_current: '27000000.00', invoice_due_current: '8000000.00',
+    } },
+  } }
+  const html = renderToStaticMarkup(React.createElement(Content, { data }))
+  assert.match(html, /Thống kê thực thu theo thời gian đang được hoàn thiện để đảm bảo độ chính xác của dữ liệu\./)
+  assert.match(html, /Kỳ trước/)
+  assert.match(html, /27\.000\.000 đ/)
+  assert.doesNotMatch(html, />1\.234\.567 đ<|>5\.000\.000 đ<|<dd>0 đ<\/dd>|Thực thu trong kỳ|Thực thu tháng/)
 })

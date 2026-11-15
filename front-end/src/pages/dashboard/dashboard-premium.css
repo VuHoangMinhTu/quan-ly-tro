@@ -1,0 +1,136 @@
+.bh-premium {
+  --dashboard-blue: #2459a9;
+  --dashboard-blue-soft: #eaf2ff;
+  --dashboard-amber: #935407;
+  --dashboard-amber-soft: #fff4df;
+  --dashboard-gap: 18px;
+}
+.bh-premium .bh-dashboard { gap: var(--dashboard-gap); }
+.bh-premium-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--bh-line);
+}
+.app-content .bh-premium-header h2 { font-size: clamp(28px, 4vw, 42px); letter-spacing: -.045em; }
+.bh-premium-header p { margin-top: 5px; color: var(--bh-ink-soft); font-size: 13px; }
+.bh-premium .bh-dashboard-filters {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: end;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.bh-premium .bh-filter-controls { display: flex; gap: 8px; }
+.bh-premium .bh-filter-controls label { min-width: 0; width: clamp(114px, 13vw, 176px); }
+.bh-premium-advanced summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--bh-line);
+  border-radius: var(--bh-radius-sm);
+  background: var(--bh-surface);
+  cursor: pointer;
+  font-size: 13px;
+}
+.bh-premium-options {
+  position: absolute;
+  z-index: 5;
+  inset-inline-end: 0;
+  width: min(420px, 100%);
+  margin-top: 6px;
+  padding: 14px;
+  border: 1px solid var(--bh-line);
+  border-radius: var(--bh-radius);
+  background: var(--bh-surface);
+  box-shadow: var(--bh-shadow-lg);
+}
+.bh-premium .bh-premium-filter-note { flex-basis: 100%; text-align: right; font-size: 11px; }
+.bh-premium-section { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-bottom: 10px; }
+.bh-premium-section h3 { font-size: 17px; font-weight: 650; }
+.bh-premium-section span { color: var(--bh-ink-soft); font-size: 12px; }
+.bh-premium .bh-dashboard-kpi { min-height: 118px; padding: 14px 16px; }
+.bh-premium .bh-dashboard-kpi > div { align-items: center; }
+.bh-premium .bh-dashboard-kpi > p:first-of-type { margin: 8px 0 4px; font-size: clamp(22px, 2.6vw, 35px); font-variant-numeric: tabular-nums; }
+.bh-premium .bh-dashboard-kpi small { font-size: 12px; }
+.bh-premium .bh-dashboard-kpi:nth-child(2) .bh-dashboard-kpi-icon { background: var(--dashboard-blue-soft); color: var(--dashboard-blue); }
+.bh-premium .bh-dashboard-kpi[data-tone='positive'] { border-color: #a9d8cf; background: #f3fbf8; }
+.bh-premium-rooms { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+.bh-premium-finance { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+.bh-premium-bottom { display: grid; gap: var(--dashboard-gap); grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr) minmax(0, 1.2fr); }
+.bh-premium-bottom .bh-house-grid { grid-template-columns: 1fr; }
+.bh-premium .bh-dashboard-panel { padding: clamp(14px, 1.6vw, 23px); }
+.bh-premium .bh-dashboard-panel > header { margin-bottom: 14px; padding-bottom: 11px; }
+.bh-premium .bh-dashboard-panel h3 { font-size: 17px; }
+.bh-premium .bh-invoice-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 14px;
+  gap: 10px;
+}
+.bh-premium .bh-invoice-metrics > div { padding: 10px 12px; background: var(--bh-canvas); border-radius: var(--bh-radius-sm); }
+.bh-premium .bh-invoice-metrics dd { font-size: 16px; overflow-wrap: anywhere; }
+.bh-premium-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--bh-primary-strong); font-size: 13px; text-decoration: underline; }
+.bh-premium-empty { padding: 22px 14px; border-radius: var(--bh-radius-sm); background: var(--bh-canvas); color: var(--bh-ink-soft); text-align: center; font-size: 13px; }
+.bh-cash-chart { margin: 0; }
+.bh-cash-chart figcaption { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+.bh-cash-chart figcaption > span { width: 10px; height: 10px; border-radius: 3px; background: var(--bh-primary); }
+.bh-cash-chart figcaption small { margin-left: auto; color: var(--bh-ink-soft); }
+.bh-area-frame, .bh-series-frame { min-width: 0; height: 240px; margin-top: 10px; }
+.bh-series-frame { height: 206px; }
+.bh-chart-ring { position: relative; flex: 0 0 155px; width: 155px; height: 155px; }
+.bh-ring-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
+.bh-ring-center strong { font-size: 28px; line-height: 1; }
+.bh-ring-center span { margin-top: 4px; color: var(--bh-ink-soft); font-size: 12px; }
+.bh-occupancy-chart { height: 12px; }
+.bh-premium .bh-occupancy-list { gap: 17px; }
+.bh-premium .bh-room-status { align-items: center; }
+.bh-chart-tooltip {
+  padding: 10px 12px;
+  border: 1px solid var(--bh-line);
+  border-radius: 10px;
+  background: var(--bh-surface);
+  color: var(--bh-ink);
+  box-shadow: var(--bh-shadow-sm);
+  font-size: 12px;
+}
+.bh-chart-tooltip dl > div { display: flex; justify-content: space-between; gap: 12px; }
+.bh-chart-tooltip dd { font-weight: 700; }
+.bh-chart-values { margin-top: 8px; color: var(--bh-ink-soft); font-size: 12px; }
+.bh-chart-values summary { cursor: pointer; width: fit-content; }
+.bh-chart-values li { margin-top: 4px; }
+.bh-demo-banner { display: inline-block; padding: 4px 8px; margin-bottom: 6px; border: 1px solid #eac98d; border-radius: 6px; background: #fff2d6; color: #744508; font-size: 11px; font-weight: 700; }
+.bh-premium-finance, .bh-premium-bottom { align-items: start; }
+.bh-occupancy-link { color: var(--bh-primary-strong); font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
+.bh-occupancy-list article > div:first-child { flex-wrap: wrap; }
+@media (prefers-reduced-motion: no-preference) {
+  .bh-area-frame .recharts-area, .bh-series-frame .recharts-bar, .bh-series-frame .recharts-line { animation: bh-chart-appear 220ms ease-out; }
+  @keyframes bh-chart-appear { from { opacity: .45; } to { opacity: 1; } }
+}
+@media (min-width: 1024px) {
+  .bh-premium .bh-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 960px) {
+  .bh-premium-header { flex-direction: column; }
+  .bh-premium .bh-dashboard-filters { justify-content: start; }
+  .bh-premium .bh-premium-filter-note { text-align: start; }
+  .bh-premium-bottom { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .bh-area-frame { height: 192px; }
+  .bh-series-frame { height: 184px; }
+  .bh-premium-rooms, .bh-premium-finance, .bh-premium-bottom { grid-template-columns: minmax(0, 1fr); }
+  .bh-premium .bh-room-status { align-items: center; }
+  .bh-premium .bh-room-status figcaption { align-self: stretch; }
+  .bh-premium .bh-dashboard-kpi { padding: 11px; }
+  .bh-premium .bh-dashboard-kpi > p:first-of-type { font-size: clamp(18px, 5.7vw, 23px); }
+  .bh-premium .bh-dashboard-kpi h3 { font-size: 12px; }
+}

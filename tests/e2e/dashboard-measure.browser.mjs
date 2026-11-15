@@ -33,7 +33,7 @@ try {
       await page.getByLabel('Mật khẩu', { exact: true }).fill(accounts.A.password)
       const started = performance.now()
       await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click()
-      await page.getByRole('heading', { name: 'Tổng quan vận hành', exact: true }).waitFor()
+      await page.getByRole('heading', { name: 'Tổng quan', exact: true }).waitFor()
       const coldReadyMs = performance.now() - started
       await page.waitForTimeout(200)
       const coldDashboardRequests = server.requests.filter(item => item.path === '/dashboard').length
@@ -45,7 +45,7 @@ try {
         await page.waitForTimeout(200)
         const at = performance.now()
         await page.getByRole('link', { name: 'Dashboard', exact: true }).click()
-        await page.getByRole('heading', { name: 'Tổng quan vận hành', exact: true }).waitFor()
+        await page.getByRole('heading', { name: 'Tổng quan', exact: true }).waitFor()
         warmReadyMs.push(performance.now() - at)
         await page.waitForTimeout(200)
       }

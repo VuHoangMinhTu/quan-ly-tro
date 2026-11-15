@@ -147,12 +147,12 @@ test('same tab A → logout → B: rooms/invoices/tenants, pending B, old URLs, 
 test('dashboard skips fresh remount requests, polls changed totals at 30 seconds, and never shares A cache with B', { timeout: 60000 }, async () => scenario(async ({ page, server }) => {
   await page.clock.install()
   await login(page, 'A')
-  await page.getByRole('heading', { name: 'Tổng quan vận hành', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Tổng quan', exact: true }).waitFor()
   const count = letter => server.requests.filter(item => item.path === '/dashboard' && item.owner === letter).length
   assert.equal(count('A'), 1)
   await tenants(page, 'A')
   await page.getByRole('link', { name: 'Dashboard', exact: true }).click()
-  await page.getByRole('heading', { name: 'Tổng quan vận hành', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Tổng quan', exact: true }).waitFor()
   await page.waitForTimeout(200)
   assert.equal(count('A'), 1)
   server.setDashboardRoomCount('A', 2)
@@ -164,7 +164,7 @@ test('dashboard skips fresh remount requests, polls changed totals at 30 seconds
   await logout(page)
   await guardB(page)
   await login(page, 'B')
-  await page.getByRole('heading', { name: 'Tổng quan vận hành', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Tổng quan', exact: true }).waitFor()
   assert.equal(count('B'), 1)
   await page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Phòng', exact: true }) }).getByText('1', { exact: true }).waitFor()
   await assertB(page)
