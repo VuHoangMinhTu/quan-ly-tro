@@ -142,8 +142,8 @@ class DashboardAnalyticsTest extends TestCase
         $this->assertCount(count($single), $multiple);
         $this->assertLessThanOrEqual(7, count($multiple));
         if (DB::getDriverName() === 'mysql') {
-            $financial = array_filter($multiple, fn ($query) => str_contains($query['query'], 'cash_received_0')
-                || str_contains($query['query'], 'invoice_due_current_0'));
+            $financial = array_filter($multiple, fn ($query) => str_contains($query['query'], ' AS cash_received')
+                || str_contains($query['query'], ' AS invoice_due_current'));
             $this->assertCount(2, $financial);
             foreach ($financial as $query) {
                 $plan = DB::select('EXPLAIN '.$query['query'], $query['bindings']);

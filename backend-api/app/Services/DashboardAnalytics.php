@@ -133,19 +133,47 @@ final class DashboardAnalytics
                 : $value->toDateString();
             $query = (clone $source)->where($column, '>=', $date($buckets[0][0]))
                 ->where($column, '<', $date($buckets[array_key_last($buckets)][1]));
+            $storageZone = config('app.timezone');
+            $grouped = $query->getConnection()->getDriverName() === 'mysql'
+                && ($column !== 'paid_at' || in_array($storageZone, ['UTC', DashboardPeriod::ZONE], true))
+                && count($buckets) > 1;
+            if ($grouped) {
+                $day = $column === 'paid_at' && $storageZone === 'UTC'
+                    ? "DATE(DATE_ADD($column, INTERVAL 7 HOUR))"
+                    : "DATE($column)";
+                $query->selectRaw("$day AS bucket_day")->groupBy('bucket_day');
+                $dayToBucket = [];
+                foreach ($buckets as $i => [$from, $to]) {
+                    for ($cursor = $from; $cursor < $to; $cursor = $cursor->addDay()) {
+                        $dayToBucket[$cursor->toDateString()] = $i;
+                    }
+                }
+            }
             foreach ($metrics as $name => $expression) {
                 $totals[$name] = str_starts_with($name, 'contracts_') || $name === 'invoice_count' ? 0 : '0.00';
+                if ($grouped) {
+                    $query->selectRaw("SUM($expression) AS $name");
+
+                    continue;
+                }
                 foreach ($buckets as $i => [$from, $to]) {
                     $query->selectRaw("SUM(CASE WHEN $column >= ? AND $column < ? THEN $expression ELSE 0 END) AS ${name}_$i", [$date($from), $date($to)]);
                 }
             }
-            $result = $query->toBase()->first();
+            $result = $grouped ? $query->toBase()->get() : $query->toBase()->first();
             foreach ($metrics as $name => $expression) {
+                $values = [];
+                if ($grouped) {
+                    foreach ($result as $dayRow) {
+                        $i = $dayToBucket[$dayRow->bucket_day];
+                        $values[$i] = BigDecimal::of((string) ($dayRow->$name ?? 0))->plus($values[$i] ?? 0);
+                    }
+                }
                 foreach ($buckets as $i => $_) {
-                    $value = $result->{$name.'_'.$i} ?? 0;
+                    $value = $grouped ? ($values[$i] ?? 0) : ($result->{$name.'_'.$i} ?? 0);
                     if (is_int($totals[$name])) {
-                        $series[$i][$name] = (int) $value;
-                        $totals[$name] += (int) $value;
+                        $series[$i][$name] = (int) (string) $value;
+                        $totals[$name] += $series[$i][$name];
                     } else {
                         $amount = BigDecimal::of((string) $value)->toScale(2, RoundingMode::HalfUp);
                         $series[$i][$name] = (string) $amount;
