@@ -10,8 +10,8 @@ use App\Models\Invoice;
 use App\Models\Room;
 use App\Models\UtilityMeter;
 use App\Services\BillingV2Access;
-use App\Services\BoardingHouseAccessService;
 use App\Services\BillingV2Evidence;
+use App\Services\BoardingHouseAccessService;
 use App\Services\ContractSettlementPolicy;
 use App\Services\MonthlyDraftRecalculation;
 use App\Services\MonthlyInvoiceBilling;
@@ -107,7 +107,7 @@ class BillingV2Controller extends Controller
             ->with('tenant:id,full_name')->get(['id', 'room_id', 'tenant_id', 'contract_code']);
 
         return ApiResponse::success([
-            'year' => $data['year'], 'boarding_house' => $house->only(['id', 'name']), 'rooms' => $rooms,
+            'year' => (int) $data['year'], 'boarding_house' => $house->only(['id', 'name']), 'rooms' => $rooms,
             'meters' => $meters, 'checkpoints' => $latestCheckpoints, 'periods' => $periods,
             'invoices' => $invoices, 'active_contracts' => $tenants,
         ], 'Đã tải sổ điện nước của nhà trọ.');
@@ -163,6 +163,7 @@ class BillingV2Controller extends Controller
             }
         }
         abort_if(CarbonImmutable::parse($data['usage_start_at'], 'Asia/Ho_Chi_Minh')->greaterThanOrEqualTo(CarbonImmutable::parse($data['usage_end_at'], 'Asia/Ho_Chi_Minh')), 422, 'Thời điểm kết thúc phải sau thời điểm bắt đầu kỳ sử dụng.');
+
         return ApiResponse::success([$billing->generateForRoom($room, $data['billing_period'], $data['usage_start_at'], $data['usage_end_at'], $data['confirmations'] ?? [], $request->user()->id)], 'Đã kiểm tra riêng phòng; chỉ tạo hóa đơn nháp nếu đủ điều kiện.');
     }
 
@@ -213,6 +214,7 @@ class BillingV2Controller extends Controller
             'reason' => ['required', 'string', 'min:5', 'max:1000'],
             'request_key' => ['required', 'uuid'],
         ]);
+
         return ApiResponse::success($evidence->correctPeriodBoundaries($meter, $data, $request->user()->id),
             'Đã lưu phiên bản đính chính mốc. Nếu hóa đơn nháp đã tính, phải xem trước và xác nhận tính lại trước khi phát hành.');
     }

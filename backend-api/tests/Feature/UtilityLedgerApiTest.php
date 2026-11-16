@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Contract;
 use App\Models\Service;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -33,12 +34,13 @@ class UtilityLedgerApiTest extends TestCase
                 'kind' => 'PERIOD_BOUNDARY', 'observed_at' => '2026-05-01 08:00:00', 'reading_value' => 140,
             ])->assertOk();
 
-        $this->getJson("/api/boarding-houses/{$room->boarding_house_id}/utility-ledger?year=2026")
+        $response = $this->getJson("/api/boarding-houses/{$room->boarding_house_id}/utility-ledger?year=2026")
             ->assertOk()
             ->assertJsonPath('data.year', 2026)
             ->assertJsonPath('data.rooms.0.id', $room->id)
             ->assertJsonPath('data.meters.0.id', $meter->id)
-            ->assertJsonPath('data.checkpoints.0.reading_value', '140.00');
+            ->assertJsonCount(0, 'data.periods');
+        $this->assertSame(140.0, (float) $response->json('data.checkpoints.0.reading_value'));
 
         $this->assertDatabaseCount('invoices', 0);
         $this->assertDatabaseCount('payments', 0);
@@ -46,10 +48,15 @@ class UtilityLedgerApiTest extends TestCase
 
     public function test_ledger_respects_feature_switch_and_house_access(): void
     {
+        config(['billing.v2_enabled' => false]);
         $contract = Contract::factory()->create();
         $house = $contract->room->boardingHouse;
         $this->actingAs($house->landlord->user, 'sanctum')
             ->getJson("/api/boarding-houses/{$house->id}/utility-ledger?year=2026")
             ->assertStatus(503);
+        config(['billing.v2_enabled' => true]);
+        $this->actingAs(User::factory()->create(), 'sanctum')
+            ->getJson("/api/boarding-houses/{$house->id}/utility-ledger?year=2026")
+            ->assertNotFound();
     }
 }
