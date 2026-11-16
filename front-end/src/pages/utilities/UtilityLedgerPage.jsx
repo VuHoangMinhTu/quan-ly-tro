@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import {
   ChevronLeft,
   ChevronRight,
@@ -20,7 +21,7 @@ const localDateTime = () =>
     .toLocaleString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" })
     .replace(" ", "T")
     .slice(0, 16);
-const apiTime = (value) => value.replace("T", " ") + ":00";
+const apiTime = (value) => value.replace("T", " ") + (value.length === 16 ? ":00" : "");
 const monthKey = (year, month) =>
   `${year}-${String(month).padStart(2, "0")}-01`;
 const meterKind = (meter) =>
@@ -41,7 +42,17 @@ function usageFor(periods, meterId, period) {
   return row ? Number(row.quantity) : null;
 }
 
-function MeterInputs({ meters, initial, onChange }) {
+function readingPayload(meter, period, end, value, start) {
+  return {
+    billing_period: period.key,
+    start_observed_at: start ? apiTime(start) : meter.previousAt || apiTime(period.start),
+    end_observed_at: apiTime(end),
+    start_reading_value: meter.previous,
+    end_reading_value: value,
+  };
+}
+
+function MeterInputs({ meters, initial, onChange, dates, setDate, observedAt, period }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {meters.map((meter) => (
@@ -55,6 +66,7 @@ function MeterInputs({ meters, initial, onChange }) {
               {meter.meter_code || `#${meter.id}`}
             </span>
           </p>
+          <p className="mt-2 text-sm">Chỉ số cũ: {display(meter.previous)}</p>
           <label className="mt-2 block text-sm font-medium text-slate-700">
             Chỉ số mới
             <input
@@ -67,14 +79,29 @@ function MeterInputs({ meters, initial, onChange }) {
               className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3"
             />
           </label>
+          {initial[meter.id] != null && initial[meter.id] !== "" && (
+            <p className="mt-2 text-sm">Tiêu thụ: {display(Number(initial[meter.id]) - Number(meter.previous))} {meter.service?.unit}</p>
+          )}
+          <details className="mt-2 text-sm">
+            <summary>Ngày giờ của công tơ</summary>
+            <label className="block">Đầu kỳ
+              <input type="datetime-local" step="1" className="block w-full" value={dates[meter.id]?.start ?? (meter.previousAt?.replace(" ", "T") || period.start)}
+                onChange={event => setDate(meter.id, "start", event.target.value)} />
+            </label>
+            <label className="block">Cuối kỳ
+              <input type="datetime-local" step="1" className="block w-full" value={dates[meter.id]?.end ?? observedAt}
+                onChange={event => setDate(meter.id, "end", event.target.value)} />
+            </label>
+          </details>
         </section>
       ))}
     </div>
   );
 }
 
-function ReadingDialog({ room, meters, period, onClose, onSaved }) {
+function ReadingDialog({ room, meters, period, onClose, onSaved, onNext }) {
   const [readings, setReadings] = useState({});
+  const [dates, setDates] = useState({});
   const [observedAt, setObservedAt] = useState(localDateTime());
   const [error, setError] = useState("");
   const mutation = useMutation({
@@ -83,21 +110,18 @@ function ReadingDialog({ room, meters, period, onClose, onSaved }) {
       for (const meter of meters) {
         const next = readings[meter.id];
         if (next === undefined || next === "") continue;
-        const previous = meter.previous ?? meter.initial_reading ?? 0;
         results.push(
-          confirmBillingPeriodBoundaries(meter.id, {
-            start_observed_at: apiTime(period.start),
-            end_observed_at: apiTime(observedAt),
-            start_reading_value: previous,
-            end_reading_value: next,
-          }),
+          confirmBillingPeriodBoundaries(meter.id, readingPayload(meter, period, dates[meter.id]?.end ?? observedAt, next, dates[meter.id]?.start)),
         );
       }
       if (!results.length)
         throw new Error("Nhập ít nhất một chỉ số mới trước khi lưu.");
       return Promise.all(results);
     },
-    onSuccess: onSaved,
+    onSuccess: (_, advance) => {
+      onSaved();
+      if (advance) onNext();
+    },
     onError: (err) => setError(getApiErrorMessage(err)),
   });
   return (
@@ -139,6 +163,12 @@ function ReadingDialog({ room, meters, period, onClose, onSaved }) {
           <MeterInputs
             meters={meters}
             initial={readings}
+            dates={dates}
+            observedAt={observedAt}
+            period={period}
+            setDate={(id, field, value) => setDates(state => ({
+              ...state, [id]: { ...state[id], [field]: value },
+            }))}
             onChange={(id, value) =>
               setReadings((state) => ({ ...state, [id]: value }))
             }
@@ -168,6 +198,12 @@ function ReadingDialog({ room, meters, period, onClose, onSaved }) {
           >
             {mutation.isPending ? "Đang lưu…" : "Lưu chỉ số"}
           </button>
+          {onNext && <button type="button" disabled={mutation.isPending}
+            onClick={() => mutation.mutate(true)}
+            className="min-h-11 rounded-lg bg-teal-700 px-4 font-semibold text-white">
+            Lưu & sang phòng tiếp theo
+          </button>}
+          {mutation.isSuccess && <p role="status">Đã lưu chỉ số cho {room.room_code}.</p>}
         </div>
       </div>
     </div>
@@ -180,33 +216,27 @@ function BulkDialog({ rooms, metersByRoom, period, onClose, onSaved }) {
     () => new Set(rooms.map((room) => room.id)),
   );
   const [outcome, setOutcome] = useState({});
-  const save = async () => {
+  const [busy, setBusy] = useState(false);
+  const [observedAt, setObservedAt] = useState(localDateTime);
+  const [meterDates, setMeterDates] = useState({});
+  const save = async (retry = false) => {
+    setBusy(true);
     const next = {};
     for (const room of rooms.filter((item) => selected.has(item.id))) {
-      try {
-        await Promise.all(
-          (metersByRoom[room.id] || [])
-            .filter(
-              (meter) =>
-                values[meter.id] !== undefined && values[meter.id] !== "",
-            )
-            .map((meter) =>
-              confirmBillingPeriodBoundaries(meter.id, {
-                start_observed_at: apiTime(period.start),
-                end_observed_at: apiTime(localDateTime()),
-                start_reading_value:
-                  meter.previous ?? meter.initial_reading ?? 0,
-                end_reading_value: values[meter.id],
-              }),
-            ),
-        );
-        next[room.id] = "Đã lưu";
-      } catch {
-        next[room.id] = "Lỗi – thử lại";
+      for (const meter of metersByRoom[room.id] || []) {
+        const value = values[meter.id];
+        if (value == null || value === "" || outcome[meter.id] === "Đã lưu" || (retry && !outcome[meter.id])) continue;
+        try {
+          await confirmBillingPeriodBoundaries(meter.id, readingPayload(meter, period, meterDates[meter.id] || observedAt, value));
+          next[meter.id] = "Đã lưu";
+        } catch (error) {
+          next[meter.id] = getApiErrorMessage(error);
+        }
       }
     }
     setOutcome((current) => ({ ...current, ...next }));
     onSaved();
+    setBusy(false);
   };
   return (
     <div
@@ -235,8 +265,12 @@ function BulkDialog({ rooms, metersByRoom, period, onClose, onSaved }) {
           </button>
         </header>
         <div className="min-h-0 flex-1 overflow-auto p-4">
-          <table className="min-w-[760px] w-full text-sm">
-            <thead className="sticky top-0 bg-white text-left text-slate-600">
+          <label className="mb-3 block text-sm">Ngày giờ ghi mặc định
+            <input type="datetime-local" value={observedAt} disabled={busy}
+              onChange={event => setObservedAt(event.target.value)} className="ml-2 rounded border p-2" />
+          </label>
+          <table className="block w-full text-sm sm:table sm:min-w-[760px]">
+            <thead className="hidden sm:table-header-group sticky top-0 bg-white text-left text-slate-600">
               <tr className="border-b">
                 <th className="p-2">
                   <input
@@ -258,22 +292,22 @@ function BulkDialog({ rooms, metersByRoom, period, onClose, onSaved }) {
                 <th className="p-2">Trạng thái</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="block sm:table-row-group">
               {rooms.map((room) => {
                 const list = metersByRoom[room.id] || [];
-                const electric = list.find((m) => meterKind(m) === "electric");
-                const water = list.find((m) => meterKind(m) === "water");
                 const input = (meter) =>
                   meter ? (
-                    <div className="flex items-center gap-1">
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span className="w-full font-medium sm:hidden">{meter.service?.name}</span>
                       <span>
                         {display(meter.previous ?? meter.initial_reading ?? 0)}
                       </span>
                       <input
-                        aria-label={`Chỉ số mới ${room.room_code}`}
+                        aria-label={`Chỉ số mới ${room.room_code} ${meter.service?.name || ""}`}
                         inputMode="decimal"
                         type="number"
                         value={values[meter.id] ?? ""}
+                        disabled={busy || outcome[meter.id] === "Đã lưu"}
                         onChange={(event) =>
                           setValues((state) => ({
                             ...state,
@@ -293,13 +327,20 @@ function BulkDialog({ rooms, metersByRoom, period, onClose, onSaved }) {
                                 ),
                             )}
                       </span>
+                      <details className="text-xs">
+                        <summary>Giờ ghi</summary>
+                        <input type="datetime-local" value={meterDates[meter.id] ?? observedAt}
+                          aria-label={`Giờ ghi ${room.room_code} ${meter.service?.name || ""}`}
+                          disabled={busy || outcome[meter.id] === "Đã lưu"}
+                          onChange={event => setMeterDates(state => ({ ...state, [meter.id]: event.target.value }))} />
+                      </details>
                     </div>
                   ) : (
                     "—"
                   );
                 return (
-                  <tr key={room.id} className="border-b border-slate-100">
-                    <td className="p-2">
+                  <tr key={room.id} className="mb-3 flex flex-wrap rounded-lg border border-slate-200 sm:table-row sm:border-x-0 sm:border-t-0">
+                    <td className="p-2 sm:table-cell">
                       <input
                         aria-label={`Chọn ${room.room_code}`}
                         type="checkbox"
@@ -318,9 +359,9 @@ function BulkDialog({ rooms, metersByRoom, period, onClose, onSaved }) {
                       />
                     </td>
                     <td className="p-2 font-semibold">{room.room_code}</td>
-                    <td className="p-2">{input(electric)}</td>
-                    <td className="p-2">{input(water)}</td>
-                    <td className="p-2">{outcome[room.id] || "Chưa lưu"}</td>
+                    <td className="w-full px-2 py-1 sm:w-auto">{list.filter(m => meterKind(m) === "electric").map(m => <div key={m.id}>{input(m)}</div>)}</td>
+                    <td className="w-full px-2 py-1 sm:w-auto">{list.filter(m => meterKind(m) === "water").map(m => <div key={m.id}>{input(m)}</div>)}</td>
+                    <td className="w-full p-2 sm:w-auto">{list.map(m => <div key={m.id}>{m.meter_code || m.service?.name}: {outcome[m.id] || "Chưa lưu"}</div>)}</td>
                   </tr>
                 );
               })}
@@ -337,10 +378,15 @@ function BulkDialog({ rooms, metersByRoom, period, onClose, onSaved }) {
           </button>
           <button
             type="button"
-            onClick={save}
+            onClick={() => save()}
+            disabled={busy}
             className="min-h-11 rounded-lg bg-teal-700 px-5 font-semibold text-white"
           >
             Lưu tất cả
+          </button>
+          <button type="button" disabled={busy || !Object.values(outcome).some(value => value !== "Đã lưu")}
+            onClick={() => save(true)} className="min-h-11 rounded-lg border px-4">
+            Thử lại mục lỗi
           </button>
         </footer>
       </div>
@@ -349,28 +395,50 @@ function BulkDialog({ rooms, metersByRoom, period, onClose, onSaved }) {
 }
 
 export default function UtilityLedgerPage() {
-  const [year, setYear] = useState(currentYear);
+  const [params, setParams] = useSearchParams();
+  const savedMonth = params.get("period");
+  const [year, setYear] = useState(savedMonth && /^20\d{2}-(0[1-9]|1[0-2])$/.test(savedMonth) ? Number(savedMonth.slice(0, 4)) : currentYear);
   const [recordMonth, setRecordMonth] = useState(
     () =>
-      `${currentYear}-${String(new Date().getMonth() + 1).padStart(2, "0")}`,
+      savedMonth && /^20\d{2}-(0[1-9]|1[0-2])$/.test(savedMonth)
+        ? savedMonth
+        : `${currentYear}-${String(new Date().getMonth() + 1).padStart(2, "0")}`,
   );
-  const [house, setHouse] = useState("");
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedRoom, setSelectedRoom] = useState(null);
+  const [dialogRoom, setDialogRoom] = useState(null);
   const [bulk, setBulk] = useState(false);
   const houses = useQuery({
     queryKey: ["boarding-houses"],
     queryFn: getBoardingHouses,
   });
-  const houseId = house || houses.data?.data?.data?.[0]?.id || "";
+  const houseId = params.get("house") || "";
   const ledger = useQuery({
     queryKey: ["utility-ledger", houseId, year],
     queryFn: () => getUtilityLedger(houseId, year),
     enabled: Boolean(houseId),
   });
   const client = useQueryClient();
-  const data = ledger.data?.data?.data;
+  const raw = ledger.data?.data?.data;
+  const data = useMemo(() => {
+    if (!raw) return null;
+    const points = new Map(raw.checkpoints.map(point => [Number(point.id), point]));
+    const periods = new Map(raw.periods.map(period => [`${period.utility_meter_id}:${period.billing_period}`, period]));
+    for (const link of raw.boundaries) {
+      const start = points.get(Number(link.start_checkpoint_id));
+      const end = points.get(Number(link.end_checkpoint_id));
+      if (!start || !end) continue;
+      const key = `${link.utility_meter_id}:${link.billing_period}`;
+      periods.set(key, {
+        ...link, start, end,
+        quantity: Number(end.reading_value) - Number(start.reading_value),
+        settled: Number(periods.get(key)?.start_checkpoint_id) === Number(start.id) &&
+          Number(periods.get(key)?.end_checkpoint_id) === Number(end.id),
+      });
+    }
+    return { ...raw, periods: [...periods.values()] };
+  }, [raw]);
   const rooms = data?.rooms || [];
   const metersByRoom = useMemo(
     () =>
@@ -382,13 +450,14 @@ export default function UtilityLedgerPage() {
             .filter(
               (point) =>
                 Number(point.utility_meter_id) === Number(meter.id) &&
-                point.observed_at < `${recordMonth}-01 00:00:00`,
+                point.observed_at <= `${recordMonth}-01 00:00:00`,
             )
             .sort((a, b) => a.observed_at.localeCompare(b.observed_at))
             .at(-1);
           return {
             ...meter,
             previous: previous?.reading_value ?? meter.initial_reading,
+            previousAt: previous?.observed_at,
           };
         })
         .reduce((result, meter) => {
@@ -411,14 +480,17 @@ export default function UtilityLedgerPage() {
     room.room_code.toLowerCase().includes(search.toLowerCase()),
   );
   const period = {
+    key: `${recordMonth}-01`,
     start: `${recordMonth}-01T00:00`,
     label: `tháng ${Number(recordMonth.slice(5))}/${recordMonth.slice(0, 4)}`,
   };
+  const writable = room => room.room_type === "PRIVATE_ROOM" && (metersByRoom[room.id] || []).some(meter => meterKind(meter) !== "other");
   const openRoom = (room) =>
-    setSelectedRoom({ ...room, tenant: contracts[room.id] });
+    setDialogRoom({ ...room, tenant: contracts[room.id] });
+  const nextRoom = dialogRoom && visible.slice(visible.findIndex(room => room.id === dialogRoom.id) + 1).find(writable);
   const saved = () =>
     client.invalidateQueries({ queryKey: ["utility-ledger", houseId, year] });
-  if (houses.isPending || ledger.isPending)
+  if (houses.isPending || (houseId && ledger.isPending))
     return (
       <p role="status" className="p-5 text-slate-600">
         Đang tải sổ điện nước…
@@ -448,10 +520,17 @@ export default function UtilityLedgerPage() {
           <label className="min-w-56 flex-1 text-sm font-semibold text-slate-700">
             Nhà trọ
             <select
+              aria-label="Nhà trọ"
               value={houseId}
-              onChange={(event) => setHouse(event.target.value)}
+              onChange={(event) => {
+                const id = event.target.value;
+                setParams(id ? { house: id, period: recordMonth } : {}, { replace: true });
+                setTab("all");
+                setSelectedRoom(null);
+              }}
               className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3"
             >
+              <option value="">Chọn nhà trọ</option>
               {(houses.data?.data?.data || []).map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.name}
@@ -481,13 +560,19 @@ export default function UtilityLedgerPage() {
             <input
               type="month"
               value={recordMonth}
-              onChange={(event) => setRecordMonth(event.target.value)}
+              onChange={(event) => {
+                if (!event.target.value) return;
+                setRecordMonth(event.target.value);
+                setYear(Number(event.target.value.slice(0, 4)));
+                setParams({ house: houseId, period: event.target.value }, { replace: true });
+              }}
               className="mt-1 min-h-11 rounded-lg border border-slate-300 px-3"
             />
           </label>
           <button
             type="button"
-            onClick={() => setBulk(true)}
+              disabled={!houseId || !visible.length}
+              onClick={() => setBulk(true)}
             className="min-h-11 rounded-lg bg-teal-700 px-4 font-semibold text-white hover:bg-teal-800"
           >
             + Ghi chỉ số hàng loạt
@@ -561,7 +646,7 @@ export default function UtilityLedgerPage() {
                         <button
                           onClick={() => {
                             setTab("room");
-                            openRoom(room);
+                            setSelectedRoom({ ...room, tenant: contracts[room.id] });
                           }}
                           className="underline decoration-teal-300 underline-offset-4"
                         >
@@ -616,6 +701,7 @@ export default function UtilityLedgerPage() {
                       <td className="sticky right-0 z-10 bg-white p-2 text-center">
                         <button
                           type="button"
+                          disabled={!writable(room)}
                           onClick={() => openRoom(room)}
                           className="inline-flex min-h-10 items-center gap-1 rounded-lg bg-teal-50 px-3 font-semibold text-teal-800 hover:bg-teal-100"
                         >
@@ -643,6 +729,7 @@ export default function UtilityLedgerPage() {
                     </p>
                   </div>
                   <button
+                    disabled={!writable(selectedRoom)}
                     onClick={() => openRoom(selectedRoom)}
                     className="min-h-11 rounded-lg bg-teal-700 px-4 font-semibold text-white"
                   >
@@ -677,6 +764,11 @@ export default function UtilityLedgerPage() {
                         className="rounded-xl border border-slate-200 p-3"
                       >
                         <strong>Tháng {index + 1}</strong>
+                        {data.periods.filter(row => row.billing_period === month && row.start && roomMeters.some(meter => meter.id === Number(row.utility_meter_id))).map(row => (
+                          <p key={row.utility_meter_id} className="mt-2 text-sm">
+                            {roomMeters.find(meter => meter.id === Number(row.utility_meter_id))?.service?.name}: {display(row.start.reading_value)} → {display(row.end.reading_value)} · {row.end.observed_at} · {row.settled ? "Đã quyết toán" : "Đã xác nhận chỉ số"}
+                          </p>
+                        ))}
                         {recorded ? (
                           <>
                             <p className="mt-2 text-amber-700">
@@ -711,21 +803,20 @@ export default function UtilityLedgerPage() {
           </div>
         )}
       </section>
-      {selectedRoom && (
+      {dialogRoom && (
         <ReadingDialog
-          room={selectedRoom}
-          meters={metersByRoom[selectedRoom.id] || []}
+          key={dialogRoom.id}
+          room={dialogRoom}
+          meters={metersByRoom[dialogRoom.id] || []}
           period={period}
-          onClose={() => setSelectedRoom(null)}
-          onSaved={() => {
-            saved();
-            setSelectedRoom(null);
-          }}
+          onClose={() => setDialogRoom(null)}
+          onSaved={saved}
+          onNext={nextRoom ? () => openRoom(nextRoom) : undefined}
         />
       )}
       {bulk && (
         <BulkDialog
-          rooms={visible}
+          rooms={visible.filter(writable)}
           metersByRoom={metersByRoom}
           period={period}
           onClose={() => setBulk(false)}

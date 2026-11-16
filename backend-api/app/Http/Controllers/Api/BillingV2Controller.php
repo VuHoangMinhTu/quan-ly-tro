@@ -9,6 +9,7 @@ use App\Models\Contract;
 use App\Models\Invoice;
 use App\Models\Room;
 use App\Models\UtilityMeter;
+use App\Models\UtilityMeterPeriodBoundary;
 use App\Services\BillingV2Access;
 use App\Services\BillingV2Evidence;
 use App\Services\BoardingHouseAccessService;
@@ -20,6 +21,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class BillingV2Controller extends Controller
 {
@@ -98,6 +100,8 @@ class BillingV2Controller extends Controller
             ->unique(fn ($point) => $point->utility_meter_id.':'.$point->scope_key)->values();
         $periods = DB::table('utility_billing_periods')->whereIn('utility_meter_id', $meterIds)
             ->where('billing_period', '>=', $from)->where('billing_period', '<', $until)->get();
+        $boundaries = UtilityMeterPeriodBoundary::whereIn('utility_meter_id', $meterIds)
+            ->where('billing_period', '>=', $from)->where('billing_period', '<', $until)->get();
         $invoices = DB::table('invoice_obligations')->join('invoices', 'invoices.id', '=', 'invoice_obligations.invoice_id')
             ->whereIn('invoice_obligations.room_id', $roomIds)->where('invoice_obligations.billing_period', '>=', $from)
             ->where('invoice_obligations.billing_period', '<', $until)
@@ -109,7 +113,7 @@ class BillingV2Controller extends Controller
         return ApiResponse::success([
             'year' => (int) $data['year'], 'boarding_house' => $house->only(['id', 'name']), 'rooms' => $rooms,
             'meters' => $meters, 'checkpoints' => $latestCheckpoints, 'periods' => $periods,
-            'invoices' => $invoices, 'active_contracts' => $tenants,
+            'invoices' => $invoices, 'active_contracts' => $tenants, 'boundaries' => $boundaries,
         ], 'Đã tải sổ điện nước của nhà trọ.');
     }
 
@@ -180,12 +184,18 @@ class BillingV2Controller extends Controller
     {
         $meter = UtilityMeter::whereHas('room.boardingHouse.landlord', fn ($q) => $q->where('user_id', $request->user()->id))->findOrFail($id);
         $data = $request->validate([
+            'billing_period' => ['sometimes', 'required', 'date_format:Y-m-01'],
             'start_observed_at' => ['required', 'date_format:Y-m-d H:i:s'],
             'end_observed_at' => ['required', 'date_format:Y-m-d H:i:s', 'after:start_observed_at'],
             'start_reading_value' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
             'end_reading_value' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999999999.99', 'gte:start_reading_value'],
         ]);
         $ids = DB::transaction(function () use ($evidence, $meter, $data, $request) {
+            Room::query()->lockForUpdate()->findOrFail($meter->room_id);
+            $period = $data['billing_period'] ?? null;
+            if ($period !== null && ($meter->room->room_type !== 'PRIVATE_ROOM' || ! $meter->is_active)) {
+                throw ValidationException::withMessages(['billing_period' => 'Chỉ ghi kỳ cho công tơ đang hoạt động của phòng riêng.']);
+            }
             $first = $evidence->checkpoint($meter, [
                 'kind' => 'PERIOD_BOUNDARY', 'contract_id' => null,
                 'observed_at' => $data['start_observed_at'], 'reading_value' => $data['start_reading_value'],
@@ -195,7 +205,22 @@ class BillingV2Controller extends Controller
                 'observed_at' => $data['end_observed_at'], 'reading_value' => $data['end_reading_value'],
             ], $request->user()->id);
 
-            return ['start_checkpoint_id' => $first, 'end_checkpoint_id' => $last];
+            $pair = ['start_checkpoint_id' => $first, 'end_checkpoint_id' => $last];
+            if ($period !== null) {
+                $key = ['utility_meter_id' => $meter->id, 'billing_period' => $period];
+                $link = UtilityMeterPeriodBoundary::where($key)->first();
+                $settled = DB::table('utility_billing_periods')->where($key)->first();
+                foreach (array_filter([$link, $settled]) as $existing) {
+                    if ((int) $existing->start_checkpoint_id !== $first || (int) $existing->end_checkpoint_id !== $last) {
+                        throw ValidationException::withMessages(['billing_period' => 'Kỳ đã có mốc khác. Hãy xem lịch sử và dùng đính chính.']);
+                    }
+                }
+                if (! $link) {
+                    UtilityMeterPeriodBoundary::create($key + $pair);
+                }
+            }
+
+            return $pair;
         }, 3);
 
         return ApiResponse::success($ids, 'Đã lưu cả hai mốc công tơ. Chưa tính tiền hoặc phát hành hóa đơn.');

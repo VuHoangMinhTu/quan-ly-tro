@@ -14,18 +14,20 @@ const combined = process.env.BILLING_V2_COMBINED_BROWSER === '1'
 const monthly = process.env.BILLING_V2_MONTHLY_BROWSER === '1'
 const recalculate = process.env.BILLING_V2_RECALCULATE_BROWSER === '1'
 const flagOff = process.env.BILLING_V2_TEST_ENABLED === 'false'
-const output = path.join(root, flagOff ? 'tmp/billing-v2-browser-flag-off' : recalculate ? 'tmp/billing-v2-browser-draft-update' : monthly ? 'tmp/billing-v2-browser-monthly' : combined ? 'tmp/billing-v2-browser-combined' : 'tmp/billing-v2-browser')
+const utilityLedger = process.env.UTILITY_LEDGER_BROWSER === '1'
+const output = path.join(root, utilityLedger ? 'tmp/utility-ledger-browser' : flagOff ? 'tmp/billing-v2-browser-flag-off' : recalculate ? 'tmp/billing-v2-browser-draft-update' : monthly ? 'tmp/billing-v2-browser-monthly' : combined ? 'tmp/billing-v2-browser-combined' : 'tmp/billing-v2-browser')
 const dist = path.join(root, 'tmp/billing-v2-dist')
 const php = process.env.E2E_PHP_PATH
 const playwrightPackage = process.env.PLAYWRIGHT_PACKAGE_PATH || path.join(root, 'front-end', 'node_modules', 'playwright')
 const { chromium } = createRequire(import.meta.url)(playwrightPackage)
 
-test('React + Laravel + isolated MySQL: checkout, actual deposit, tiered vacancy, lost response and retry', { timeout: 120000 }, async () => {
+test(utilityLedger ? 'React + Laravel + isolated MySQL: utility ledger' : 'React + Laravel + isolated MySQL: checkout, actual deposit, tiered vacancy, lost response and retry', { timeout: 120000 }, async () => {
   assert.ok(php && existsSync(php), 'Provide local PHP')
   assert.ok(existsSync(path.join(dist, 'index.html')), 'Build billing-v2-dist first')
   assert.equal(existsSync(path.join(backend, 'bootstrap/cache/config.php')), false)
   await mkdir(output, { recursive: true })
   const env = { ...process.env, APP_ENV: 'testing', APP_URL: 'http://127.0.0.1:8848', APP_DEBUG: 'false', APP_KEY: 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=', FRONTEND_URL: 'http://127.0.0.1:8849', BILLING_V2_ENABLED: flagOff ? 'false' : 'true', DB_CONNECTION: 'mysql', DB_HOST: '127.0.0.1', DB_PORT: '13368', DB_DATABASE: 'beehouse_billing_v2_test', DB_USERNAME: 'billing_test', DB_PASSWORD: '', DB_URL: '', DB_SOCKET: '', CACHE_STORE: 'array', SESSION_DRIVER: 'array', QUEUE_CONNECTION: 'sync', MAIL_MAILER: 'array', LOG_CHANNEL: 'stderr', BCRYPT_ROUNDS: '4' }
+  if (utilityLedger) Object.assign(env, { DB_PORT: '13369', DB_PASSWORD: process.env.DB_PASSWORD || '' })
   const cli = command => {
     const result = spawnSync(php, [path.join(backend, 'tests/Fixtures/BillingV2Browser.php'), command], { cwd: backend, env, encoding: 'utf8', windowsHide: true })
     assert.equal(result.status, 0, result.stdout + result.stderr)
@@ -66,6 +68,59 @@ test('React + Laravel + isolated MySQL: checkout, actual deposit, tiered vacancy
     await page.getByLabel('Email', { exact: true }).fill('billing-browser@example.invalid')
     await page.getByLabel('Mật khẩu', { exact: true }).fill('BrowserTest123!')
     await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click(); await page.waitForURL('**/dashboard')
+    if (utilityLedger) {
+      const shot = name => page.screenshot({ path: path.join(output, name + '.png'), fullPage: true })
+      await page.goto('http://127.0.0.1:8849/utilities')
+      const house = page.getByLabel('Nhà trọ', { exact: true })
+      await house.locator(`option[value="${fixture.house}"]`).waitFor({ state: 'attached' })
+      await shot('01-chon-nha-tro')
+      await house.selectOption(String(fixture.house))
+      await page.getByRole('button', { name: 'P112', exact: true }).waitFor()
+      assert.equal(await page.getByRole('button', { name: 'Cả nhà' }).getAttribute('aria-pressed'), 'true')
+      await shot('02-ca-nha')
+      await page.getByRole('button', { name: 'P101', exact: true }).click()
+      assert.equal(await page.locator('article').count(), 12)
+      await shot('03-tung-phong')
+      await page.getByLabel('Kỳ đang ghi').fill('2026-11')
+      await page.getByRole('button', { name: 'Ghi chỉ số', exact: true }).click()
+      const dialog = page.getByRole('dialog')
+      await dialog.getByLabel('Chỉ số mới').first().fill('950')
+      await dialog.getByLabel('Chỉ số mới').last().fill('95')
+      await dialog.getByLabel('Ngày giờ ghi', { exact: true }).fill('2026-11-15T08:00')
+      await shot('04-ghi-tung-phong')
+      await dialog.getByRole('button', { name: 'Lưu chỉ số', exact: true }).click()
+      await dialog.getByRole('status').waitFor()
+      await shot('06-da-luu')
+      await dialog.getByRole('button', { name: 'Đóng', exact: true }).first().click()
+      await page.reload()
+      const savedRoom = page.getByRole('row').filter({ has: page.getByRole('button', { name: 'P101', exact: true }) })
+      await savedRoom.getByText('50 kWh', { exact: true }).waitFor()
+      await page.getByRole('button', { name: /Ghi chỉ số hàng loạt/ }).click()
+      const bulk = page.getByRole('dialog')
+      await bulk.getByLabel('Ngày giờ ghi mặc định').fill('2026-11-15T08:00')
+      await bulk.getByLabel('Chỉ số mới P102 Điện giả lập').fill('960')
+      await bulk.getByLabel('Chỉ số mới P102 Nước giả lập').fill('80')
+      await shot('05-ghi-hang-loat')
+      await bulk.getByRole('button', { name: 'Lưu tất cả' }).click()
+      await bulk.getByText('Điện giả lập: Đã lưu', { exact: true }).waitFor()
+      await bulk.getByLabel('Chỉ số mới P102 Nước giả lập').fill('96')
+      await bulk.getByRole('button', { name: 'Thử lại mục lỗi' }).click()
+      await bulk.getByText('Nước giả lập: Đã lưu', { exact: true }).waitFor()
+      await page.setViewportSize({ width: 390, height: 844 })
+      await bulk.getByLabel('Chỉ số mới P102 Điện giả lập').scrollIntoViewIfNeeded()
+      await page.screenshot({ path: path.join(output, '07-mobile.png') })
+      await bulk.getByRole('button', { name: 'Đóng', exact: true }).first().click()
+      await page.setViewportSize({ width: 1366, height: 900 })
+      const thirdRoom = page.getByRole('row').filter({ has: page.getByRole('button', { name: 'P103', exact: true }) })
+      await thirdRoom.getByRole('button', { name: 'Ghi chỉ số', exact: true }).click()
+      await dialog.getByLabel('Chỉ số mới').first().fill('970')
+      await dialog.getByLabel('Ngày giờ ghi', { exact: true }).fill('2026-11-15T08:00')
+      await dialog.getByRole('button', { name: 'Lưu & sang phòng tiếp theo' }).click()
+      await dialog.getByRole('heading', { name: /P104/ }).waitFor()
+      assert.equal(await dialog.getByLabel('Chỉ số mới').first().inputValue(), '')
+      assert.deepEqual(cli('assert-empty'), { invoices: 0, payments: 0, payos_requests: 0 })
+      return
+    }
     await page.goto('http://127.0.0.1:8849/invoices')
     await page.getByLabel('Chọn nhà trọ', { exact: true }).selectOption(String(fixture.house))
     if (flagOff) {

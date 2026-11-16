@@ -25,7 +25,7 @@ class BillingV2MysqlConcurrencyTest extends TestCase
             $this->markTestSkipped('Requires the isolated MySQL configuration, never simulated with SQLite.');
         }
         $this->assertSame('127.0.0.1', config('database.connections.mysql.host'));
-        $this->assertSame('13368', (string) config('database.connections.mysql.port'));
+        $this->assertContains((string) config('database.connections.mysql.port'), ['13368', '13369']);
         $this->assertSame('beehouse_billing_v2_test', DB::selectOne('SELECT DATABASE() AS name')->name);
         $this->assertSame('billing_test', config('database.connections.mysql.username'));
         Artisan::call('migrate:fresh', ['--force' => true, '--no-interaction' => true]);
@@ -39,10 +39,10 @@ class BillingV2MysqlConcurrencyTest extends TestCase
         $contract->save();
         $contract->agreedServices()->create(['service_id' => $service->id, 'service_name' => $service->name, 'service_type' => $service->type, 'billing_method' => 'TIERED', 'base_price' => 0, 'effective_from' => '2026-10-01', 'is_active' => true, 'pricing_snapshot' => $service->priceTiers->map->only(['from_quantity', 'to_quantity', 'unit_price', 'tier_order'])->all()]);
         $meter = $room->utilityMeters()->create([
-    'service_id' => $service->id,
-    'initial_reading' => 0,
-    'is_active' => true,
-]);
+            'service_id' => $service->id,
+            'initial_reading' => 0,
+            'is_active' => true,
+        ]);
         foreach ([['PERIOD_BOUNDARY', null, 'P:2026-10-01 00:00:00', '2026-10-01 00:00:00', 100], ['CHECK_IN', $contract->id, 'CHECK_IN:'.$contract->id, '2026-10-01 00:00:00', 100], ['PERIOD_BOUNDARY', null, 'P:2026-11-01 00:00:00', '2026-11-01 00:00:00', 150]] as [$kind, $contractId, $scope, $at, $reading]) {
             DB::table('utility_checkpoints')->insert(['utility_meter_id' => $meter->id, 'contract_id' => $contractId, 'kind' => $kind, 'scope_key' => $scope, 'revision' => 1, 'observed_at' => $at, 'reading_value' => $reading, 'confirmed_by' => $actor, 'created_at' => now()]);
         }
