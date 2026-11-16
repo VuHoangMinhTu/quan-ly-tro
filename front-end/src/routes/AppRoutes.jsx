@@ -29,6 +29,7 @@ import ContractNavigationPage from '../pages/contracts/ContractNavigationPage'
 import ContractTemplateListPage from '../pages/contracts/ContractTemplateListPage'
 import ServiceListPage from '../pages/services/ServiceListPage'
 import UtilityMeterDetailPage from '../pages/utilities/UtilityMeterDetailPage'
+import UtilityLedgerPage from '../pages/utilities/UtilityLedgerPage'
 import InvoiceCreatePage from '../pages/invoices/InvoiceCreatePage'
 import BillingV2Page from '../pages/invoices/BillingV2Page'
 import InvoiceDetailPage from '../pages/invoices/InvoiceDetailPage'
@@ -90,7 +91,7 @@ export default function AppRoutes() {
             <Route path="/contract-templates/new" element={<ContractTemplateEditorPage />} />
             <Route path="/contract-templates/:id" element={<ContractTemplateEditorPage />} />
             <Route path="/services" element={<ModuleNavigationPage module="services" />} />
-            <Route path="/utilities" element={<ModuleNavigationPage module="utilities" />} />
+            <Route path="/utilities" element={<UtilityLedgerPage />} />
             <Route path="/invoices" element={<ModuleNavigationPage module="invoices" />} />
             <Route path="/boarding-houses" element={<BoardingHouseListPage />} />
             <Route path="/boarding-houses/new" element={<BoardingHouseCreatePage />} />

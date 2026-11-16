@@ -10,6 +10,7 @@ use App\Models\Invoice;
 use App\Models\Room;
 use App\Models\UtilityMeter;
 use App\Services\BillingV2Access;
+use App\Services\BoardingHouseAccessService;
 use App\Services\BillingV2Evidence;
 use App\Services\ContractSettlementPolicy;
 use App\Services\MonthlyDraftRecalculation;
@@ -22,6 +23,8 @@ use Illuminate\Support\Facades\DB;
 
 class BillingV2Controller extends Controller
 {
+    public function __construct(private BoardingHouseAccessService $boardingHouseAccess) {}
+
     public function status(Request $request, BillingV2Access $access): JsonResponse
     {
         return ApiResponse::success(['enabled' => $access->enabledFor($request->user())]);
@@ -71,6 +74,43 @@ class BillingV2Controller extends Controller
             ->with(['agreedServices', 'room:id,room_code,room_type', 'bed:id,bed_code', 'tenant:id,full_name'])->get(['id', 'room_id', 'tenant_id', 'contract_type', 'bed_id', 'contract_code', 'monthly_rent', 'start_date', 'end_date']);
 
         return ApiResponse::success($contracts);
+    }
+
+    /**
+     * One read model for the owner-facing utility ledger. Checkpoints are
+     * returned as evidence, while billing periods provide the authoritative
+     * period-to-invoice relationship; a checkpoint's calendar month alone is
+     * never used to infer a billing period.
+     */
+    public function utilityLedger(Request $request, int $id): JsonResponse
+    {
+        $house = $this->boardingHouseAccess->house($request->user(), $id);
+        $data = $request->validate(['year' => ['required', 'integer', 'min:2000', 'max:2200']]);
+        $from = sprintf('%04d-01-01', $data['year']);
+        $until = sprintf('%04d-01-01', $data['year'] + 1);
+        $rooms = $house->rooms()->orderBy('sort_order')->orderBy('room_code')->get(['id', 'room_code', 'room_name', 'room_type', 'status']);
+        $roomIds = $rooms->pluck('id');
+        $meters = UtilityMeter::query()->with('service:id,name,unit,type')
+            ->whereIn('room_id', $roomIds)->where('is_active', true)->orderBy('id')->get();
+        $meterIds = $meters->pluck('id');
+        $latestCheckpoints = DB::table('utility_checkpoints')->whereIn('utility_meter_id', $meterIds)
+            ->where('kind', 'PERIOD_BOUNDARY')->orderByDesc('revision')->get()
+            ->unique(fn ($point) => $point->utility_meter_id.':'.$point->scope_key)->values();
+        $periods = DB::table('utility_billing_periods')->whereIn('utility_meter_id', $meterIds)
+            ->where('billing_period', '>=', $from)->where('billing_period', '<', $until)->get();
+        $invoices = DB::table('invoice_obligations')->join('invoices', 'invoices.id', '=', 'invoice_obligations.invoice_id')
+            ->whereIn('invoice_obligations.room_id', $roomIds)->where('invoice_obligations.billing_period', '>=', $from)
+            ->where('invoice_obligations.billing_period', '<', $until)
+            ->select('invoice_obligations.room_id', 'invoice_obligations.billing_period', 'invoice_obligations.invoice_id', 'invoices.status')
+            ->get();
+        $tenants = Contract::query()->whereIn('room_id', $roomIds)->where('status', 'ACTIVE')
+            ->with('tenant:id,full_name')->get(['id', 'room_id', 'tenant_id', 'contract_code']);
+
+        return ApiResponse::success([
+            'year' => $data['year'], 'boarding_house' => $house->only(['id', 'name']), 'rooms' => $rooms,
+            'meters' => $meters, 'checkpoints' => $latestCheckpoints, 'periods' => $periods,
+            'invoices' => $invoices, 'active_contracts' => $tenants,
+        ], 'Đã tải sổ điện nước của nhà trọ.');
     }
 
     public function monthly(Request $request, int $id, MonthlyInvoiceBilling $billing): JsonResponse
