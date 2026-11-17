@@ -57,7 +57,7 @@ test(utilityLedger ? 'React + Laravel + isolated MySQL: utility ledger' : 'React
     await new Promise(resolve => server.listen(8849, '127.0.0.1', resolve))
     for (let i = 0; i < 50; i++) { try { const response = await fetch('http://127.0.0.1:8848/up'); if (response.ok()) break } catch { /* wait for local PHP */ } await new Promise(resolve => setTimeout(resolve, 100)) }
     browser = await chromium.launch({ executablePath: process.env.E2E_CHROMIUM_PATH, headless: true })
-    context = await browser.newContext({ viewport: { width: 1366, height: 900 } })
+    context = await browser.newContext({ viewport: utilityLedger ? { width: 1440, height: 900 } : { width: 1366, height: 900 } })
     await context.tracing.start({ screenshots: true, snapshots: true })
     await context.route('**/*', route => new URL(route.request().url()).origin === 'http://127.0.0.1:8849' ? route.continue() : route.abort())
     page = await context.newPage(); page.setDefaultTimeout(15000)
@@ -69,7 +69,7 @@ test(utilityLedger ? 'React + Laravel + isolated MySQL: utility ledger' : 'React
     await page.getByLabel('Mật khẩu', { exact: true }).fill('BrowserTest123!')
     await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click(); await page.waitForURL('**/dashboard')
     if (utilityLedger) {
-      const shot = name => page.screenshot({ path: path.join(output, name + '.png'), fullPage: true })
+      const shot = name => page.screenshot({ path: path.join(output, name + '.png') })
       await page.goto('http://127.0.0.1:8849/utilities')
       const house = page.getByLabel('Nhà trọ', { exact: true })
       await house.locator(`option[value="${fixture.house}"]`).waitFor({ state: 'attached' })
@@ -116,9 +116,35 @@ test(utilityLedger ? 'React + Laravel + isolated MySQL: utility ledger' : 'React
       const bulk = page.getByRole('dialog')
       await bulk.getByLabel('Ngày giờ ghi mặc định').fill('2026-11-15T08:00')
       await bulk.getByLabel('Chỉ số mới P102 Điện giả lập').fill('960')
+      const bulkRow = bulk.locator('tr.ledger-meter-row').filter({ has: page.getByRole('rowheader', { name: /P102/ }) })
+      assert.deepEqual(await bulkRow.evaluate(row => ({
+        cells: row.cells.length,
+        height: Math.round(row.getBoundingClientRect().height),
+        inputHeights: [...row.querySelectorAll('input[type="number"]')].map(input => Math.round(input.getBoundingClientRect().height)),
+        aligned: [...row.querySelectorAll('input[type="number"]')].every(input => Math.abs(
+          input.getBoundingClientRect().top + input.getBoundingClientRect().height / 2 -
+          (row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2),
+        ) < 1),
+      })), { cells: 9, height: 56, inputHeights: [40, 40], aligned: true })
+      const checkHeaderAlignment = () => bulkRow.evaluate(row => {
+        const headers = [...row.closest('table').tHead.rows[1].cells]
+        return headers.every((header, index) => {
+          const heading = header.getBoundingClientRect()
+          const cell = row.cells[index + 2].getBoundingClientRect()
+          return Math.abs(heading.left - cell.left) < 1 && Math.abs(heading.width - cell.width) < 1
+        })
+      })
+      assert.equal(await checkHeaderAlignment(), true)
       await bulk.getByLabel('Chỉ số mới P102 Nước giả lập').fill('80')
       await bulk.getByRole('alert').getByText('Chỉ số mới không được nhỏ hơn chỉ số cũ.').waitFor()
       await shot('05-ghi-hang-loat')
+      await page.setViewportSize({ width: 1366, height: 768 })
+      assert.equal(await checkHeaderAlignment(), true)
+      await bulk.getByRole('button', { name: 'Giờ ghi P102', exact: true }).click()
+      await bulk.getByLabel('Giờ ghi P102 Điện giả lập', { exact: true }).waitFor()
+      assert.equal(await checkHeaderAlignment(), true)
+      await shot('09-laptop-hang-loat')
+      await bulk.getByRole('button', { name: 'Giờ ghi P102', exact: true }).click()
       await bulk.getByRole('button', { name: 'Lưu tất cả' }).click()
       await bulk.getByText('Điện giả lập: Đã lưu', { exact: true }).waitFor()
       await bulk.getByLabel('Chỉ số mới P102 Nước giả lập').fill('96')
@@ -128,7 +154,7 @@ test(utilityLedger ? 'React + Laravel + isolated MySQL: utility ledger' : 'React
       await bulk.getByLabel('Chỉ số mới P102 Điện giả lập').scrollIntoViewIfNeeded()
       await page.screenshot({ path: path.join(output, '07-mobile.png') })
       await bulk.getByRole('button', { name: 'Đóng', exact: true }).first().click()
-      await page.setViewportSize({ width: 1366, height: 900 })
+      await page.setViewportSize({ width: 1440, height: 900 })
       const thirdRoom = page.getByRole('row').filter({ has: page.getByRole('button', { name: 'P103', exact: true }) })
       await thirdRoom.getByRole('button', { name: 'Ghi chỉ số', exact: true }).click()
       await dialog.getByLabel('Chỉ số mới').first().fill('970')

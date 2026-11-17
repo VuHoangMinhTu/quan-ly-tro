@@ -41,8 +41,8 @@ function Correction({ row, onClose, onSaved }) {
       setBusy(false)
     }
   }
-  return <div role="dialog" aria-modal="true" aria-labelledby="correction-title" className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-3">
-    <form onSubmit={save} className="max-h-[92dvh] w-full max-w-lg space-y-4 overflow-auto rounded-2xl bg-white p-5">
+  return <div role="dialog" aria-modal="true" aria-labelledby="correction-title" className="ledger-dialog fixed inset-0 z-50 grid place-items-center bg-slate-950/35 p-3">
+    <form onSubmit={save} className="max-h-[92dvh] w-full max-w-lg space-y-4 overflow-auto rounded-xl border border-slate-200 bg-white p-5">
       <h2 id="correction-title" className="text-xl font-bold">Đính chính {row.meter.service?.name}</h2>
       <fieldset disabled={busy} className="grid gap-3 sm:grid-cols-2">
         <label>Chỉ số đầu kỳ<input required type="number" min="0" step="0.01" inputMode="decimal" className="block w-full rounded border p-2" value={start} onChange={change(setStart)} /></label>
@@ -65,7 +65,7 @@ function Correction({ row, onClose, onSaved }) {
 export default function UtilityLedgerHistory({ rooms, room, selectRoom, year, data, meters, canWrite, onRecord, onSaved }) {
   const [editing, setEditing] = useState(null)
   const meterById = new Map(meters.map(meter => [Number(meter.id), meter]))
-  return <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
+  return <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <label className="text-sm font-semibold">Chọn phòng
         <select className="mt-1 block min-h-11 min-w-48 rounded-lg border border-slate-300 px-3" value={room?.id || ''} onChange={event => selectRoom(Number(event.target.value))}>
@@ -77,7 +77,7 @@ export default function UtilityLedgerHistory({ rooms, room, selectRoom, year, da
         <button type="button" disabled={!canWrite} onClick={onRecord} className="min-h-11 rounded-lg bg-teal-700 px-4 font-semibold text-white disabled:opacity-50">Ghi chỉ số</button></>}
     </div>
     {room && <div className="overflow-x-auto">
-      <table aria-label="Lịch sử chỉ số 12 tháng" className="w-full min-w-[780px] text-sm tabular-nums">
+      <table aria-label="Lịch sử chỉ số 12 tháng" className="ledger-history-table w-full min-w-[780px] text-sm tabular-nums">
         <thead className="bg-slate-50 text-left text-slate-700">
           <tr>{['Tháng', 'Điện đầu → cuối', 'kWh', 'Nước đầu → cuối', 'm³', 'Trạng thái', 'Thao tác'].map(label => <th key={label} scope="col" className="p-3">{label}</th>)}</tr>
         </thead>
@@ -92,10 +92,11 @@ export default function UtilityLedgerHistory({ rooms, room, selectRoom, year, da
               {row.start && row.end ? `${display(row.start.reading_value)} → ${display(row.end.reading_value)}` : '—'}
             </div>) : '—'}</td><td className="p-3">{group.length ? group.map(row => <div key={row.utility_meter_id}>{display(row.quantity)}</div>) : '—'}</td></>
           }
-          return <tr key={key} className="border-t border-slate-100 align-top">
+          const status = usageStatus(entries, meters.length)
+          return <tr key={key} className="h-13 border-t border-slate-100 align-middle hover:bg-slate-50">
             <th scope="row" className="whitespace-nowrap p-3 text-left">Tháng {index + 1}</th>
             {pair('ELECTRICITY')}{pair('WATER')}
-            <td className="p-3">{usageStatus(entries, meters.length)}
+            <td className="p-3"><span className="ledger-badge" data-status={status}>{status}</span>
               {entries.length > 0 && entries.every(row => row.settled && !row.needsReview) && <p className="text-xs text-slate-600">Đã quyết toán</p>}
               {invoices.map(invoice => <Link key={invoice.invoice_id} className="block text-teal-800 underline" to={`/invoices/${invoice.invoice_id}`}>Hóa đơn #{invoice.invoice_id}</Link>)}
             </td>
