@@ -51,6 +51,7 @@ if (($argv[1] ?? '') === 'seed') {
     $evidence->checkpoint($waterMeter, ['kind' => 'PERIOD_BOUNDARY', 'observed_at' => '2026-10-01 00:00:00', 'reading_value' => 20], $user->id);
     $evidence->checkpoint($waterMeter, ['kind' => 'CHECK_IN', 'contract_id' => $a->id, 'observed_at' => '2026-10-01 00:00:00', 'reading_value' => 20], $user->id);
     if (getenv('UTILITY_LEDGER_BROWSER') === '1') {
+        DB::beginTransaction();
         $house = $room->boardingHouse;
         $house->update(['name' => 'BeeHouse – Nguyễn Văn An']);
         foreach (range(101, 112) as $code) {
@@ -74,6 +75,7 @@ if (($argv[1] ?? '') === 'seed') {
                 }
             }
         }
+        DB::commit();
     }
     echo json_encode(['user' => $user->id, 'house' => $room->boarding_house_id, 'room' => $room->id, 'ktxRoom' => $dormitory->id, 'a' => $a->id, 'b' => $b->id, 'meter' => $meter->id, 'waterMeter' => $waterMeter->id], JSON_THROW_ON_ERROR);
 } elseif (($argv[1] ?? '') === 'assert-empty') {

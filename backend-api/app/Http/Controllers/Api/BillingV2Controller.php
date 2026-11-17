@@ -114,6 +114,7 @@ class BillingV2Controller extends Controller
             'year' => (int) $data['year'], 'boarding_house' => $house->only(['id', 'name']), 'rooms' => $rooms,
             'meters' => $meters, 'checkpoints' => $latestCheckpoints, 'periods' => $periods,
             'invoices' => $invoices, 'active_contracts' => $tenants, 'boundaries' => $boundaries,
+            'can_record' => $this->boardingHouseAccess->isOwner($request->user(), $house),
         ], 'Đã tải sổ điện nước của nhà trọ.');
     }
 

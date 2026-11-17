@@ -77,6 +77,7 @@ class UtilityLedgerApiTest extends TestCase
         $response = $this->getJson("/api/boarding-houses/{$room->boarding_house_id}/utility-ledger?year=2026")
             ->assertOk()
             ->assertJsonPath('data.year', 2026)
+            ->assertJsonPath('data.can_record', true)
             ->assertJsonPath('data.rooms.0.id', $room->id)
             ->assertJsonPath('data.meters.0.id', $meter->id)
             ->assertJsonCount(0, 'data.periods');
@@ -95,6 +96,11 @@ class UtilityLedgerApiTest extends TestCase
             ->getJson("/api/boarding-houses/{$house->id}/utility-ledger?year=2026")
             ->assertStatus(503);
         config(['billing.v2_enabled' => true]);
+        $manager = User::factory()->create();
+        $house->managers()->attach($manager);
+        $this->actingAs($manager, 'sanctum')
+            ->getJson("/api/boarding-houses/{$house->id}/utility-ledger?year=2026")
+            ->assertOk()->assertJsonPath('data.can_record', false);
         $this->actingAs(User::factory()->create(), 'sanctum')
             ->getJson("/api/boarding-houses/{$house->id}/utility-ledger?year=2026")
             ->assertNotFound();

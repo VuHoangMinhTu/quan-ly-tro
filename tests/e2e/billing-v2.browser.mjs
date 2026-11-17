@@ -15,13 +15,13 @@ const monthly = process.env.BILLING_V2_MONTHLY_BROWSER === '1'
 const recalculate = process.env.BILLING_V2_RECALCULATE_BROWSER === '1'
 const flagOff = process.env.BILLING_V2_TEST_ENABLED === 'false'
 const utilityLedger = process.env.UTILITY_LEDGER_BROWSER === '1'
-const output = path.join(root, utilityLedger ? 'tmp/utility-ledger-browser' : flagOff ? 'tmp/billing-v2-browser-flag-off' : recalculate ? 'tmp/billing-v2-browser-draft-update' : monthly ? 'tmp/billing-v2-browser-monthly' : combined ? 'tmp/billing-v2-browser-combined' : 'tmp/billing-v2-browser')
+const output = path.join(root, utilityLedger ? 'tmp/utility-ledger-polish' : flagOff ? 'tmp/billing-v2-browser-flag-off' : recalculate ? 'tmp/billing-v2-browser-draft-update' : monthly ? 'tmp/billing-v2-browser-monthly' : combined ? 'tmp/billing-v2-browser-combined' : 'tmp/billing-v2-browser')
 const dist = path.join(root, 'tmp/billing-v2-dist')
 const php = process.env.E2E_PHP_PATH
 const playwrightPackage = process.env.PLAYWRIGHT_PACKAGE_PATH || path.join(root, 'front-end', 'node_modules', 'playwright')
 const { chromium } = createRequire(import.meta.url)(playwrightPackage)
 
-test(utilityLedger ? 'React + Laravel + isolated MySQL: utility ledger' : 'React + Laravel + isolated MySQL: checkout, actual deposit, tiered vacancy, lost response and retry', { timeout: 120000 }, async () => {
+test(utilityLedger ? 'React + Laravel + isolated MySQL: utility ledger' : 'React + Laravel + isolated MySQL: checkout, actual deposit, tiered vacancy, lost response and retry', { timeout: utilityLedger ? 240000 : 120000 }, async () => {
   assert.ok(php && existsSync(php), 'Provide local PHP')
   assert.ok(existsSync(path.join(dist, 'index.html')), 'Build billing-v2-dist first')
   assert.equal(existsSync(path.join(backend, 'bootstrap/cache/config.php')), false)
@@ -79,7 +79,10 @@ test(utilityLedger ? 'React + Laravel + isolated MySQL: utility ledger' : 'React
       assert.equal(await page.getByRole('button', { name: 'Cả nhà' }).getAttribute('aria-pressed'), 'true')
       await shot('02-ca-nha')
       await page.getByRole('button', { name: 'P101', exact: true }).click()
-      assert.equal(await page.locator('article').count(), 12)
+      const history = page.getByRole('table', { name: 'Lịch sử chỉ số 12 tháng' })
+      assert.equal(await history.locator('tbody tr').count(), 12)
+      await page.getByLabel('Chọn phòng').selectOption({ label: 'P102' })
+      await page.getByLabel('Chọn phòng').selectOption({ label: 'P101' })
       await shot('03-tung-phong')
       await page.getByLabel('Kỳ đang ghi').fill('2026-11')
       await page.getByRole('button', { name: 'Ghi chỉ số', exact: true }).click()
@@ -95,11 +98,26 @@ test(utilityLedger ? 'React + Laravel + isolated MySQL: utility ledger' : 'React
       await page.reload()
       const savedRoom = page.getByRole('row').filter({ has: page.getByRole('button', { name: 'P101', exact: true }) })
       await savedRoom.getByText('50 kWh', { exact: true }).waitFor()
+      await page.getByLabel('Trạng thái ghi chỉ số').selectOption('Đã ghi')
+      await savedRoom.waitFor()
+      assert.equal(await page.getByRole('button', { name: 'P112', exact: true }).count(), 0)
+      await page.getByLabel('Trạng thái ghi chỉ số').selectOption('Tất cả')
+      await savedRoom.getByRole('button', { name: 'P101', exact: true }).click()
+      const november = history.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Tháng 11', exact: true }) })
+      await november.getByText('Xem chi tiết').click()
+      await november.getByRole('button', { name: 'Đính chính', exact: true }).first().click()
+      await dialog.getByLabel('Chỉ số cuối kỳ').fill('951')
+      await dialog.getByLabel('Lý do đính chính').fill('Đối chiếu lại ảnh công tơ')
+      await shot('08-dinh-chinh')
+      await dialog.getByRole('button', { name: 'Lưu đính chính' }).click()
+      await november.getByText('900 → 951', { exact: true }).waitFor()
+      await page.getByRole('button', { name: 'Cả nhà', exact: true }).click()
       await page.getByRole('button', { name: /Ghi chỉ số hàng loạt/ }).click()
       const bulk = page.getByRole('dialog')
       await bulk.getByLabel('Ngày giờ ghi mặc định').fill('2026-11-15T08:00')
       await bulk.getByLabel('Chỉ số mới P102 Điện giả lập').fill('960')
       await bulk.getByLabel('Chỉ số mới P102 Nước giả lập').fill('80')
+      await bulk.getByRole('alert').getByText('Chỉ số mới không được nhỏ hơn chỉ số cũ.').waitFor()
       await shot('05-ghi-hang-loat')
       await bulk.getByRole('button', { name: 'Lưu tất cả' }).click()
       await bulk.getByText('Điện giả lập: Đã lưu', { exact: true }).waitFor()
@@ -118,6 +136,10 @@ test(utilityLedger ? 'React + Laravel + isolated MySQL: utility ledger' : 'React
       await dialog.getByRole('button', { name: 'Lưu & sang phòng tiếp theo' }).click()
       await dialog.getByRole('heading', { name: /P104/ }).waitFor()
       assert.equal(await dialog.getByLabel('Chỉ số mới').first().inputValue(), '')
+      await dialog.getByRole('button', { name: 'Phòng trước' }).click()
+      await dialog.getByRole('heading', { name: /P103/ }).waitFor()
+      await dialog.getByRole('button', { name: 'Bỏ qua phòng' }).click()
+      await dialog.getByRole('heading', { name: /P104/ }).waitFor()
       assert.deepEqual(cli('assert-empty'), { invoices: 0, payments: 0, payos_requests: 0 })
       return
     }
