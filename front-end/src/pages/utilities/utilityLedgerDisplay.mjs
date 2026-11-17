@@ -1,9 +1,18 @@
 export const display = value => Number(value).toLocaleString('vi-VN', { maximumFractionDigits: 2 })
 
-export function formatTime(value) {
+export function formatLedgerDate(value) {
   if (!value) return '—'
-  const [date, time] = value.replace('T', ' ').split(' ')
-  return `${date.split('-').reverse().join('/')} ${(time || '').slice(0, 5)}`.trim()
+  return value.slice(0, 10).split('-').reverse().join('/')
+}
+
+export function replaceLedgerDate(value, date) {
+  return date ? date + value.slice(10) : ''
+}
+
+export function readingWindowError(start, end) {
+  if (!start || !end) return 'Chọn đủ ngày đầu kỳ và ngày cuối kỳ.'
+  const normalize = value => value.replace('T', ' ').padEnd(19, ':00')
+  return normalize(end) <= normalize(start) ? 'Mốc cuối kỳ phải sau mốc đầu kỳ.' : ''
 }
 
 export function readingError(value, previous) {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { formatTime, readingError, usageStatus } from './utilityLedgerDisplay.mjs'
+import { formatLedgerDate, readingError, readingWindowError, replaceLedgerDate, usageStatus } from './utilityLedgerDisplay.mjs'
 
 test('zero consumption is valid and a decreasing or over-precise reading is invalid', () => {
   assert.equal(readingError('900.00', '900'), '')
@@ -16,6 +16,10 @@ test('ledger statuses distinguish no readings, partial readings, complete readin
   assert.equal(usageStatus([{ needsReview: true }], 2), 'Cần đối soát')
 })
 
-test('formatting keeps the business-local date and 24 hour time', () => {
-  assert.equal(formatTime('2026-11-15 18:45:30'), '15/11/2026 18:45')
+test('date-only formatting and editing preserve the full local timestamp for Billing V2', () => {
+  assert.equal(formatLedgerDate('2026-11-15 18:45:30'), '15/11/2026')
+  assert.equal(replaceLedgerDate('2026-11-15 18:45:30', '2026-12-02'), '2026-12-02 18:45:30')
+  assert.equal(replaceLedgerDate('2026-11-15T18:45', '2026-12-02'), '2026-12-02T18:45')
+  assert.equal(readingWindowError('2026-11-15 08:00:00', '2026-11-15T18:45'), '')
+  assert.match(readingWindowError('2026-11-15 18:45:30', '2026-11-15T18:45'), /phải sau/)
 })

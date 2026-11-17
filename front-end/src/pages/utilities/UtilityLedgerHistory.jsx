@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { correctBillingPeriodBoundaries } from '../../api/billingV2Api'
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
-import { display, formatTime, readingError, usageStatus } from './utilityLedgerDisplay.mjs'
+import { display, formatLedgerDate, readingError, readingWindowError, usageStatus } from './utilityLedgerDisplay.mjs'
+import LedgerDateTime from './LedgerDateTime'
 
 const localInput = value => value.replace(' ', 'T')
 const apiInput = value => value.replace('T', ' ') + (value.length === 16 ? ':00' : '')
@@ -17,14 +18,16 @@ function Correction({ row, onClose, onSaved }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const validation = readingError(end, start)
-  const change = setter => event => {
-    setter(event.target.value)
+  const windowError = readingWindowError(from, to)
+  const setDraft = (setter, value) => {
+    setter(value)
     setRequestKey(crypto.randomUUID())
     setError('')
   }
+  const change = setter => event => setDraft(setter, event.target.value)
   async function save(event) {
     event.preventDefault()
-    if (busy || validation || start === '' || end === '') return
+    if (busy || validation || windowError || start === '' || end === '') return
     setBusy(true)
     try {
       await correctBillingPeriodBoundaries(row.utility_meter_id, {
@@ -49,14 +52,18 @@ function Correction({ row, onClose, onSaved }) {
         <label>Chỉ số cuối kỳ<input required type="number" min="0" step="0.01" inputMode="decimal" aria-invalid={Boolean(validation)} className="block w-full rounded border p-2" value={end} onChange={change(setEnd)} />
           {validation && <span role="alert" className="text-sm text-red-700">{validation}</span>}
         </label>
-        <label>Ngày giờ đầu kỳ<input required type="datetime-local" step="1" className="block w-full rounded border p-2" value={from} onChange={change(setFrom)} /></label>
-        <label>Ngày giờ cuối kỳ<input required type="datetime-local" step="1" className="block w-full rounded border p-2" value={to} onChange={change(setTo)} /></label>
+        <div className="sm:col-span-2"><LedgerDateTime label="Ngày đầu kỳ" required value={from} onValueChange={value => setDraft(setFrom, value)} /></div>
+        <div className="sm:col-span-2"><LedgerDateTime label="Ngày cuối kỳ" required value={to}
+          aria-invalid={Boolean(windowError)} aria-describedby={windowError ? 'ledger-correction-window-error' : undefined}
+          onValueChange={value => setDraft(setTo, value)} />
+          {windowError && <p id="ledger-correction-window-error" role="alert" className="mt-1 text-sm text-red-700">{windowError}</p>}
+        </div>
         <label className="sm:col-span-2">Lý do đính chính<textarea required minLength={5} maxLength={1000} className="block w-full rounded border p-2" value={reason} onChange={change(setReason)} /></label>
       </fieldset>
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       <div className="flex justify-end gap-2">
         <button type="button" disabled={busy} onClick={onClose} className="min-h-11 rounded border px-4">Đóng</button>
-        <button disabled={busy || Boolean(validation)} className="min-h-11 rounded bg-teal-700 px-4 text-white">Lưu đính chính</button>
+        <button disabled={busy || Boolean(validation || windowError)} className="min-h-11 rounded bg-teal-700 px-4 text-white">Lưu đính chính</button>
       </div>
     </form>
   </div>
@@ -104,7 +111,7 @@ export default function UtilityLedgerHistory({ rooms, room, selectRoom, year, da
               <summary className="cursor-pointer font-semibold text-teal-800">Xem chi tiết</summary>
               {entries.map(row => <div className="mt-2 border-t pt-2" key={row.utility_meter_id}>
                 <p>{row.meter.service?.name} {row.meter.meter_code}</p>
-                {row.start && row.end && <p>{formatTime(row.start.observed_at)} → {formatTime(row.end.observed_at)}</p>}
+                {row.start && row.end && <p>{formatLedgerDate(row.start.observed_at)} → {formatLedgerDate(row.end.observed_at)}</p>}
                 {canWrite && row.correctable && <button type="button" className="min-h-11 text-teal-800 underline" onClick={() => setEditing(row)}>Đính chính</button>}
               </div>)}
             </details>}</td>

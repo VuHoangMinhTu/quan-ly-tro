@@ -16,7 +16,8 @@ import { getUtilityLedger } from "../../api/utilityLedgerApi";
 import { confirmBillingPeriodBoundaries } from "../../api/billingV2Api";
 import { getApiErrorMessage } from "../../api/getApiErrorMessage";
 import UtilityLedgerHistory from "./UtilityLedgerHistory";
-import { display, formatTime, readingError, usageStatus } from "./utilityLedgerDisplay.mjs";
+import LedgerDateTime from "./LedgerDateTime";
+import { display, formatLedgerDate, readingError, readingWindowError, usageStatus } from "./utilityLedgerDisplay.mjs";
 import "./utilityLedger.css";
 
 const currentYear = new Date().getFullYear();
@@ -77,11 +78,9 @@ function MeterInputs({ meters, initial, onChange, dates, setDate, observedAt, pe
             </span>
           </p>
           <p className="mt-2 text-sm">Chỉ số cũ: {display(meter.previous)}</p>
-          <p className="mt-1 text-xs text-slate-600">
-            {meter.previousAt && !dates[meter.id]?.start ? "Mốc đã xác nhận được đề xuất" : "Mốc đầu kỳ cần xác nhận"}
-            {" · "}{formatTime(dates[meter.id]?.start || meter.previousAt || period.start)}
-            {" → "}{formatTime(dates[meter.id]?.end ?? observedAt)}
-          </p>
+          {(!meter.previousAt || dates[meter.id]?.start) && <p className="mt-1 text-xs font-medium text-amber-800">
+            Kiểm tra ngày đầu kỳ: {formatLedgerDate(dates[meter.id]?.start ?? period.start)}
+          </p>}
           <label className="mt-2 block text-sm font-medium text-slate-700">
             Chỉ số mới
             <input
@@ -99,15 +98,14 @@ function MeterInputs({ meters, initial, onChange, dates, setDate, observedAt, pe
             <p className="mt-2 rounded bg-teal-50 px-2 py-1 font-semibold text-teal-900">Tiêu thụ: {display(Number(initial[meter.id]) - Number(meter.previous))} {meter.service?.unit}</p>
           )}
           <details className="mt-2 text-sm">
-            <summary>Ngày giờ của công tơ</summary>
-            <label className="block">Đầu kỳ
-              <input type="datetime-local" step="1" className="block w-full" value={dates[meter.id]?.start ?? (meter.previousAt?.replace(" ", "T") || period.start)}
-                onChange={event => setDate(meter.id, "start", event.target.value)} />
-            </label>
-            <label className="block">Cuối kỳ
-              <input type="datetime-local" step="1" className="block w-full" value={dates[meter.id]?.end ?? observedAt}
-                onChange={event => setDate(meter.id, "end", event.target.value)} />
-            </label>
+            <summary className="min-h-11 content-center">Khoảng đo</summary>
+            <div className="space-y-2">
+              <LedgerDateTime label={meter.previousAt && dates[meter.id]?.start == null ? "Ngày đầu kỳ · Mốc đã xác nhận" : "Ngày đầu kỳ · Cần xác nhận"}
+                value={dates[meter.id]?.start ?? (meter.previousAt?.replace(" ", "T") || period.start)}
+                onValueChange={value => setDate(meter.id, "start", value)} />
+              <LedgerDateTime label="Ngày cuối kỳ" value={dates[meter.id]?.end ?? observedAt}
+                onValueChange={value => setDate(meter.id, "end", value)} />
+            </div>
           </details>
         </section>
       ))}
@@ -124,24 +122,26 @@ function ReadingDialog({ room, meters: initialMeters, period, onClose, onSaved, 
   const invalid = meters.some(meter => readingError(readings[meter.id], meter.previous));
   const mutation = useMutation({
     mutationFn: async () => {
-      const results = [];
+      const requests = [];
       if (invalid) throw new Error("Kiểm tra lại chỉ số được đánh dấu.");
       for (const meter of meters) {
         const next = readings[meter.id];
         if (next === undefined || next === "") continue;
-        results.push(
-          confirmBillingPeriodBoundaries(meter.id, readingPayload(meter, period, dates[meter.id]?.end ?? observedAt, next, dates[meter.id]?.start)),
-        );
+        const start = dates[meter.id]?.start ?? meter.previousAt ?? period.start;
+        const end = dates[meter.id]?.end ?? observedAt;
+        const error = readingWindowError(start, end);
+        if (error) throw new Error(error);
+        requests.push([meter.id, readingPayload(meter, period, end, next, start)]);
       }
-      if (!results.length)
+      if (!requests.length)
         throw new Error("Nhập ít nhất một chỉ số mới trước khi lưu.");
-      return Promise.all(results);
+      return Promise.all(requests.map(([id, payload]) => confirmBillingPeriodBoundaries(id, payload)));
     },
     onSuccess: (_, advance) => {
       onSaved();
       if (advance) onNext();
     },
-    onError: (err) => setError(getApiErrorMessage(err)),
+    onError: (err) => setError(err.response ? getApiErrorMessage(err) : err.billingV2Message || err.message),
   });
   return (
     <div
@@ -160,7 +160,6 @@ function ReadingDialog({ room, meters: initialMeters, period, onClose, onSaved, 
             <p className="mt-1 text-sm text-slate-600">
               {room.tenant || "Chưa có người thuê"}
             </p>
-            <p className="mt-1 text-xs text-slate-600">Kiểm tra khoảng đo trước khi lưu. Sản lượng thuộc kỳ đang chọn.</p>
           </div>
           <button
             aria-label="Đóng"
@@ -171,15 +170,8 @@ function ReadingDialog({ room, meters: initialMeters, period, onClose, onSaved, 
             <X />
           </button>
         </div>
-        <label className="mt-4 block text-sm font-medium text-slate-700">
-          Ngày giờ ghi
-          <input
-            type="datetime-local"
-            value={observedAt}
-            onChange={(event) => setObservedAt(event.target.value)}
-            className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 px-3"
-          />
-        </label>
+        <div className="mt-4"><LedgerDateTime label="Ngày ghi" value={observedAt}
+          onValueChange={value => { setObservedAt(value); setError(""); }} /></div>
         <div className="mt-4">
           <MeterInputs
             meters={meters}
@@ -245,6 +237,8 @@ function BulkDialog({ rooms, metersByRoom: initialMetersByRoom, period, onClose,
     `${room.room_code} ${contracts[room.id] || ""}`.toLowerCase().includes(search.trim().toLowerCase()) &&
     (filter === statuses[0] || statusFor(room) === filter));
   const completed = Object.values(outcome).filter(value => value === "Đã lưu").length;
+  const needsReview = Object.values(metersByRoom).flat().filter(meter =>
+    outcome[meter.id] !== "Đã lưu" && (outcome[meter.id] || readingError(values[meter.id], meter.previous))).length;
   const save = async (retry = false) => {
     setBusy(true);
     const next = {};
@@ -253,13 +247,14 @@ function BulkDialog({ rooms, metersByRoom: initialMetersByRoom, period, onClose,
         if (meterKind(meter) === "other") continue;
         const value = values[meter.id];
         if (value == null || value === "" || outcome[meter.id] === "Đã lưu" || (retry && !outcome[meter.id])) continue;
-        const invalid = readingError(value, meter.previous);
+        const end = meterDates[meter.id] ?? observedAt;
+        const invalid = readingError(value, meter.previous) || readingWindowError(meter.previousAt ?? period.start, end);
         if (invalid) {
           next[meter.id] = invalid;
           continue;
         }
         try {
-          await confirmBillingPeriodBoundaries(meter.id, readingPayload(meter, period, meterDates[meter.id] || observedAt, value), { quiet: true });
+          await confirmBillingPeriodBoundaries(meter.id, readingPayload(meter, period, end, value), { quiet: true });
           next[meter.id] = "Đã lưu";
         } catch (error) {
           next[meter.id] = getApiErrorMessage(error);
@@ -297,10 +292,8 @@ function BulkDialog({ rooms, metersByRoom: initialMetersByRoom, period, onClose,
           </button>
         </header>
         <div className="min-h-0 flex-1 overflow-auto bg-slate-50 p-3 sm:p-4">
-          <label className="mb-3 block text-sm">Ngày giờ ghi mặc định
-            <input type="datetime-local" value={observedAt} disabled={busy}
-              onChange={event => setObservedAt(event.target.value)} className="ml-2 rounded border p-2" />
-          </label>
+          <div className="mb-3 max-w-80"><LedgerDateTime label="Ngày ghi mặc định" value={observedAt}
+            disabled={busy} onValueChange={setObservedAt} /></div>
           <div className="mb-3 flex flex-wrap gap-2">
             <input aria-label="Tìm phòng nhập hàng loạt" placeholder="Tìm phòng hoặc người thuê" className="min-h-11 flex-1 rounded border px-3"
               value={search} onChange={event => setSearch(event.target.value)} />
@@ -333,19 +326,25 @@ function BulkDialog({ rooms, metersByRoom: initialMetersByRoom, period, onClose,
                 const water = list.filter(meter => meterKind(meter) === "water");
                 const meters = [...electric, ...water];
                 const savedCount = meters.filter(meter => outcome[meter.id] === "Đã lưu").length;
-                const failed = meters.some(meter => outcome[meter.id] && outcome[meter.id] !== "Đã lưu");
+                const errorFor = meter => readingError(values[meter.id], meter.previous) ||
+                  (outcome[meter.id] === "Đã lưu" ? "" : outcome[meter.id]);
+                const failed = meters.some(errorFor);
                 const state = failed ? "Có mục lỗi" : savedCount === meters.length ? "Đã lưu" : savedCount ? "Lưu một phần" : "Chưa lưu";
                 const cells = (meter, kind) => {
                   const value = meter && values[meter.id];
                   const invalid = meter && readingError(value, meter.previous);
+                  const error = meter && errorFor(meter);
+                  const errorId = meter ? `ledger-meter-error-${meter.id}` : undefined;
                   const label = kind === "electric" ? "Điện" : "Nước";
                   return <>
                     <td data-kind={kind} data-field="old"><span className="ledger-mobile-label">{label} cũ</span>{meter ? display(meter.previous) : "—"}</td>
                     <td data-kind={kind} data-field="new"><span className="ledger-mobile-label">{label} mới</span>{meter ? <input
                       aria-label={`Chỉ số mới ${room.room_code} ${meter.service?.name || ""}`}
-                      type="number" inputMode="decimal" aria-invalid={Boolean(invalid)}
+                      type="number" inputMode="decimal" aria-invalid={Boolean(error)} aria-describedby={error ? `${errorId}-mobile ${errorId}-desktop` : undefined}
                       value={value ?? ""} disabled={busy || outcome[meter.id] === "Đã lưu"}
-                      onChange={event => setValues(current => ({ ...current, [meter.id]: event.target.value }))} /> : "—"}</td>
+                      onChange={event => setValues(current => ({ ...current, [meter.id]: event.target.value }))} /> : "—"}
+                      {error && <p role="alert" id={`${errorId}-mobile`} className="ledger-mobile-error">{error}</p>}
+                    </td>
                     <td data-kind={kind} data-field="usage"><span className="ledger-mobile-label">Tiêu thụ</span>
                       {value == null || value === "" || invalid ? "—" : display(Number(value) - Number(meter.previous))}</td>
                   </>;
@@ -368,29 +367,27 @@ function BulkDialog({ rooms, metersByRoom: initialMetersByRoom, period, onClose,
                       {cells(electric[index], "electric")}{cells(water[index], "water")}
                       <td data-field="state">{index === 0 && <div className="flex items-center gap-1">
                         <span className="ledger-badge" data-status={state}>{state}</span>
-                        <button type="button" className="ledger-expand" aria-label={`Giờ ghi ${room.room_code}`}
+                        <button type="button" className="ledger-expand" aria-label={`Ngày ghi ${room.room_code}`}
                           aria-expanded={Boolean(expanded[room.id])} onClick={() => setExpanded(current => ({ ...current, [room.id]: !current[room.id] }))}>
                           <ChevronRight size={16} aria-hidden="true" />
                         </button>
                       </div>}</td>
                     </tr>)}
-                  {(expanded[room.id] || meters.some(meter => readingError(values[meter.id], meter.previous) || outcome[meter.id])) && <tr className="ledger-detail-row"><td colSpan={9}>
+                  {(expanded[room.id] || savedCount > 0 || failed) && <tr className={`ledger-detail-row ${expanded[room.id] || savedCount ? "" : "ledger-desktop-error"}`}><td colSpan={9}>
                     {meters.map(meter => {
-                      const invalid = readingError(values[meter.id], meter.previous);
                       const result = outcome[meter.id];
                       return <Fragment key={meter.id}>
-                        {invalid && <p role="alert" className="text-red-700">{meter.service?.name}: {invalid}</p>}
-                        {result && result !== invalid && <p className={result === "Đã lưu" ? "text-teal-800" : "text-red-700"}>{meter.meter_code || meter.service?.name}: {result}</p>}
+                        {errorFor(meter) && <p role="alert" id={`ledger-meter-error-${meter.id}-desktop`} className="ledger-desktop-error text-red-700">{meter.service?.name}: {errorFor(meter)}</p>}
+                        {result === "Đã lưu" && <p className="text-teal-800">{meter.meter_code || meter.service?.name}: {result}</p>}
                       </Fragment>;
                     })}
                     {expanded[room.id] && <>
-                      <div className="flex flex-wrap gap-3 pb-2">{meters.map(meter => <label key={meter.id}>
-                        {meter.meter_code || meter.service?.name}
-                        <input className="block min-h-11 rounded-lg border border-slate-200 px-2" type="datetime-local"
-                          aria-label={`Giờ ghi ${room.room_code} ${meter.service?.name || ""}`}
+                      <div className="flex flex-wrap gap-3 pb-2">{meters.map(meter => <LedgerDateTime key={meter.id}
+                          label={meter.meter_code || meter.service?.name}
+                          aria-label={`Ngày ghi ${room.room_code} ${meter.service?.name || ""}`}
                           value={meterDates[meter.id] ?? observedAt} disabled={busy || outcome[meter.id] === "Đã lưu"}
-                          onChange={event => setMeterDates(current => ({ ...current, [meter.id]: event.target.value }))} />
-                      </label>)}</div>
+                          onValueChange={value => setMeterDates(current => ({ ...current, [meter.id]: value }))} />
+                      )}</div>
                     </>}
                   </td></tr>}
                 </tbody>;
@@ -399,7 +396,7 @@ function BulkDialog({ rooms, metersByRoom: initialMetersByRoom, period, onClose,
           </div>
         </div>
         <footer className="grid shrink-0 grid-cols-2 gap-2 border-t border-slate-200 bg-white p-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:flex sm:items-center sm:justify-end sm:px-4">
-          <p className="col-span-2 text-xs text-slate-600 sm:mr-auto">{completed} đã lưu · {Object.keys(outcome).length - completed} mục cần kiểm tra</p>
+          <p className="col-span-2 text-xs text-slate-600 sm:mr-auto">{completed} đã lưu · {needsReview} mục cần kiểm tra</p>
           <button
             type="button"
             onClick={onClose}
@@ -769,7 +766,7 @@ export default function UtilityLedgerPage() {
           position={position + 1} total={queue.length}
         />
       )}
-      {bulk && (
+      {bulk && houseId && data && queue.length > 0 && (
         <BulkDialog
           rooms={rooms.filter(writable)}
           metersByRoom={metersByRoom}
