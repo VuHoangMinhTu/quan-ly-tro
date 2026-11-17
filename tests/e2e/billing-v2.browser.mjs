@@ -15,7 +15,7 @@ const monthly = process.env.BILLING_V2_MONTHLY_BROWSER === '1'
 const recalculate = process.env.BILLING_V2_RECALCULATE_BROWSER === '1'
 const flagOff = process.env.BILLING_V2_TEST_ENABLED === 'false'
 const utilityLedger = process.env.UTILITY_LEDGER_BROWSER === '1'
-const output = path.join(root, utilityLedger ? 'tmp/utility-ledger-polish' : flagOff ? 'tmp/billing-v2-browser-flag-off' : recalculate ? 'tmp/billing-v2-browser-draft-update' : monthly ? 'tmp/billing-v2-browser-monthly' : combined ? 'tmp/billing-v2-browser-combined' : 'tmp/billing-v2-browser')
+const output = path.join(root, utilityLedger ? `tmp/utility-ledger-polish-${Date.now()}` : flagOff ? 'tmp/billing-v2-browser-flag-off' : recalculate ? 'tmp/billing-v2-browser-draft-update' : monthly ? 'tmp/billing-v2-browser-monthly' : combined ? 'tmp/billing-v2-browser-combined' : 'tmp/billing-v2-browser')
 const dist = path.join(root, 'tmp/billing-v2-dist')
 const php = process.env.E2E_PHP_PATH
 const playwrightPackage = process.env.PLAYWRIGHT_PACKAGE_PATH || path.join(root, 'front-end', 'node_modules', 'playwright')

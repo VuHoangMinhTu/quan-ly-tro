@@ -110,7 +110,8 @@ function MeterInputs({ meters, initial, onChange, dates, setDate, observedAt, pe
   );
 }
 
-function ReadingDialog({ room, meters, period, onClose, onSaved, onNext, onPrevious, position, total }) {
+function ReadingDialog({ room, meters: initialMeters, period, onClose, onSaved, onNext, onPrevious, position, total }) {
+  const [meters] = useState(initialMeters);
   const [readings, setReadings] = useState({});
   const [dates, setDates] = useState({});
   const [observedAt, setObservedAt] = useState(localDateTime());
@@ -226,7 +227,8 @@ function ReadingDialog({ room, meters, period, onClose, onSaved, onNext, onPrevi
   );
 }
 
-function BulkDialog({ rooms, metersByRoom, period, onClose, onSaved, statusFor, contracts }) {
+function BulkDialog({ rooms, metersByRoom: initialMetersByRoom, period, onClose, onSaved, statusFor, contracts }) {
+  const [metersByRoom] = useState(initialMetersByRoom);
   const [values, setValues] = useState({});
   const [selected, setSelected] = useState(
     () => new Set(rooms.map((room) => room.id)),
@@ -352,7 +354,7 @@ function BulkDialog({ rooms, metersByRoom, period, onClose, onSaved, statusFor, 
                             [meter.id]: event.target.value,
                           }))
                         }
-                        className="min-h-11 w-full min-w-0 rounded border border-slate-300 px-2 py-2 text-right aria-invalid:border-red-600"
+                        className="min-h-11 w-full min-w-0 appearance-[textfield] rounded border border-slate-300 px-1 py-2 text-right aria-invalid:border-red-600 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       />
                       <span>
                         {values[meter.id] === undefined ||
