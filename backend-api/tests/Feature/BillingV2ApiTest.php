@@ -190,6 +190,40 @@ class BillingV2ApiTest extends TestCase
         $this->assertDatabaseCount('utility_billing_periods', 0);
     }
 
+    public function test_checkout_retry_keeps_one_termination_and_rejects_different_evidence(): void
+    {
+        [$contract, , $meter] = $this->fixture();
+        $url = "/api/billing-v2/contracts/{$contract->id}/checkout";
+        $payload = [
+            'actual_ended_at' => '2026-10-15 10:00:00', 'reason' => 'MUTUAL_EARLY_END',
+            'readings' => [['utility_meter_id' => $meter->id, 'reading_value' => 130]],
+        ];
+        $this->postJson($url, $payload)->assertOk();
+        $this->postJson($url, $payload)->assertOk();
+        $this->postJson($url, [...$payload, 'readings' => [['utility_meter_id' => $meter->id, 'reading_value' => 131]]])
+            ->assertUnprocessable();
+        $this->assertDatabaseCount('contract_terminations', 1);
+        $this->assertDatabaseCount('contract_settlements', 1);
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertDatabaseCount('payments', 0);
+        $this->assertDatabaseCount('payos_payment_requests', 0);
+    }
+
+    public function test_shared_dormitory_checkout_is_rejected_and_cannot_create_financial_entries(): void
+    {
+        [$contract, $room, $meter] = $this->fixture();
+        $room->update(['room_type' => 'DORMITORY']);
+        $this->postJson("/api/billing-v2/contracts/{$contract->id}/checkout", [
+            'actual_ended_at' => '2026-10-15 10:00:00', 'reason' => 'MUTUAL_EARLY_END',
+            'readings' => [['utility_meter_id' => $meter->id, 'reading_value' => 130]],
+        ])->assertUnprocessable()->assertJsonValidationErrors('room_id');
+        $this->assertDatabaseCount('contract_terminations', 0);
+        $this->assertDatabaseCount('contract_deposit_entries', 0);
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertDatabaseCount('payments', 0);
+        $this->assertDatabaseCount('payos_payment_requests', 0);
+    }
+
     private function fixture(string $method = 'PER_UNIT', string $type = 'ELECTRICITY'): array
     {
         $this->travelTo(now()->setDate(2026, 11, 2)->startOfDay());

@@ -99,8 +99,11 @@ function DepositLedger({ contract, rows, held, refresh }) {
     {draft && <form className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3" onSubmit={event => { event.preventDefault(); if (!mutation.isPending) mutation.mutate(draft) }}>
       <h4 className="font-semibold">{eventLabel[draft.event]}</h4>
       <fieldset disabled={mutation.isPending} className="grid gap-3 sm:grid-cols-2">
-        <label>Số tiền (đ)<input type="number" inputMode="numeric" min="1" step="1" max={draft.event === 'REFUNDED' ? held : undefined} required className={field}
-          value={draft.amount} onChange={event => setDraft({ ...draft, amount: event.target.value })} /></label>
+        <label>Số tiền (đ)<input aria-label="Số tiền (đ)" type="number" inputMode="numeric" min="1" step="1" max={draft.event === 'REFUNDED' ? held : undefined} required className={field}
+          value={draft.amount} aria-invalid={draft.event === 'REFUNDED' && Number(draft.amount) > held}
+          onChange={event => setDraft({ ...draft, amount: event.target.value })} />
+          {draft.event === 'REFUNDED' && Number(draft.amount) > held && <p role="alert" className="mt-1 text-sm text-red-700">Số tiền hoàn vượt số dư cọc còn giữ.</p>}
+        </label>
         <label>Thời điểm giao dịch<input type="datetime-local" required className={field} value={draft.occurredAt}
           onChange={event => setDraft({ ...draft, occurredAt: event.target.value })} /></label>
       </fieldset>
