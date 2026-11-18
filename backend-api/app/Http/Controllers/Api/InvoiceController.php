@@ -117,6 +117,7 @@ class InvoiceController extends Controller
             ->whereIn('allocation.invoice_item_id', $invoice->items->pluck('id'))
             ->get(['period.utility_meter_id', 'allocation.quantity', 'allocation.tariff_amount', 'opening.id as opening_id', 'opening.observed_at as opening_at', 'opening.reading_value as opening_value', 'closing.id as closing_id', 'closing.observed_at as closing_at', 'closing.reading_value as closing_value']));
         $invoice->setAttribute('payos_available', app(PayOSService::class)->availableFor($invoice->room->boardingHouse->landlord));
+        $invoice->setAttribute('payos_new_requests_enabled', (bool) config('services.payos.new_requests_enabled', false));
         $invoice->setAttribute('payment_profile', app(InvoicePaymentInfoService::class)->forInvoice($invoice));
 
         return ApiResponse::success($invoice, 'Lấy thông tin hóa đơn thành công.');

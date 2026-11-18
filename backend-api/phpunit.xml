@@ -19,6 +19,7 @@
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>
+        <env name="PAYOS_NEW_REQUESTS_ENABLED" value="true"/>
         <env name="APP_URL" value="http://127.0.0.1"/>
         <env name="APP_KEY" value="base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>

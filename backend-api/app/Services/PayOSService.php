@@ -31,6 +31,7 @@ class PayOSService
 
     public function createOrReuse(Invoice $invoice): PayOSPaymentRequest
     {
+        abort_unless(config('services.payos.new_requests_enabled', false), 503, 'PayOS đang tạm ngừng. Vui lòng dùng QR ngân hàng hoặc thanh toán thủ công.');
         $merchant = $invoice->room->boardingHouse->landlord;
         $this->credentialsFor($merchant);
         $configId = $merchant->payosConfig()->where('is_active', true)->value('id');
@@ -540,7 +541,8 @@ class PayOSService
 
     public function availableFor(Landlord $landlord): bool
     {
-        return $landlord->payosConfig()->where('is_active', true)->exists() || $this->usesGlobalFallback($landlord);
+        return (bool) config('services.payos.new_requests_enabled', false)
+            && ($landlord->payosConfig()->where('is_active', true)->exists() || $this->usesGlobalFallback($landlord));
     }
 
     public function webhookUrl(LandlordPayOSConfig $config): string
