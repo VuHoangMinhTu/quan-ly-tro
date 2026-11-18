@@ -13,6 +13,7 @@ import ContractServicesSection from '../../components/contracts/ContractServices
 import ContractDocumentSection from '../../components/contracts/ContractDocumentSection'
 import ContractSigningSection from '../../components/contracts/ContractSigningSection'
 import ContractHandoverSection from '../../components/contracts/ContractHandoverSection'
+import ContractExitSection from '../../components/contracts/ContractExitSection'
 import { residenceStatusLabels } from '../../utils/residence'
 import DateInput from '../../components/ui/DateInput'
 
@@ -87,6 +88,7 @@ export default function ContractDetailPage() {
     <ContractDocumentSection contract={contract} handoverConfirmed={handoverConfirmed} />
     <ContractSigningSection contract={contract} />
     <ContractHandoverSection contract={contract} />
+    {!draft && !contract.is_demo && contract.operational_role === 'OWNER' && <ContractExitSection key={id} contract={contract} />}
     <ContractServicesSection key={id} contract={contract} />
     <Card title="Chỉ số đầu hợp đồng (dữ liệu chốt theo hợp đồng)"><p className="text-sm text-slate-600">{draft ? <>Phải ghi số đọc thực tế và ngày bàn giao trong thời hạn thuê trước khi kích hoạt. <Link to={`/contracts/${id}/edit`} state={forwardContext(location, `/rooms/${contract.room_id}`)} className="font-medium underline">Sửa tại bước 2. Người ở & dịch vụ</Link>.</> : <>Đây là chỉ số đầu đã chốt trong hợp đồng; Mốc CHECK_IN V2 được đồng bộ từ chỉ số đầu khi kích hoạt hợp đồng. Với hợp đồng cũ, cần đối soát và bổ sung mốc an toàn.</>}</p><div className="grid gap-3 sm:grid-cols-2">{openings.map(opening => <article key={opening.id ?? opening.utility_meter_id} className="rounded-lg border p-3 text-sm"><strong>{opening.service_name}</strong><p>{formatUtilityValue(opening.opening_reading)} {opening.unit}</p><p>Ngày ghi: {formatDate(opening.reading_date)}</p></article>)}</div>{openings.length === 0 && <p className="text-sm text-slate-500">Chưa có chỉ số đầu được ghi nhận cho hợp đồng này.</p>}</Card>
     <Card title="Khai báo cư trú">{declarations.length ? <ul className="space-y-2">{declarations.map(record => <li key={record.id}><Link to={`/residence-declarations/${record.id}`} className="inline-flex min-h-11 items-center text-sm underline">Hồ sơ #{record.id} · {residenceStatusLabels[record.status]}</Link></li>)}</ul> : <p className="text-sm text-slate-500">Tạm trú: Chưa khai báo.</p>}{active && <Link to={`/residence-declarations/new?room_id=${contract.room_id}&contract_id=${id}`} state={{ returnTo: `/contracts/${id}`, returnLabel: 'Hợp đồng' }} className="inline-flex min-h-11 items-center rounded-lg border px-3 text-sm">Tạo hồ sơ tạm trú</Link>}</Card>

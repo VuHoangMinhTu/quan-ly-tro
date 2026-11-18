@@ -15,7 +15,8 @@ const monthly = process.env.BILLING_V2_MONTHLY_BROWSER === '1'
 const recalculate = process.env.BILLING_V2_RECALCULATE_BROWSER === '1'
 const flagOff = process.env.BILLING_V2_TEST_ENABLED === 'false'
 const utilityLedger = process.env.UTILITY_LEDGER_BROWSER === '1'
-const output = path.join(root, utilityLedger ? `tmp/utility-ledger-polish-${Date.now()}` : flagOff ? 'tmp/billing-v2-browser-flag-off' : recalculate ? 'tmp/billing-v2-browser-draft-update' : monthly ? 'tmp/billing-v2-browser-monthly' : combined ? 'tmp/billing-v2-browser-combined' : 'tmp/billing-v2-browser')
+const contractExit = process.env.CONTRACT_EXIT_BROWSER === '1'
+const output = path.join(root, contractExit ? `tmp/contract-exit-${Date.now()}` : utilityLedger ? `tmp/utility-ledger-polish-${Date.now()}` : flagOff ? 'tmp/billing-v2-browser-flag-off' : recalculate ? 'tmp/billing-v2-browser-draft-update' : monthly ? 'tmp/billing-v2-browser-monthly' : combined ? 'tmp/billing-v2-browser-combined' : 'tmp/billing-v2-browser')
 const dist = path.join(root, 'tmp/billing-v2-dist')
 const php = process.env.E2E_PHP_PATH
 const playwrightPackage = process.env.PLAYWRIGHT_PACKAGE_PATH || path.join(root, 'front-end', 'node_modules', 'playwright')
@@ -27,7 +28,7 @@ test(utilityLedger ? 'React + Laravel + isolated MySQL: utility ledger' : 'React
   assert.equal(existsSync(path.join(backend, 'bootstrap/cache/config.php')), false)
   await mkdir(output, { recursive: true })
   const env = { ...process.env, APP_ENV: 'testing', APP_URL: 'http://127.0.0.1:8848', APP_DEBUG: 'false', APP_KEY: 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=', FRONTEND_URL: 'http://127.0.0.1:8849', BILLING_V2_ENABLED: flagOff ? 'false' : 'true', DB_CONNECTION: 'mysql', DB_HOST: '127.0.0.1', DB_PORT: '13368', DB_DATABASE: 'beehouse_billing_v2_test', DB_USERNAME: 'billing_test', DB_PASSWORD: '', DB_URL: '', DB_SOCKET: '', CACHE_STORE: 'array', SESSION_DRIVER: 'array', QUEUE_CONNECTION: 'sync', MAIL_MAILER: 'array', LOG_CHANNEL: 'stderr', BCRYPT_ROUNDS: '4' }
-  if (utilityLedger) Object.assign(env, { DB_PORT: '13369', DB_PASSWORD: process.env.DB_PASSWORD || '' })
+  if (utilityLedger || contractExit) Object.assign(env, { DB_PORT: '13369', DB_PASSWORD: process.env.DB_PASSWORD || '' })
   const cli = command => {
     const result = spawnSync(php, [path.join(backend, 'tests/Fixtures/BillingV2Browser.php'), command], { cwd: backend, env, encoding: 'utf8', windowsHide: true })
     assert.equal(result.status, 0, result.stdout + result.stderr)
@@ -68,6 +69,40 @@ test(utilityLedger ? 'React + Laravel + isolated MySQL: utility ledger' : 'React
     await page.getByLabel('Email', { exact: true }).fill('billing-browser@example.invalid')
     await page.getByLabel('Mật khẩu', { exact: true }).fill('BrowserTest123!')
     await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click(); await page.waitForURL('**/dashboard')
+    if (contractExit) {
+      await page.goto(`http://127.0.0.1:8849/contracts/${fixture.a}`)
+      await page.getByRole('button', { name: 'Ghi nhận cọc', exact: true }).click()
+      await page.getByLabel('Số tiền (đ)', { exact: true }).fill('1000000')
+      await page.getByLabel('Thời điểm giao dịch', { exact: true }).fill('2026-10-02T08:00')
+      await page.getByRole('button', { name: 'Lưu giao dịch', exact: true }).click()
+      await page.waitForFunction(() => document.querySelectorAll('#contract-exit').length === 1 &&
+        !document.querySelector('#contract-exit form'))
+      await page.getByRole('cell', { name: 'Nhận cọc', exact: true }).waitFor()
+      await page.getByRole('button', { name: 'Ghi hoàn cọc', exact: true }).click()
+      await page.getByLabel('Số tiền (đ)', { exact: true }).fill('200000')
+      await page.getByLabel('Thời điểm giao dịch', { exact: true }).fill('2026-10-03T08:00')
+      await page.getByRole('button', { name: 'Lưu giao dịch', exact: true }).click()
+      await page.getByRole('cell', { name: 'Hoàn cọc', exact: true }).waitFor()
+      const exitSection = page.locator('#contract-exit')
+      assert.match(await exitSection.innerText(), /800\.000/)
+      await exitSection.scrollIntoViewIfNeeded()
+      await page.screenshot({ path: path.join(output, 'so-coc.png') })
+      await page.getByRole('button', { name: 'Bắt đầu trả phòng', exact: true }).click()
+      const dialog = page.getByRole('dialog', { name: 'Bàn giao phòng' })
+      await dialog.getByLabel('Thời điểm trả phòng').fill('2026-10-15T10:00')
+      await dialog.getByRole('button', { name: 'Tiếp tục', exact: true }).click()
+      const checkout = page.getByRole('dialog')
+      await checkout.getByLabel(/Điện giả lập/).fill('130')
+      await checkout.getByLabel(/Nước giả lập/).fill('25')
+      await checkout.getByRole('button', { name: 'Tiếp tục', exact: true }).click()
+      await page.screenshot({ path: path.join(output, 'xac-nhan-tra-phong.png') })
+      await checkout.getByRole('button', { name: 'Xác nhận trả phòng', exact: true }).click()
+      await exitSection.getByText(/Chờ quyết toán cuối kỳ/).waitFor()
+      assert.deepEqual(cli('assert-empty'), { invoices: 0, payments: 0, payos_requests: 0 })
+      assert.deepEqual(errors, [])
+      assert.deepEqual(serverErrors, [])
+      return
+    }
     if (utilityLedger) {
       const shot = name => page.screenshot({ path: path.join(output, name + '.png') })
       await page.goto('http://127.0.0.1:8849/utilities')
