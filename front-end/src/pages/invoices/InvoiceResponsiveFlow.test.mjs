@@ -92,9 +92,21 @@ test('invoice list uses the same amounts and detail route in mobile cards and de
   assert.ok(tableContainer.props.className.includes('max-w-full'))
 })
 
+test('disabled PayOS hides payment actions while preserving legacy summary', async () => {
+  const page = await pageHarness('./InvoiceDetailPage.jsx', { invoice: {
+    ...invoiceFixture, payos_new_requests_enabled: false, payos_available: true,
+    payos_payment_request: { order_code: '123456', amount: 2800000, status: 'PENDING', qr_code: 'legacy' },
+  } })
+  const rendered = page.render()
+  assert.equal(rendered.filter(node => node.type === 'button' && /QR thanh toán|QR payOS/.test(text(node))).length, 0)
+  assert.equal(rendered.filter(node => node.props.role === 'dialog').length, 0)
+  assert.ok(rendered.some(node => node.type === 'p' && /Yêu cầu PayOS cũ/.test(text(node)) && /123456/.test(text(node))))
+  assert.equal(page.mutations[4].calls.length, 0)
+})
+
 test('existing payOS QR is reused in a bounded modal with an aspect-preserving SVG', async () => {
   const paymentRequest = { amount: 2800000, qr_code: 'existing-qr-payload', order_code: '123456', checkout_url: 'https://pay.payos.vn/example', description: 'NGUYEN VAN AN CK' }
-  const page = await pageHarness('./InvoiceDetailPage.jsx', { invoice: { ...invoiceFixture, payos_payment_request: paymentRequest } })
+  const page = await pageHarness('./InvoiceDetailPage.jsx', { invoice: { ...invoiceFixture, payos_new_requests_enabled: true, payos_payment_request: paymentRequest } })
   page.render().find((node) => node.type === 'button' && text(node) === 'Xem QR thanh toán').props.onClick()
   const rendered = page.render()
   const modal = rendered.find((node) => node.props.role === 'dialog')

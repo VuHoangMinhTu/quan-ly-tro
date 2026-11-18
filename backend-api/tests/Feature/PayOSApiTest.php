@@ -24,11 +24,27 @@ use PayOS\Models\V2\PaymentRequests\PaymentLink;
 use PayOS\Models\V2\PaymentRequests\PaymentLinkStatus;
 use PayOS\Models\Webhooks\WebhookData;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class PayOSApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_disabled_creation_preserves_legacy_requests_and_payments(): void
+    {
+        [$user, $invoice] = $this->ownerAndInvoice(5_000_000, 0);
+        $request = $this->paymentRequest($invoice, 5_000_000);
+        $before = $request->fresh()->getAttributes();
+        config(['services.payos.new_requests_enabled' => false]);
+        $this->withToken($user->createToken('test')->plainTextToken)
+            ->postJson("/api/invoices/{$invoice->id}/payos")->assertStatus(503);
+        $this->assertSame($before, $request->fresh()->getAttributes());
+        $this->assertDatabaseCount('payos_payment_requests', 1);
+        $this->assertDatabaseCount('payments', 0);
+        $this->expectException(HttpException::class);
+        app(PayOSService::class)->createOrReuse($invoice);
+    }
 
     public function test_owner_can_create_a_payos_payment_request_for_the_remaining_amount(): void
     {
