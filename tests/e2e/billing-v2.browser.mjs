@@ -80,6 +80,24 @@ test(utilityLedger ? 'React + Laravel + isolated MySQL: utility ledger' : 'React
         assert.match((await denied.json()).errors.status[0], /Billing V2/)
       }
       const shot = name => page.screenshot({ path: path.join(output, name + '.png') })
+      if (process.env.BEEHOUSE_INTEGRATION_BROWSER === '1') {
+        for (const [meter, reading] of [[fixture.meter, 100], [fixture.waterMeter, 20]]) {
+          const saved = await context.request.post(`http://127.0.0.1:8849/api/billing-v2/meters/${meter}/period-boundaries`, { headers: ownerHeaders, data: {
+            billing_period: '2026-10-01', start_observed_at: '2026-10-01 00:00:00', end_observed_at: '2026-10-05 08:00:00', start_reading_value: reading, end_reading_value: reading,
+          } })
+          assert.equal(saved.status(), 200, await saved.text())
+        }
+        const ledger = await context.request.get(`http://127.0.0.1:8849/api/boarding-houses/${fixture.house}/utility-ledger?year=2026`, { headers: ownerHeaders })
+        assert.equal(ledger.status(), 200)
+        assert.equal((await ledger.json()).data.boundaries.length, 2)
+        await page.goto('http://127.0.0.1:8849/utilities')
+        await page.getByLabel('Nhà trọ', { exact: true }).selectOption(String(fixture.house))
+        await page.getByRole('button', { name: '101', exact: true }).click()
+        await page.getByRole('table', { name: 'Lịch sử chỉ số 12 tháng' }).waitFor()
+        await page.screenshot({ path: path.join(output, '00-ledger-before-checkout.png') })
+        assert.deepEqual(cli('assert-empty'), { invoices: 0, payments: 0, payos_requests: 0 })
+        const shot = name => page.screenshot({ path: path.join(output, name + '.png') })
+      }
       const align = locator => locator.evaluate(element => element.scrollIntoView({ block: 'start' }))
       await page.goto(`http://127.0.0.1:8849/contracts/${fixture.a}`)
       await page.getByRole('button', { name: 'Bắt đầu trả phòng', exact: true }).waitFor()

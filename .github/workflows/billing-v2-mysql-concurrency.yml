@@ -1,17 +1,19 @@
 
-name: BeeHouse Billing V2 MySQL concurrency
+name: BeeHouse Integration QA
 
 on:
   workflow_dispatch:
+  push:
+    branches: [codex/beehouse-integration-qa]
 
 permissions:
   contents: read
 
 jobs:
   mysql-concurrency:
-    name: Three isolated MySQL concurrency tests
+    name: Integration QA (PHP 8.3 / MySQL 8.0 / Chromium)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
 
     services:
       mysql:
@@ -22,7 +24,7 @@ jobs:
           MYSQL_USER: billing_test
           MYSQL_PASSWORD: ci_test_only
         ports:
-          - 13368:3306
+          - 13369:3306
         options: >-
           --health-cmd="mysqladmin ping --protocol=tcp -h 127.0.0.1 -u root -pci_root_only"
           --health-interval=5s
@@ -31,6 +33,7 @@ jobs:
 
     defaults:
       run:
+        shell: bash
         working-directory: backend-api
 
     env:
@@ -49,6 +52,7 @@ jobs:
       SESSION_DRIVER: array
       QUEUE_CONNECTION: sync
       MAIL_MAILER: array
+      PAYOS_NEW_REQUESTS_ENABLED: 'false'
 
     steps:
       - name: Checkout source
@@ -58,13 +62,12 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, xml, dom, pdo_mysql, zip, gd, intl, bcmath
+          extensions: mbstring, xml, dom, pdo_mysql, pdo_sqlite, zip, gd, intl, bcmath
           coverage: none
           tools: composer:v2
 
       - name: Install PHP dependencies
         run: |
-          cp .env.example .env
           composer install --no-interaction --prefer-dist --no-progress
           php artisan config:clear
 
@@ -72,9 +75,87 @@ jobs:
         run: |
           php -r 'if (getenv("APP_ENV") !== "testing" || getenv("DB_HOST") !== "127.0.0.1" || getenv("DB_PORT") !== "13368" || getenv("DB_DATABASE") !== "beehouse_billing_v2_test") { fwrite(STDERR, "Unsafe database environment\n"); exit(1); }'
 
-      - name: Run MySQL concurrency tests
+      - name: Laravel full suite
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          PAYOS_NEW_REQUESTS_ENABLED: 'true'
+        run: |
+          mkdir -p ../tmp/qa-reports
+          php -d memory_limit=1024M vendor/bin/phpunit --log-junit ../tmp/qa-reports/laravel.xml 2>&1 | tee ../tmp/qa-reports/laravel.log
+
+      - name: Verify PayOS disabled and checkout authorization
+        if: ${{ !cancelled() }}
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: |
+          mkdir -p ../tmp/qa-reports
+          php vendor/bin/phpunit --filter 'test_disabled_creation_preserves_legacy_requests_and_payments|test_legacy_status_transition_requires_checkout_for_a_v2_contract|test_case_i_rejects_cross_landlord_access_with_404' --log-junit ../tmp/qa-reports/safety.xml 2>&1 | tee ../tmp/qa-reports/safety.log
+
+      - name: Run MySQL concurrency and idempotency
+        if: ${{ !cancelled() }}
         run: |
           php -d memory_limit=512M vendor/bin/phpunit \
+            --bootstrap tests/Fixtures/BillingV2MysqlBootstrap.php \
             --filter=BillingV2MysqlConcurrencyTest \
             --display-skipped \
-            --fail-on-skipped
+            --fail-on-skipped --log-junit ../tmp/qa-reports/mysql.xml 2>&1 | tee ../tmp/qa-reports/mysql.log
+
+      - uses: actions/setup-node@v4
+        if: ${{ !cancelled() }}
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: front-end/package-lock.json
+
+      - name: Install frontend and Chromium
+        if: ${{ !cancelled() }}
+        id: frontend
+        working-directory: front-end
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Frontend tests
+        if: ${{ !cancelled() && steps.frontend.outcome == 'success' }}
+        working-directory: front-end
+        run: find src -name '*.test.mjs' -print0 | xargs -0 node --test 2>&1 | tee ../tmp/qa-reports/frontend.tap
+
+      - name: Lint
+        if: ${{ !cancelled() && steps.frontend.outcome == 'success' }}
+        working-directory: front-end
+        run: npm run lint 2>&1 | tee ../tmp/qa-reports/lint.log
+
+      - name: Build
+        if: ${{ !cancelled() && steps.frontend.outcome == 'success' }}
+        id: build
+        working-directory: front-end
+        run: npx vite build --outDir ../tmp/billing-v2-dist 2>&1 | tee ../tmp/qa-reports/build.log
+
+      - name: Chromium Utility Ledger desktop and mobile
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        working-directory: .
+        env:
+          UTILITY_LEDGER_BROWSER: '1'
+        run: E2E_PHP_PATH="$(command -v php)" node --test tests/e2e/billing-v2.browser.mjs 2>&1 | tee tmp/qa-reports/utility-chromium.tap
+
+      - name: Chromium integrated ledger, deposit and checkout
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        working-directory: .
+        env:
+          CONTRACT_EXIT_BROWSER: '1'
+          BEEHOUSE_INTEGRATION_BROWSER: '1'
+        run: E2E_PHP_PATH="$(command -v php)" node --test tests/e2e/billing-v2.browser.mjs 2>&1 | tee tmp/qa-reports/integration-chromium.tap
+
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beehouse-integration-qa
+          path: |
+            tmp/qa-reports/
+            tmp/contract-exit-*/
+            tmp/utility-ledger-polish-*/
+            backend-api/storage/logs/
+          retention-days: 14
