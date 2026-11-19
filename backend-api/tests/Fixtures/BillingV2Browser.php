@@ -25,6 +25,9 @@ if (($argv[1] ?? '') === 'seed') {
     foreach ([$a, $b] as $contract) {
         $contract->handoverReports()->create(['type' => 'CHECK_IN', 'status' => 'CONFIRMED', 'items' => [], 'confirmed_at' => now()]);
     }
+    if (getenv('CONTRACT_EXIT_BROWSER') === '1') {
+        $b->occupants()->create(['room_id' => $room->id, 'tenant_id' => $b->tenant_id, 'is_primary' => true, 'status' => 'ACTIVE', 'move_in_date' => '2026-10-20']);
+    }
     $service = $room->boardingHouse->services()->create(['name' => 'Điện giả lập', 'type' => 'ELECTRICITY', 'billing_method' => 'TIERED', 'base_price' => 0, 'unit' => 'kWh', 'is_active' => true]);
     $service->priceTiers()->createMany([['from_quantity' => 0, 'to_quantity' => 20, 'unit_price' => 2000, 'tier_order' => 1], ['from_quantity' => 20, 'to_quantity' => null, 'unit_price' => 4000, 'tier_order' => 2]]);
     foreach ([$a, $b] as $contract) {
