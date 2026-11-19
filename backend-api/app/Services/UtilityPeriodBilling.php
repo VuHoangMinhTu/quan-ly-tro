@@ -69,7 +69,9 @@ class UtilityPeriodBilling
     private function assertLegacyMeterHistoryConsistent(UtilityMeter $meter): void
     {
         $legacy = $meter->readings()->get(['reading_date', 'reading_value']);
-        if ($legacy->isEmpty()) return;
+        if ($legacy->isEmpty()) {
+            return;
+        }
         $effective = DB::table('utility_checkpoints')->where('utility_meter_id', $meter->id)
             ->orderByDesc('revision')->orderByDesc('id')->get()->unique('scope_key');
         foreach ($legacy as $reading) {
@@ -109,10 +111,17 @@ class UtilityPeriodBilling
             $this->require($monthlyUpdate || ! DB::table('monthly_invoice_compositions')->whereIn('invoice_id', $room->invoices()->select('id'))->where('billing_period', $period)->exists(), 'invoice_review', 'Kỳ đã tổng hợp hóa đơn tháng. Không tính lại riêng điện nước làm mất khoản phòng/dịch vụ; cần đối soát.');
             $existingCycles = DB::table('utility_billing_periods')->whereIn('utility_meter_id', $room->utilityMeters()->withTrashed()->select('id'))->where('billing_period', $period)->get();
             $meters = $this->metersForPeriod($room, $period, $start, $end);
-            $windows = $this->resolveMeterWindows($meters, $existingCycles, $start, $end, $monthlyUpdate, $meterPeriods);
+            $linked = DB::table('utility_meter_period_boundaries as link')
+                ->join('utility_checkpoints as opening', 'opening.id', '=', 'link.start_checkpoint_id')
+                ->join('utility_checkpoints as closing', 'closing.id', '=', 'link.end_checkpoint_id')
+                ->whereIn('link.utility_meter_id', $meters->pluck('id'))->where('link.billing_period', $period)
+                ->get(['link.utility_meter_id', 'opening.observed_at as starts_at', 'closing.observed_at as ends_at'])
+                ->keyBy('utility_meter_id');
+            $windows = $this->resolveMeterWindows($meters, $existingCycles, $linked, $start, $end, $meterPeriods);
             if ($existingCycles->isNotEmpty() && ! $monthlyUpdate) {
                 $sameWindow = $existingCycles->count() === $meters->count() && $existingCycles->every(function ($cycle) use ($windows) {
                     $window = $windows[(int) $cycle->utility_meter_id] ?? null;
+
                     return $window && $cycle->usage_start_at === $window[0]->format('Y-m-d H:i:s')
                         && $cycle->usage_end_at === $window[1]->format('Y-m-d H:i:s');
                 });
@@ -191,7 +200,7 @@ class UtilityPeriodBilling
      * the same physical reading times. Explicit windows are scoped to meter IDs.
      * A previously calculated mixed window may be replayed and rebuilt safely.
      */
-    private function resolveMeterWindows(Collection $meters, $existingCycles, CarbonImmutable $start, CarbonImmutable $end, bool $monthlyUpdate, array $meterPeriods): array
+    private function resolveMeterWindows(Collection $meters, $existingCycles, \Illuminate\Support\Collection $linked, CarbonImmutable $start, CarbonImmutable $end, array $meterPeriods): array
     {
         $ids = $meters->pluck('id')->map(fn ($id) => (int) $id)->all();
         $existing = $existingCycles->keyBy('utility_meter_id');
@@ -204,8 +213,14 @@ class UtilityPeriodBilling
         $windows = [];
         foreach ($meters as $meter) {
             $row = $specified->get($meter->id);
+            $link = $linked->get($meter->id);
             $fromExisting = false;
-            if ($row) {
+            if ($link) {
+                $this->require(! $row || ($row['usage_start_at'] === $link->starts_at && $row['usage_end_at'] === $link->ends_at), 'meter_periods', 'Kỳ sử dụng phải khớp mốc đã xác nhận trong sổ điện nước.');
+                $fromExisting = true;
+                $meterStart = CarbonImmutable::parse($link->starts_at, 'Asia/Ho_Chi_Minh');
+                $meterEnd = CarbonImmutable::parse($link->ends_at, 'Asia/Ho_Chi_Minh');
+            } elseif ($row) {
                 $meterStart = CarbonImmutable::parse($row['usage_start_at'], 'Asia/Ho_Chi_Minh');
                 $meterEnd = CarbonImmutable::parse($row['usage_end_at'], 'Asia/Ho_Chi_Minh');
             } elseif ($existing->has($meter->id) && $mixedExisting) {
@@ -214,7 +229,7 @@ class UtilityPeriodBilling
                 $meterStart = CarbonImmutable::parse($cycle->usage_start_at, $cycle->timezone);
                 $meterEnd = CarbonImmutable::parse($cycle->usage_end_at, $cycle->timezone);
             } else {
-                $this->require(!$specified->isNotEmpty(), 'meter_periods', 'Đã gửi kỳ riêng nhưng thiếu công tơ #'.$meter->id.'.');
+                $this->require(! $specified->isNotEmpty(), 'meter_periods', 'Đã gửi kỳ riêng nhưng thiếu công tơ #'.$meter->id.'.');
                 $meterStart = $start;
                 $meterEnd = $end;
             }

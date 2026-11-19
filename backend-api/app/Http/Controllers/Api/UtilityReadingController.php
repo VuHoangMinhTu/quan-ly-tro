@@ -22,6 +22,7 @@ class UtilityReadingController extends Controller
     public function store(StoreUtilityReadingRequest $request, int $meterId): JsonResponse
     {
         $meter = $this->meter($request, $meterId);
+        $this->ensureLegacyWriteAllowed($meter);
         $data = $request->validated();
         $this->validateSequence($meter, $data);
         $meter->readings()->create($data);
@@ -37,6 +38,7 @@ class UtilityReadingController extends Controller
     public function update(UpdateUtilityReadingRequest $request, int $id): JsonResponse
     {
         $reading = $this->reading($request, $id);
+        $this->ensureLegacyWriteAllowed($reading->meter);
         $data = $request->validated();
         $this->validateSequence($reading->meter, $data, $reading->id);
         $reading->update($data);
@@ -46,19 +48,34 @@ class UtilityReadingController extends Controller
 
     public function destroy(Request $request, int $id): JsonResponse
     {
-        $this->reading($request, $id)->delete();
+        $reading = $this->reading($request, $id);
+        $this->ensureLegacyWriteAllowed($reading->meter);
+        $reading->delete();
 
         return ApiResponse::success(null, 'Xóa chỉ số điện/nước thành công.');
     }
 
     private function meter(Request $request, int $id): UtilityMeter
     {
+        abort_unless($request->user()->landlord, 404);
+
         return UtilityMeter::whereHas('room.boardingHouse', fn ($query) => $query->where('landlord_id', $request->user()->landlord->id))->findOrFail($id);
     }
 
     private function reading(Request $request, int $id): UtilityReading
     {
+        abort_unless($request->user()->landlord, 404);
+
         return UtilityReading::whereHas('meter.room.boardingHouse', fn ($query) => $query->where('landlord_id', $request->user()->landlord->id))->findOrFail($id);
+    }
+
+    private function ensureLegacyWriteAllowed(UtilityMeter $meter): void
+    {
+        if ($meter->room?->room_type !== 'DORMITORY') {
+            throw ValidationException::withMessages([
+                'reading_value' => 'Lịch sử chỉ số chỉ để tra cứu. Ghi hoặc đính chính chỉ số tại Quyết toán điện nước.',
+            ]);
+        }
     }
 
     private function validateSequence(UtilityMeter $meter, array $data, ?int $ignoreId = null): void

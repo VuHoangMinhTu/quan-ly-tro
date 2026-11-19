@@ -11,7 +11,7 @@ require __DIR__.'/BillingV2MysqlBootstrap.php';
 $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
 if (config('database.default') !== 'mysql' || config('database.connections.mysql.database') !== 'beehouse_billing_v2_test'
-    || config('database.connections.mysql.host') !== '127.0.0.1' || (string) config('database.connections.mysql.port') !== '13368') {
+    || config('database.connections.mysql.host') !== '127.0.0.1' || ! in_array((string) config('database.connections.mysql.port'), ['13368', '13369'], true)) {
     throw new RuntimeException('Effective database is not isolated.');
 }
 $directory = realpath($argv[2] ?? '');
