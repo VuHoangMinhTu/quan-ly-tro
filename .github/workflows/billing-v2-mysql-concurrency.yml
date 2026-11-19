@@ -43,7 +43,7 @@ jobs:
       BILLING_V2_ENABLED: 'true'
       DB_CONNECTION: mysql
       DB_HOST: 127.0.0.1
-      DB_PORT: '13368'
+      DB_PORT: '13369'
       DB_DATABASE: beehouse_billing_v2_test
       DB_USERNAME: billing_test
       DB_PASSWORD: ci_test_only
@@ -73,7 +73,8 @@ jobs:
 
       - name: Verify isolated database
         run: |
-          php -r 'if (getenv("APP_ENV") !== "testing" || getenv("DB_HOST") !== "127.0.0.1" || getenv("DB_PORT") !== "13368" || getenv("DB_DATABASE") !== "beehouse_billing_v2_test") { fwrite(STDERR, "Unsafe database environment\n"); exit(1); }'
+          php -r 'if (getenv("APP_ENV") !== "testing" || getenv("DB_HOST") !== "127.0.0.1" || getenv("DB_PORT") !== "13369" || getenv("DB_DATABASE") !== "beehouse_billing_v2_test") { fwrite(STDERR, "Unsafe database environment\n"); exit(1); }'
+          php -r '$db = new PDO("mysql:host=127.0.0.1;port=".getenv("DB_PORT").";dbname=".getenv("DB_DATABASE"), getenv("DB_USERNAME"), getenv("DB_PASSWORD")); echo $db->query("SELECT CONCAT(VERSION(), CHAR(32), DATABASE())")->fetchColumn(), PHP_EOL;'
 
       - name: Laravel full suite
         env:
