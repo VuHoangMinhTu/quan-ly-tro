@@ -102,6 +102,14 @@ jobs:
             --display-skipped \
             --fail-on-skipped --log-junit ../tmp/qa-reports/mysql.xml 2>&1 | tee ../tmp/qa-reports/mysql.log
 
+      - name: Upload backend reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beehouse-backend-qa
+          path: tmp/qa-reports/
+          retention-days: 14
+
       - uses: actions/setup-node@v4
         if: ${{ !cancelled() }}
         with:
@@ -109,13 +117,12 @@ jobs:
           cache: npm
           cache-dependency-path: front-end/package-lock.json
 
-      - name: Install frontend and Chromium
+      - name: Install frontend
         if: ${{ !cancelled() }}
         id: frontend
+        timeout-minutes: 5
         working-directory: front-end
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
+        run: npm ci --fetch-retries=1 --fetch-timeout=30000 2>&1 | tee ../tmp/qa-reports/npm-install.log
 
       - name: Frontend tests
         if: ${{ !cancelled() && steps.frontend.outcome == 'success' }}
@@ -133,15 +140,24 @@ jobs:
         working-directory: front-end
         run: npx vite build --outDir ../tmp/billing-v2-dist 2>&1 | tee ../tmp/qa-reports/build.log
 
-      - name: Chromium Utility Ledger desktop and mobile
+      - name: Install Chromium
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        id: chromium
+        timeout-minutes: 5
+        working-directory: front-end
+        env:
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: '30000'
+        run: npx playwright install chromium 2>&1 | tee ../tmp/qa-reports/chromium-install.log
+
+      - name: Chromium Utility Ledger desktop and mobile
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.chromium.outcome == 'success' }}
         working-directory: .
         env:
           UTILITY_LEDGER_BROWSER: '1'
         run: E2E_PHP_PATH="$(command -v php)" node --test tests/e2e/billing-v2.browser.mjs 2>&1 | tee tmp/qa-reports/utility-chromium.tap
 
       - name: Chromium integrated ledger, deposit and checkout
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.chromium.outcome == 'success' }}
         working-directory: .
         env:
           CONTRACT_EXIT_BROWSER: '1'
