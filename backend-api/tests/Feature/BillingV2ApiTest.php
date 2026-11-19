@@ -759,6 +759,12 @@ class BillingV2ApiTest extends TestCase
         [$a] = $this->fixture();
 
         $this->putJson("/api/contracts/{$a->id}/status", ['status' => 'TERMINATED', 'move_out_date' => '2026-10-15'])->assertUnprocessable()->assertJsonValidationErrors('status');
+        DB::table('utility_checkpoints')->where('contract_id', $a->id)->delete();
+        $this->putJson("/api/contracts/{$a->id}", ['status' => 'TERMINATED'])->assertUnprocessable()->assertJsonValidationErrors('status');
+        $this->putJson("/api/contracts/{$a->id}/status", ['status' => 'EXPIRED'])->assertUnprocessable()->assertJsonValidationErrors('status');
+        $this->actingAs(User::factory()->create(), 'sanctum');
+        $this->putJson("/api/contracts/{$a->id}/status", ['status' => 'TERMINATED'])->assertNotFound();
+        $this->putJson("/api/contracts/{$a->id}", ['status' => 'TERMINATED'])->assertNotFound();
 
         $this->assertSame('ACTIVE', $a->fresh()->status);
         $this->assertDatabaseCount('contract_terminations', 0);

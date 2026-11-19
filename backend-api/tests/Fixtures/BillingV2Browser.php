@@ -81,6 +81,10 @@ if (($argv[1] ?? '') === 'seed') {
         DB::commit();
     }
     echo json_encode(['user' => $user->id, 'house' => $room->boarding_house_id, 'room' => $room->id, 'ktxRoom' => $dormitory->id, 'a' => $a->id, 'b' => $b->id, 'meter' => $meter->id, 'waterMeter' => $waterMeter->id], JSON_THROW_ON_ERROR);
+} elseif (($argv[1] ?? '') === 'assert-checkout') {
+    $termination = DB::table('contract_terminations')->sole();
+    $settlement = DB::table('contract_settlements')->where('contract_id', $termination->contract_id)->sole();
+    echo json_encode(['actual_ended_at' => $termination->actual_ended_at, 'billing_period' => $settlement->billing_period], JSON_THROW_ON_ERROR);
 } elseif (($argv[1] ?? '') === 'assert-empty') {
     if (Invoice::count() !== 0 || DB::table('payments')->count() !== 0 || DB::table('payos_payment_requests')->count() !== 0) {
         throw new RuntimeException('Flag-off browser path created financial records.');

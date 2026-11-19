@@ -198,7 +198,8 @@ export default function ContractExitSection({ contract, view = 'overview' }) {
     {view === 'deposit' ? <DepositLedger contract={contract} rows={rows} held={held} refresh={refresh} /> : <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-lg font-semibold">Trả phòng</h3>{contract.status === 'ACTIVE' && data.room.room_type === 'PRIVATE_ROOM' && <button type="button" className={primary} onClick={() => setCheckout(true)}>Bắt đầu trả phòng</button>}</div>
       {data.room.room_type !== 'PRIVATE_ROOM' && <p className="text-sm text-slate-600">Xác nhận trả phòng Billing V2 hiện áp dụng cho phòng riêng.</p>}
-      {settlements.map(row => <p key={row.id} className="text-sm text-slate-700">{row.billing_period ? formatExitTime(row.billing_period) : ''} · {row.status === 'FINAL_RECONCILED' ? 'Đã đối soát cuối kỳ' : 'Chờ quyết toán cuối kỳ'}</p>)}
+      {contract.actual_ended_at && <p className="text-sm text-slate-700">Ngày trả phòng: <strong>{formatExitTime(contract.actual_ended_at)}</strong></p>}
+      {settlements.map(row => <p key={row.id} className="text-sm text-slate-700">{row.billing_period ? `Kỳ quyết toán ${row.billing_period.slice(5, 7)}/${row.billing_period.slice(0, 4)} · ` : ''} {row.status === 'FINAL_RECONCILED' ? 'Đã đối soát cuối kỳ' : 'Chờ quyết toán cuối kỳ'}</p>)}
       {settlements.some(row => row.confirmation_state === 'NEEDS_OWNER_CONFIRMATION') && <button type="button" className={secondary} disabled={confirm.isPending} onClick={() => confirm.mutate()}>Xác nhận đã đối soát và không còn giữ cọc</button>}
       {confirm.isError && <p role="alert" className="text-sm text-red-700">{getApiErrorMessage(confirm.error)}</p>}
     </section>}

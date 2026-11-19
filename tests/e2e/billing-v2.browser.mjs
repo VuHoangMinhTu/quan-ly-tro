@@ -70,10 +70,20 @@ test(utilityLedger ? 'React + Laravel + isolated MySQL: utility ledger' : 'React
     await page.getByLabel('Mật khẩu', { exact: true }).fill('BrowserTest123!')
     await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click(); await page.waitForURL('**/dashboard')
     if (contractExit) {
+      const ownerLogin = await context.request.post('http://127.0.0.1:8849/api/login', { data: { email: 'billing-browser@example.invalid', password: 'BrowserTest123!' }, headers: { Accept: 'application/json' } })
+      assert.equal(ownerLogin.status(), 200)
+      const ownerHeaders = { Accept: 'application/json', Authorization: `Bearer ${(await ownerLogin.json()).data.token}` }
+      // B has no CHECK_IN. The legacy status endpoint must still reject both shortcuts.
+      for (const status of ['TERMINATED', 'EXPIRED']) {
+        const denied = await context.request.put(`http://127.0.0.1:8849/api/contracts/${fixture.b}/status`, { headers: ownerHeaders, data: { status } })
+        assert.equal(denied.status(), 422)
+        assert.match((await denied.json()).errors.status[0], /Billing V2/)
+      }
       const shot = name => page.screenshot({ path: path.join(output, name + '.png') })
       const align = locator => locator.evaluate(element => element.scrollIntoView({ block: 'start' }))
       await page.goto(`http://127.0.0.1:8849/contracts/${fixture.a}`)
       await page.getByRole('button', { name: 'Bắt đầu trả phòng', exact: true }).waitFor()
+      assert.equal(await page.getByRole('button', { name: /^Chấm dứt/ }).count(), 0)
       await align(page.locator('#contract-exit'))
       await shot('01-chi-tiet-hop-dong-desktop')
       await page.getByRole('tab', { name: 'Sổ cọc', exact: true }).click()
@@ -162,8 +172,12 @@ test(utilityLedger ? 'React + Laravel + isolated MySQL: utility ledger' : 'React
       await checkout.getByRole('button', { name: 'Xác nhận trả phòng', exact: true }).click()
       assert.equal((await checkoutRequest).postDataJSON().actual_ended_at, '2026-10-15 10:00:00')
       await exitSection.getByText(/Chờ quyết toán cuối kỳ/).waitFor()
+      assert.deepEqual(cli('assert-checkout'), { actual_ended_at: '2026-10-15 10:00:00', billing_period: '2026-10-01' })
+      const detail = await context.request.get(`http://127.0.0.1:8849/api/contracts/${fixture.a}`, { headers: ownerHeaders })
+      assert.equal((await detail.json()).data.actual_ended_at, '2026-10-15 10:00:00')
       await page.reload()
-      await exitSection.getByText(/Chờ quyết toán cuối kỳ/).waitFor()
+      await exitSection.getByText('Ngày trả phòng: 15/10/2026 10:00').waitFor()
+      await exitSection.getByText('Kỳ quyết toán 10/2026 · Chờ quyết toán cuối kỳ').waitFor()
       assert.equal(await page.getByRole('button', { name: 'Bắt đầu trả phòng', exact: true }).count(), 0)
       await align(exitSection)
       await page.screenshot({ path: path.join(output, 'mobile-da-tra-phong.png') })
@@ -174,6 +188,10 @@ test(utilityLedger ? 'React + Laravel + isolated MySQL: utility ledger' : 'React
       await shot('09-trang-sau-tra-phong-desktop')
       await exitSection.evaluate(section => section.scrollIntoView({ block: 'start' }))
       await page.screenshot({ path: path.join(output, 'desktop-da-tra-phong.png') })
+      await page.getByRole('tab', { name: 'Sổ cọc', exact: true }).click()
+      await page.getByRole('cell', { name: 'Hoàn cọc', exact: true }).waitFor()
+      assert.equal(await page.locator('#contract-exit tbody tr').count(), 2)
+      assert.match(await exitSection.innerText(), /800\.000/)
       assert.deepEqual(cli('assert-empty'), { invoices: 0, payments: 0, payos_requests: 0 })
       // Seed a deliberate outstanding invoice through the existing API, separate from the zero-side-effect checkout scenario.
       const login = await context.request.post('http://127.0.0.1:8849/api/login', { data: { email: 'billing-browser@example.invalid', password: 'BrowserTest123!' }, headers: { Accept: 'application/json' } })
