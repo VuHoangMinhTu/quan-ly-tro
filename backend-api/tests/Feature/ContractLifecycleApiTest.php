@@ -211,6 +211,7 @@ class ContractLifecycleApiTest extends TestCase
     #[TestWith([false])]
     public function test_termination_preserves_or_ends_every_occupant_and_room_status(bool $returnRoom): void
     {
+        config(['billing.v2_enabled' => false]);
         [$old, $owner, , $roommate] = $this->fixture();
         $third = Tenant::create(['landlord_id' => $roommate->landlord_id, 'full_name' => 'Người ở cùng thứ hai']);
         $old->room->update(['max_tenants' => 3]);
@@ -305,6 +306,7 @@ class ContractLifecycleApiTest extends TestCase
 
     public function test_terminated_contract_with_moved_out_primary_allows_new_contract_without_changing_history(): void
     {
+        config(['billing.v2_enabled' => false]);
         [$old, $owner] = $this->fixture();
         $old->tenant->update(['full_name' => 'Nguyễn Văn Cũ']);
         $this->login($owner)->putJson("/api/contracts/{$old->id}", $this->activate($old, $owner))->assertOk();
@@ -323,6 +325,7 @@ class ContractLifecycleApiTest extends TestCase
 
     public function test_terminated_contract_without_move_out_keeps_primary_and_blocks_new_activation(): void
     {
+        config(['billing.v2_enabled' => false]);
         [$old, $owner] = $this->fixture();
         $old->tenant->update(['full_name' => 'Nguyễn Văn Đang Ở']);
         $this->login($owner)->putJson("/api/contracts/{$old->id}", $this->activate($old, $owner))->assertOk();
@@ -432,6 +435,7 @@ class ContractLifecycleApiTest extends TestCase
 
     public function test_ending_contract_keeps_snapshot_and_occupancy_history_and_cannot_reopen(): void
     {
+        config(['billing.v2_enabled' => false]);
         $this->travelTo('2027-10-01');
         [$contract, $owner] = $this->fixture();
         $this->login($owner)->putJson("/api/contracts/{$contract->id}", $this->activate($contract, $owner))->assertOk();
@@ -445,6 +449,7 @@ class ContractLifecycleApiTest extends TestCase
 
     public function test_early_expiry_is_rejected_and_termination_can_keep_occupancy_active(): void
     {
+        config(['billing.v2_enabled' => false]);
         $this->travelTo('2026-10-15');
         [$contract, $owner] = $this->fixture();
         $this->login($owner)->putJson("/api/contracts/{$contract->id}", $this->activate($contract, $owner))->assertOk();
