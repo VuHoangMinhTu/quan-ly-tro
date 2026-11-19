@@ -1,11 +1,13 @@
 <?php
 
 use App\Models\Room;
+use App\Services\BillingV2Evidence;
 use App\Services\MonthlyDraftRecalculation;
 use App\Services\MonthlyInvoiceBilling;
 use App\Services\UtilityPeriodBilling;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 require __DIR__.'/BillingV2MysqlBootstrap.php';
 $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
@@ -30,7 +32,21 @@ while (! is_file($directory.'/go')) {
 }
 file_put_contents($directory.'/attempting-'.$worker, 'attempting');
 $room = Room::findOrFail((int) $argv[1]);
-if (($argv[4] ?? '') === 'recalculate') {
+if (in_array($argv[4] ?? '', ['refund', 'refund-retry'], true)) {
+    $contract = $room->contracts()->firstOrFail();
+    try {
+        $id = $app->make(BillingV2Evidence::class)->deposit($contract, [
+            'event' => 'REFUNDED', 'amount' => 800,
+            'occurred_at' => '2026-10-02 08:00:00',
+            'request_key' => $argv[4] === 'refund-retry' ? 'shared-refund' : 'refund-'.$worker,
+        ], $room->boardingHouse->landlord->user_id);
+        $refund = ['id' => $id, 'blocked' => false];
+    } catch (ValidationException $error) {
+        $refund = ['id' => null, 'blocked' => true];
+    }
+    echo json_encode($refund + ['connection_id' => DB::selectOne('SELECT CONNECTION_ID() AS id')->id]);
+    exit(0);
+} elseif (($argv[4] ?? '') === 'recalculate') {
     $confirmed = $app->make(MonthlyDraftRecalculation::class)->confirm($room, $argv[5], 'Synthetic concurrent correction', $room->boardingHouse->landlord->user_id);
     $result = ['invoices' => $room->invoices()->get()->all()];
 } elseif (($argv[4] ?? '') === 'monthly') {

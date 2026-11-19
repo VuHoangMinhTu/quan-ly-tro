@@ -27,6 +27,7 @@ class NewTenantUtilityBillingTest extends TestCase
         $old = Contract::factory()->create(['room_id' => $new->room_id, 'status' => 'ACTIVE', 'start_date' => '2026-09-01', 'end_date' => '2027-09-30']);
         $old->occupants()->create(['room_id' => $old->room_id, 'tenant_id' => $old->tenant_id, 'is_primary' => true, 'move_in_date' => '2026-09-01', 'status' => 'ACTIVE']);
         $old->utilityOpenings()->create(['utility_meter_id' => $meter->id, 'service_id' => $service->id, 'service_name' => 'Điện', 'opening_reading' => 100, 'reading_date' => '2026-09-01']);
+        config(['billing.v2_enabled' => false]);
         $this->putJson("/api/contracts/{$old->id}/status", ['status' => 'TERMINATED', 'move_out_date' => '2026-10-22'])->assertOk();
         $new->handoverReports()->create(['type' => 'CHECK_IN', 'status' => 'CONFIRMED', 'items' => [['name' => 'Đồ bàn giao', 'quantity' => 1]], 'confirmed_at' => now()]);
 

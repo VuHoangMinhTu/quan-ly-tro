@@ -18,6 +18,8 @@ class BillingV2MysqlConcurrencyTest extends TestCase
     #[TestWith(['utility'])]
     #[TestWith(['monthly'])]
     #[TestWith(['recalculate'])]
+    #[TestWith(['refund'])]
+    #[TestWith(['refund-retry'])]
     public function test_simultaneous_mysql_workers_wait_on_room_lock_and_create_one_obligation(string $mode): void
     {
         $monthly = $mode !== 'utility';
@@ -58,6 +60,12 @@ class BillingV2MysqlConcurrencyTest extends TestCase
             $token = $preview['token'];
         }
         $directory = dirname(base_path()).'/tmp/billing-v2-mysql/concurrency-'.bin2hex(random_bytes(6));
+        if (str_starts_with($mode, 'refund')) {
+            app(BillingV2Evidence::class)->deposit($contract, [
+                'event' => 'RECEIVED', 'amount' => 1000, 'request_key' => 'initial-receipt',
+                'occurred_at' => '2026-10-01 00:00:00',
+            ], $actor);
+        }
         mkdir($directory, 0700, true);
         $workers = [];
         DB::beginTransaction();
@@ -93,6 +101,20 @@ class BillingV2MysqlConcurrencyTest extends TestCase
                 $results[] = json_decode($stdout, true, flags: JSON_THROW_ON_ERROR);
             }
             $this->assertNotSame($results[0]['connection_id'], $results[1]['connection_id']);
+            if (str_starts_with($mode, 'refund')) {
+                $this->assertDatabaseCount('contract_deposit_entries', 2);
+                $this->assertSame('200', (string) app(BillingV2Evidence::class)->heldDeposit($contract));
+                if ($mode === 'refund') {
+                    $this->assertEqualsCanonicalizing([false, true], array_column($results, 'blocked'));
+                } else {
+                    $this->assertSame($results[0]['id'], $results[1]['id']);
+                }
+                $this->assertDatabaseCount('invoices', 0);
+                $this->assertDatabaseCount('payments', 0);
+                $this->assertDatabaseCount('payos_payment_requests', 0);
+
+                return;
+            }
             $this->assertSame($results[0]['invoice_ids'], $results[1]['invoice_ids']);
             $this->assertDatabaseCount('invoices', 1);
             $this->assertDatabaseCount('invoice_obligations', 1);
