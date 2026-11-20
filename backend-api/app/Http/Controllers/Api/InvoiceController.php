@@ -17,9 +17,12 @@ use App\Services\ContractSettlementPolicy;
 use App\Services\InvoiceContractEligibility;
 use App\Services\InvoicePaymentInfoService;
 use App\Services\PayOSService;
+use Brick\Math\BigDecimal;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -105,6 +108,11 @@ class InvoiceController extends Controller
     {
         $invoice = Invoice::query()->whereHas('room', fn ($query) => $query->whereIn('boarding_house_id', $access->houses($r->user())->select('boarding_houses.id')))
             ->with(['room.boardingHouse', 'contract.tenant', 'contract.bed', 'items', 'payosPaymentRequest'])->findOrFail($id);
+        $payosRequest = $invoice->payosPaymentRequest;
+        $remaining = BigDecimal::of($invoice->total_amount)->minus($invoice->paid_amount);
+        if ($payosRequest && (! $remaining->isPositive() || ! $remaining->isEqualTo($payosRequest->amount))) {
+            $invoice->setRelation('payosPaymentRequest', null);
+        }
         $invoice->setAttribute('can_manage', $access->isOwner($r->user(), $invoice->room->boardingHouse));
         $invoice->setAttribute('billing_engine_version', DB::table('invoice_obligations')->where('invoice_id', $invoice->id)->exists() ? 2 : 1);
         $composition = DB::table('monthly_invoice_compositions')->where('invoice_id', $invoice->id)->first();
@@ -139,7 +147,15 @@ class InvoiceController extends Controller
 
             return $this->updateLockedInvoice($r, $invoice);
         });
-        app(PayOSService::class)->invalidateRequestsForAmountChange($invoice, $oldRemaining, $newRemaining);
+        try {
+            app(PayOSService::class)->invalidateRequestsForAmountChange($invoice, $oldRemaining, $newRemaining);
+        } catch (QueryException $exception) {
+            // The invoice already committed. The detail response independently rejects an outdated QR.
+            Log::warning('Invoice updated but legacy PayOS invalidation could not be persisted.', [
+                'invoice_id' => $invoice->id,
+                'sqlstate' => (string) $exception->getCode(),
+            ]);
+        }
 
         return ApiResponse::success(null, 'Cập nhật hóa đơn thành công.');
     }

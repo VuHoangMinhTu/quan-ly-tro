@@ -113,12 +113,14 @@ function InvoiceDetails({ id }) {
   const remaining = Number(invoice.total_amount) - Number(invoice.paid_amount)
   const canPay = canManage && ['UNPAID', 'PARTIALLY_PAID'].includes(invoice.status) && Number(invoice.total_amount) > 0
   const payments = paymentsQuery.data?.data?.data || []
-  const activePayosRequest = payosRequest || invoice.payos_payment_request
+  const matchesRemaining = request => canPay && request && Math.round(Number(request.amount) * 100) === Math.round(remaining * 100)
+  const currentPayosRequest = matchesRemaining(invoice.payos_payment_request) ? invoice.payos_payment_request : null
+  const activePayosRequest = matchesRemaining(payosRequest) ? payosRequest : currentPayosRequest
   const legacyPayos = !invoice.payos_new_requests_enabled && invoice.payos_payment_request
   const payosError = payosMutation.error ? getApiErrorMessage(payosMutation.error) : ''
   const openPayOS = () => {
-    if (invoice.payos_payment_request) {
-      setPayosRequest(invoice.payos_payment_request)
+    if (currentPayosRequest) {
+      setPayosRequest(currentPayosRequest)
       return
     }
     payosMutation.mutate()
@@ -207,10 +209,10 @@ function InvoiceDetails({ id }) {
     <div className="mt-6 min-w-0 rounded-xl bg-white p-4 shadow sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h3 className="font-semibold">Thanh toán</h3>
-        {canPay && <div className="flex flex-wrap gap-2"><button onClick={() => setPayment({})} className="min-h-11 px-2 text-sm underline">Ghi nhận tiền mặt</button>{invoice.payos_new_requests_enabled && (invoice.payos_available || invoice.payos_payment_request) && <button disabled={payosMutation.isPending} onClick={openPayOS} className="min-h-11 rounded bg-blue-700 px-3 py-2 text-sm text-white disabled:opacity-60">{payosMutation.isPending ? 'Đang tạo QR...' : invoice.payos_payment_request ? 'Xem QR thanh toán' : 'Tạo QR thanh toán'}</button>}</div>}
-        {canPay && invoice.payos_new_requests_enabled && !invoice.payos_available && !invoice.payos_payment_request && <p className="text-sm text-slate-600">Chủ trọ chưa cấu hình PayOS.</p>}
+        {canPay && <div className="flex flex-wrap gap-2"><button onClick={() => setPayment({})} className="min-h-11 px-2 text-sm underline">Ghi nhận tiền mặt</button>{invoice.payos_new_requests_enabled && (invoice.payos_available || currentPayosRequest) && <button disabled={payosMutation.isPending} onClick={openPayOS} className="min-h-11 rounded bg-blue-700 px-3 py-2 text-sm text-white disabled:opacity-60">{payosMutation.isPending ? 'Đang tạo QR...' : currentPayosRequest ? 'Xem QR thanh toán' : 'Tạo QR thanh toán'}</button>}</div>}
+        {canPay && invoice.payos_new_requests_enabled && !invoice.payos_available && !currentPayosRequest && <p className="text-sm text-slate-600">Chủ trọ chưa cấu hình PayOS.</p>}
       </div>
-      {invoice.payos_new_requests_enabled && invoice.payos_payment_request && <button type="button" onClick={openPayOS} className="mt-3 min-h-11 text-left text-sm text-blue-700 underline">QR payOS hiện có · {formatCurrency(invoice.payos_payment_request.amount)}</button>}
+      {invoice.payos_new_requests_enabled && currentPayosRequest && <button type="button" onClick={openPayOS} className="mt-3 min-h-11 text-left text-sm text-blue-700 underline">QR payOS hiện có · {formatCurrency(currentPayosRequest.amount)}</button>}
       {payosMutation.isError && <p className="mt-3 break-words text-sm text-red-700">{payosError || 'Không thể tạo yêu cầu thanh toán payOS.'}</p>}
       <p className="mt-3 flex flex-wrap items-center gap-2 text-sm">Trạng thái: <InvoiceStatusBadge status={invoice.status} /></p>
       {invoice.status === 'PAID' && <p className="mt-2 text-sm font-medium">Đã thanh toán đầy đủ{invoice.paid_at ? ` lúc ${formatDate(invoice.paid_at)}` : ''}.</p>}
