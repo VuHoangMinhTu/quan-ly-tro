@@ -99,6 +99,47 @@ class PaymentApiTest extends TestCase
         return [$user, $invoice];
     }
 
+    public function test_key_survives_replay_edit_and_removal_and_conflicting_payload_is_rejected(): void
+    {
+        [$owner, $invoice] = $this->ownerAndInvoice();
+        $this->withToken($owner->createToken('test')->plainTextToken);
+        $url = "/api/invoices/{$invoice->id}/payments";
+        $payload = ['amount' => 100000, 'payment_method' => 'CASH', 'paid_at' => '2026-10-10 08:00:00'];
+        $keyed = [...$payload, 'request_key' => 'e98ce958-a01d-4d67-9abd-7b1622167a01'];
+        $this->postJson($url, $keyed)->assertCreated();
+        $this->postJson($url, [...$keyed, 'amount' => '100000.00'])->assertOk()->assertJsonPath('data.replayed', true);
+        $this->postJson($url, [...$keyed, 'amount' => 200000])->assertUnprocessable()->assertJsonValidationErrors('request_key');
+        $payment = $invoice->payments()->sole();
+        $this->putJson("/api/payments/{$payment->id}", [...$payload, 'amount' => 150000])->assertOk();
+        $this->postJson($url, $keyed)->assertOk();
+        $this->assertSame('150000.00', $invoice->payments()->sole()->amount);
+        $this->deleteJson("/api/payments/{$payment->id}")->assertOk();
+        $this->postJson($url, $keyed)->assertOk();
+        $this->assertDatabaseCount('payments', 0);
+        $this->postJson($url, [...$keyed, 'request_key' => 'e98ce958-a01d-4d67-9abd-7b1622167a02'])->assertCreated();
+        $this->postJson($url, $payload)->assertCreated();
+        $this->assertDatabaseCount('payments', 2);
+        $this->assertDatabaseCount('manual_payment_requests', 2);
+        $this->assertDatabaseCount('invoices', 1);
+        $this->assertDatabaseCount('payos_payment_requests', 0);
+    }
+
+    public function test_keyed_payment_is_scoped_to_owned_invoice_and_failed_validation_does_not_consume_key(): void
+    {
+        [$owner, $invoice] = $this->ownerAndInvoice();
+        [$other, $foreign] = $this->ownerAndInvoice();
+        $payload = ['amount' => 100000, 'payment_method' => 'CASH', 'paid_at' => '2026-10-10 08:00:00', 'request_key' => 'e98ce958-a01d-4d67-9abd-7b1622167a01'];
+        $this->withToken($owner->createToken('test')->plainTextToken)
+            ->postJson("/api/invoices/{$foreign->id}/payments", $payload)->assertNotFound();
+        $this->postJson("/api/invoices/{$invoice->id}/payments", [...$payload, 'amount' => 2000000])->assertUnprocessable();
+        $this->assertDatabaseCount('manual_payment_requests', 0);
+        $this->postJson("/api/invoices/{$invoice->id}/payments", $payload)->assertCreated();
+        $this->app['auth']->forgetGuards();
+        $this->withToken($other->createToken('test')->plainTextToken)
+            ->postJson("/api/invoices/{$foreign->id}/payments", $payload)->assertCreated();
+        $this->assertDatabaseCount('manual_payment_requests', 2);
+    }
+
     /**
      * A basic feature test example.
      */

@@ -132,7 +132,20 @@ class InvoiceController extends Controller
 
     public function update(UpdateInvoiceRequest $r, int $id): JsonResponse
     {
-        $i = $this->invoice($r, $id);
+        $owned = $this->invoice($r, $id);
+        [$invoice, $oldRemaining, $newRemaining] = DB::transaction(function () use ($owned, $r): array {
+            Room::query()->whereKey($owned->room_id)->lockForUpdate()->firstOrFail();
+            $invoice = Invoice::query()->lockForUpdate()->findOrFail($owned->id);
+
+            return $this->updateLockedInvoice($r, $invoice);
+        });
+        app(PayOSService::class)->invalidateRequestsForAmountChange($invoice, $oldRemaining, $newRemaining);
+
+        return ApiResponse::success(null, 'Cập nhật hóa đơn thành công.');
+    }
+
+    private function updateLockedInvoice(UpdateInvoiceRequest $r, Invoice $i): array
+    {
         app(ContractSettlementPolicy::class)->assertInvoiceWriteAllowed($i);
         $this->assertNotMonthlyComposed($i);
         if ($this->hasV2Obligation($i->id)) {
@@ -169,14 +182,8 @@ class InvoiceController extends Controller
             throw ValidationException::withMessages(['discount_amount' => 'Tổng tiền hóa đơn không được nhỏ hơn số tiền đã thanh toán.']);
         }
         $i->update([...$d, 'total_amount' => $i->subtotal - ($d['discount_amount'] ?? 0)]);
-        $updatedInvoice = $i->fresh();
-        app(PayOSService::class)->invalidateRequestsForAmountChange(
-            $updatedInvoice,
-            $oldRemaining,
-            (float) $updatedInvoice->total_amount - (float) $updatedInvoice->paid_amount,
-        );
 
-        return ApiResponse::success(null, 'Cập nhật hóa đơn thành công.');
+        return [$i, $oldRemaining, (float) $i->total_amount - (float) $i->paid_amount];
     }
 
     public function destroy(Request $r, int $id): JsonResponse
