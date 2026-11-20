@@ -158,6 +158,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/invoices/{id}/generate', [InvoiceController::class, 'generate']);
     Route::get('/billing-v2/status', [BillingV2Controller::class, 'status']);
     Route::middleware(EnsureBillingV2Enabled::class)->group(function (): void {
+        Route::get('/boarding-houses/{id}/utility-ledger', [BillingV2Controller::class, 'utilityLedger']);
         Route::get('/billing-v2/boarding-houses/{id}/monthly-options', [BillingV2Controller::class, 'monthlyOptions']);
         Route::get('/billing-v2/rooms/{id}', [BillingV2Controller::class, 'show']);
         Route::post('/billing-v2/meters/{id}/checkpoints', [BillingV2Controller::class, 'checkpoint']);

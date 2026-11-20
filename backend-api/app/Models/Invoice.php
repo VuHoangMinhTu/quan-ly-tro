@@ -19,7 +19,10 @@ class Invoice extends Model
 
     protected static function booted(): void
     {
-        static::saving(fn (Invoice $invoice) => app(InvoicePaymentInfoService::class)->capture($invoice));
+        static::saving(function (Invoice $invoice): void {
+            abort_unless($invoice->exists, 503, 'Tạm dừng tạo hóa đơn mới để bảo vệ dữ liệu tài chính.');
+            app(InvoicePaymentInfoService::class)->capture($invoice);
+        });
     }
 
     protected $fillable = [
