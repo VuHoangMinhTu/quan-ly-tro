@@ -124,6 +124,17 @@ test('existing payOS QR is reused in a bounded modal with an aspect-preserving S
   assert.equal(page.mutations[4].calls.length, 0)
 })
 
+test('cached PayOS modal is hidden after the invoice remaining amount changes', async () => {
+  const invoice = { ...invoiceFixture, payos_new_requests_enabled: true,
+    payos_payment_request: { amount: 2800000, qr_code: 'old-qr', checkout_url: 'https://pay.example/old' } }
+  const page = await pageHarness('./InvoiceDetailPage.jsx', { invoice })
+  page.render().find(node => node.type === 'button' && text(node) === 'Xem QR thanh toán').props.onClick()
+  assert.ok(page.render().some(node => node.props.role === 'dialog'))
+  invoice.total_amount = 3600000
+  assert.equal(page.render().some(node => node.props.role === 'dialog'), false)
+  assert.equal(page.render().some(node => node.type === 'a' && node.props.href === 'https://pay.example/old'), false)
+})
+
 test('payment cards and table preserve source restrictions and the edit remaining amount', async () => {
   const cash = { id: 1, amount: 1000000, payment_method: 'CASH', payment_source: 'MANUAL', reference_code: 'CASH-1' }
   const payos = { id: 2, amount: 500000, payment_method: 'PAYOS', payment_source: 'PAYOS_WEBHOOK', reference_code: 'PAYOS-2' }

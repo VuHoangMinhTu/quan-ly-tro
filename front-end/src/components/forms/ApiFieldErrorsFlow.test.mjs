@@ -9,6 +9,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { transformWithOxc } from 'vite'
 import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMessage.js'
+import { createManualPaymentAttempt } from '../../api/manualPaymentAttempt.mjs'
 import { contractKeys } from '../../api/contractKeys.js'
 import { tenantKeys } from '../../api/tenantKeys.js'
 import { invoiceStatusLabels } from '../../utils/invoiceStatus.js'
@@ -40,11 +41,11 @@ async function harness(path, props = {}, extraBindings = {}) {
   let previousDependencies
   const input = (inputProps) => React.createElement('input', inputProps)
   const bindings = { AuthLayout: 'auth-layout', handleFormSubmit, notifyInvalidSubmit, TenantPicker: props => React.createElement("tenant-picker", props),
-    ...dates, ...serviceHelpers, ...validation, toFormString, applyApiFieldErrors, getApiErrorMessage, z, zodResolver, contractKeys, tenantKeys, invoiceStatusLabels,
+    ...dates, ...serviceHelpers, ...validation, toFormString, applyApiFieldErrors, getApiErrorMessage, createManualPaymentAttempt, z, zodResolver, contractKeys, tenantKeys, invoiceStatusLabels,
     useRef: (initial) => ({ current: initial }),
     useState: (initial) => {
       const index = stateCursor++
-      if (!(index in states)) states[index] = initial
+      if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial
       return [states[index], (value) => { states[index] = value }]
     },
     useEffect: (effect, dependencies) => {
@@ -130,6 +131,26 @@ test('payment displays overpayment at the amount field, rejects NaN and submits 
   page.form.setValue('amount', '100')
   await page.submit()
   assert.equal(calls[0].amount, 100)
+})
+
+test('payment dialog keeps the original request available after response loss', async () => {
+  const calls = []
+  const busy = []
+  const page = await harness('./PaymentForm.jsx', {
+    remaining: 100, initialValues: { amount: 100, paid_at: '2026-10-25T09:30' },
+    idempotent: true, onAttemptState: value => busy.push(value),
+    onSubmit: async payload => {
+      calls.push(payload)
+      if (calls.length === 1) throw new Error('Response lost')
+    },
+  }, { createManualPaymentAttempt: () => createManualPaymentAttempt(() => 'fixed-key') })
+  await page.submit()
+  assert.equal(busy.at(-1), true)
+  assert.equal(page.render().find(node => node.type === 'fieldset').props.disabled, true)
+  const retry = page.render().find(node => node.type === 'button' && text(node) === 'Thử lại giao dịch')
+  await retry.props.onClick()
+  assert.equal(calls[0], calls[1])
+  assert.equal(busy.at(-1), false)
 })
 
 for (const [path, field, initial] of [

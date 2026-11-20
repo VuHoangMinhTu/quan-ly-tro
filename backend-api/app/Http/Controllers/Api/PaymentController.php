@@ -10,6 +10,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\BoardingHouseAccessService;
 use App\Services\InvoicePaymentService;
+use Brick\Math\BigDecimal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,14 +27,55 @@ class PaymentController extends Controller
 
     public function store(StorePaymentRequest $r, int $invoiceId): JsonResponse
     {
-        DB::transaction(function () use ($r, $invoiceId) {
-            $i = $this->invoice($r, $invoiceId)->lockForUpdate()->firstOrFail();
-            $this->allowed($i, $r->validated()['amount']);
-            $i->payments()->create($r->validated());
+        $values = $r->safe()->except(['request_key']);
+        $key = $r->validated('request_key');
+        $fingerprint = $key === null ? null : $this->fingerprint($values);
+
+        // Resolve the owner's landlord before the transaction. Under MySQL
+        // REPEATABLE READ, a lookup before the invoice lock would freeze a stale snapshot.
+        $ownedInvoice = $this->invoice($r, $invoiceId);
+        $replayed = DB::transaction(function () use ($ownedInvoice, $values, $key, $fingerprint): bool {
+            $i = $ownedInvoice->lockForUpdate()->firstOrFail();
+            if ($key !== null) {
+                $request = DB::table('manual_payment_requests')
+                    ->where('invoice_id', $i->id)->where('request_key', strtolower($key));
+                $previous = $request->value('payload_hash');
+                if ($previous !== null) {
+                    if (! hash_equals($previous, $fingerprint)) {
+                        throw ValidationException::withMessages(['request_key' => 'Mã giao dịch này đã được dùng với dữ liệu khác.']);
+                    }
+
+                    return true;
+                }
+
+                DB::table('manual_payment_requests')->insert([
+                    'invoice_id' => $i->id, 'request_key' => strtolower($key), 'payload_hash' => $fingerprint,
+                ]);
+            }
+
+            $this->allowed($i, $values['amount']);
+            $i->payments()->create($values);
             app(InvoicePaymentService::class)->recalculate($i);
+
+            return false;
         });
 
+        if ($replayed) {
+            return ApiResponse::success(['replayed' => true], 'Yêu cầu thanh toán này đã được xử lý trước đó.');
+        }
+
         return ApiResponse::success(null, 'Ghi nhận thanh toán thành công.', 201);
+    }
+
+    private function fingerprint(array $values): string
+    {
+        return hash('sha256', json_encode([
+            (string) BigDecimal::of((string) $values['amount'])->strippedOfTrailingZeros(),
+            $values['payment_method'],
+            $values['paid_at'],
+            $values['reference_code'] ?? null,
+            $values['note'] ?? null,
+        ], JSON_THROW_ON_ERROR));
     }
 
     public function show(Request $r, int $id): JsonResponse
