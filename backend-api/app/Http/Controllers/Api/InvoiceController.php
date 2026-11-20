@@ -203,6 +203,9 @@ class InvoiceController extends Controller
         if ($this->hasV2Obligation($invoice->id)) {
             throw ValidationException::withMessages(['invoice_id' => 'Hóa đơn V2 chỉ được phát hành sau khi rà soát qua luồng hóa đơn tháng; không thể tạo khoản thu bằng API cũ.']);
         }
+        if ($invoice->room?->room_type !== 'DORMITORY') {
+            throw ValidationException::withMessages(['invoice_id' => 'Tạo hóa đơn tháng tại Quyết toán. Hóa đơn thủ công vẫn có thể thêm khoản thu thủ công.']);
+        }
         $billing->generateForInvoice($invoice);
 
         return ApiResponse::success(null, 'Tạo các khoản thu tự động thành công.');

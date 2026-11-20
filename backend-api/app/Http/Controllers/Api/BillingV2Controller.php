@@ -9,8 +9,10 @@ use App\Models\Contract;
 use App\Models\Invoice;
 use App\Models\Room;
 use App\Models\UtilityMeter;
+use App\Models\UtilityMeterPeriodBoundary;
 use App\Services\BillingV2Access;
 use App\Services\BillingV2Evidence;
+use App\Services\BoardingHouseAccessService;
 use App\Services\ContractSettlementPolicy;
 use App\Services\MonthlyDraftRecalculation;
 use App\Services\MonthlyInvoiceBilling;
@@ -19,9 +21,12 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class BillingV2Controller extends Controller
 {
+    public function __construct(private BoardingHouseAccessService $boardingHouseAccess) {}
+
     public function status(Request $request, BillingV2Access $access): JsonResponse
     {
         return ApiResponse::success(['enabled' => $access->enabledFor($request->user())]);
@@ -71,6 +76,46 @@ class BillingV2Controller extends Controller
             ->with(['agreedServices', 'room:id,room_code,room_type', 'bed:id,bed_code', 'tenant:id,full_name'])->get(['id', 'room_id', 'tenant_id', 'contract_type', 'bed_id', 'contract_code', 'monthly_rent', 'start_date', 'end_date']);
 
         return ApiResponse::success($contracts);
+    }
+
+    /**
+     * One read model for the owner-facing utility ledger. Checkpoints are
+     * returned as evidence, while billing periods provide the authoritative
+     * period-to-invoice relationship; a checkpoint's calendar month alone is
+     * never used to infer a billing period.
+     */
+    public function utilityLedger(Request $request, int $id): JsonResponse
+    {
+        $house = $this->boardingHouseAccess->house($request->user(), $id);
+        $data = $request->validate(['year' => ['required', 'integer', 'min:2000', 'max:2200']]);
+        $from = sprintf('%04d-01-01', $data['year']);
+        $until = sprintf('%04d-01-01', $data['year'] + 1);
+        $rooms = $house->rooms()->orderBy('sort_order')->orderBy('room_code')->get(['id', 'room_code', 'room_name', 'room_type', 'status']);
+        $roomIds = $rooms->pluck('id');
+        $meters = UtilityMeter::query()->with('service:id,name,unit,type')
+            ->whereIn('room_id', $roomIds)->where('is_active', true)->orderBy('id')->get();
+        $meterIds = $meters->pluck('id');
+        $latestCheckpoints = DB::table('utility_checkpoints')->whereIn('utility_meter_id', $meterIds)
+            ->where('kind', 'PERIOD_BOUNDARY')->orderByDesc('revision')->get()
+            ->unique(fn ($point) => $point->utility_meter_id.':'.$point->scope_key)->values();
+        $periods = DB::table('utility_billing_periods')->whereIn('utility_meter_id', $meterIds)
+            ->where('billing_period', '>=', $from)->where('billing_period', '<', $until)->get();
+        $boundaries = UtilityMeterPeriodBoundary::whereIn('utility_meter_id', $meterIds)
+            ->where('billing_period', '>=', $from)->where('billing_period', '<', $until)->get();
+        $invoices = DB::table('invoice_obligations')->join('invoices', 'invoices.id', '=', 'invoice_obligations.invoice_id')
+            ->whereIn('invoice_obligations.room_id', $roomIds)->where('invoice_obligations.billing_period', '>=', $from)
+            ->where('invoice_obligations.billing_period', '<', $until)
+            ->select('invoice_obligations.room_id', 'invoice_obligations.billing_period', 'invoice_obligations.invoice_id', 'invoices.status')
+            ->get();
+        $tenants = Contract::query()->whereIn('room_id', $roomIds)->where('status', 'ACTIVE')
+            ->with('tenant:id,full_name')->get(['id', 'room_id', 'tenant_id', 'contract_code']);
+
+        return ApiResponse::success([
+            'year' => (int) $data['year'], 'boarding_house' => $house->only(['id', 'name']), 'rooms' => $rooms,
+            'meters' => $meters, 'checkpoints' => $latestCheckpoints, 'periods' => $periods,
+            'invoices' => $invoices, 'active_contracts' => $tenants, 'boundaries' => $boundaries,
+            'can_record' => $this->boardingHouseAccess->isOwner($request->user(), $house),
+        ], 'Đã tải sổ điện nước của nhà trọ.');
     }
 
     public function monthly(Request $request, int $id, MonthlyInvoiceBilling $billing): JsonResponse
@@ -123,6 +168,7 @@ class BillingV2Controller extends Controller
             }
         }
         abort_if(CarbonImmutable::parse($data['usage_start_at'], 'Asia/Ho_Chi_Minh')->greaterThanOrEqualTo(CarbonImmutable::parse($data['usage_end_at'], 'Asia/Ho_Chi_Minh')), 422, 'Thời điểm kết thúc phải sau thời điểm bắt đầu kỳ sử dụng.');
+
         return ApiResponse::success([$billing->generateForRoom($room, $data['billing_period'], $data['usage_start_at'], $data['usage_end_at'], $data['confirmations'] ?? [], $request->user()->id)], 'Đã kiểm tra riêng phòng; chỉ tạo hóa đơn nháp nếu đủ điều kiện.');
     }
 
@@ -139,12 +185,18 @@ class BillingV2Controller extends Controller
     {
         $meter = UtilityMeter::whereHas('room.boardingHouse.landlord', fn ($q) => $q->where('user_id', $request->user()->id))->findOrFail($id);
         $data = $request->validate([
+            'billing_period' => ['sometimes', 'required', 'date_format:Y-m-01'],
             'start_observed_at' => ['required', 'date_format:Y-m-d H:i:s'],
             'end_observed_at' => ['required', 'date_format:Y-m-d H:i:s', 'after:start_observed_at'],
             'start_reading_value' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
             'end_reading_value' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999999999.99', 'gte:start_reading_value'],
         ]);
         $ids = DB::transaction(function () use ($evidence, $meter, $data, $request) {
+            Room::query()->lockForUpdate()->findOrFail($meter->room_id);
+            $period = $data['billing_period'] ?? null;
+            if ($period !== null && ($meter->room->room_type !== 'PRIVATE_ROOM' || ! $meter->is_active)) {
+                throw ValidationException::withMessages(['billing_period' => 'Chỉ ghi kỳ cho công tơ đang hoạt động của phòng riêng.']);
+            }
             $first = $evidence->checkpoint($meter, [
                 'kind' => 'PERIOD_BOUNDARY', 'contract_id' => null,
                 'observed_at' => $data['start_observed_at'], 'reading_value' => $data['start_reading_value'],
@@ -154,7 +206,22 @@ class BillingV2Controller extends Controller
                 'observed_at' => $data['end_observed_at'], 'reading_value' => $data['end_reading_value'],
             ], $request->user()->id);
 
-            return ['start_checkpoint_id' => $first, 'end_checkpoint_id' => $last];
+            $pair = ['start_checkpoint_id' => $first, 'end_checkpoint_id' => $last];
+            if ($period !== null) {
+                $key = ['utility_meter_id' => $meter->id, 'billing_period' => $period];
+                $link = UtilityMeterPeriodBoundary::where($key)->first();
+                $settled = DB::table('utility_billing_periods')->where($key)->first();
+                foreach (array_filter([$link, $settled]) as $existing) {
+                    if ((int) $existing->start_checkpoint_id !== $first || (int) $existing->end_checkpoint_id !== $last) {
+                        throw ValidationException::withMessages(['billing_period' => 'Kỳ đã có mốc khác. Hãy xem lịch sử và dùng đính chính.']);
+                    }
+                }
+                if (! $link) {
+                    UtilityMeterPeriodBoundary::create($key + $pair);
+                }
+            }
+
+            return $pair;
         }, 3);
 
         return ApiResponse::success($ids, 'Đã lưu cả hai mốc công tơ. Chưa tính tiền hoặc phát hành hóa đơn.');
@@ -173,6 +240,7 @@ class BillingV2Controller extends Controller
             'reason' => ['required', 'string', 'min:5', 'max:1000'],
             'request_key' => ['required', 'uuid'],
         ]);
+
         return ApiResponse::success($evidence->correctPeriodBoundaries($meter, $data, $request->user()->id),
             'Đã lưu phiên bản đính chính mốc. Nếu hóa đơn nháp đã tính, phải xem trước và xác nhận tính lại trước khi phát hành.');
     }

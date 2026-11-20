@@ -2,7 +2,7 @@
 
 $backend = dirname(__DIR__, 2);
 if (getenv('APP_ENV') !== 'testing' || getenv('DB_CONNECTION') !== 'mysql' || getenv('DB_HOST') !== '127.0.0.1'
-    || getenv('DB_PORT') !== '13368' || getenv('DB_DATABASE') !== 'beehouse_billing_v2_test' || getenv('DB_USERNAME') !== 'billing_test'
+    || ! in_array(getenv('DB_PORT'), ['13368', '13369'], true) || getenv('DB_DATABASE') !== 'beehouse_billing_v2_test' || getenv('DB_USERNAME') !== 'billing_test'
     || getenv('DB_URL') !== false && getenv('DB_URL') !== '') {
     throw new RuntimeException('Only the isolated loopback Billing V2 MySQL instance is allowed.');
 }

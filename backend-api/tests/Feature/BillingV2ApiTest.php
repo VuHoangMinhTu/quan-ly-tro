@@ -1,9 +1,11 @@
 <?php
 
 namespace Tests\Feature;
+
 use App\Models\Contract;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\BillingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\TestWith;
@@ -90,8 +92,8 @@ class BillingV2ApiTest extends TestCase
         ])->assertOk();
 
         $dormitoryResult = collect($response->json('data'))->firstWhere('room_id', $dormitory->id);
-       $this->assertSame('NO_ELIGIBLE_CONTRACT', $dormitoryResult['status']);
-$this->assertSame([], $dormitoryResult['invoices']);
+        $this->assertSame('NO_ELIGIBLE_CONTRACT', $dormitoryResult['status']);
+        $this->assertSame([], $dormitoryResult['invoices']);
         $this->assertDatabaseMissing('invoices', ['room_id' => $dormitory->id]);
         $this->assertDatabaseMissing('utility_billing_periods', ['utility_meter_id' => $dormitory->utilityMeters()->value('id')]);
         $this->assertDatabaseCount('monthly_invoice_compositions', 0);
@@ -804,7 +806,8 @@ $this->assertSame([], $dormitoryResult['invoices']);
         $invoice = $a->invoices()->create(['room_id' => $room->id, 'billing_period' => '2026-10-01', 'status' => 'DRAFT']);
         $this->postJson("/api/invoices/{$invoice->id}/items", ['type' => 'OTHER', 'description' => 'Synthetic manual charge', 'quantity' => 1, 'unit_price' => 70000])->assertCreated();
 
-        $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+        $this->postJson("/api/invoices/{$invoice->id}/generate")->assertUnprocessable()->assertJsonValidationErrors('invoice_id');
+        app(BillingService::class)->generateForInvoice($invoice);
 
         $this->assertSame('4340000.00', $invoice->fresh()->total_amount);
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'RENT', 'amount' => 3800000, 'source' => 'AUTO']);

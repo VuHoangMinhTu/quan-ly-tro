@@ -14,10 +14,12 @@ use App\Models\User;
 use App\Models\UtilityMeter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
+use Tests\ExercisesLegacyBillingCalculation;
 use Tests\TestCase;
 
 class BillingServiceApiTest extends TestCase
 {
+    use ExercisesLegacyBillingCalculation;
     use RefreshDatabase;
 
     public function test_unassigned_house_catalogue_services_are_not_charged_and_manual_items_are_preserved(): void
@@ -230,7 +232,8 @@ class BillingServiceApiTest extends TestCase
 
         $this->withToken($user->createToken('test')->plainTextToken)
             ->putJson("/api/utility-readings/{$closing->id}", ['reading_date' => '2026-11-01', 'reading_value' => 150])
-            ->assertOk();
+            ->assertUnprocessable();
+        $closing->update(['reading_date' => '2026-11-01']);
         $invoice = $this->invoice($room, '2026-11-01');
         $invoice->update(['contract_id' => $contract->id]);
 
@@ -460,6 +463,6 @@ class BillingServiceApiTest extends TestCase
     private function generate(User $user, Invoice $invoice): TestResponse
     {
         return $this->withToken($user->createToken('test')->plainTextToken)
-            ->postJson("/api/invoices/{$invoice->id}/generate");
+            ->postLegacyCalculation($invoice->id);
     }
 }

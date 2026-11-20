@@ -37,6 +37,12 @@ class BillingV2Evidence
             if ($previous && $previous->observed_at === $data['observed_at'] && BigDecimal::of($previous->reading_value)->isEqualTo($data['reading_value'])) {
                 return $previous->id;
             }
+            if ($previous && $data['kind'] === 'PERIOD_BOUNDARY') {
+                $linked = DB::table('utility_meter_period_boundaries')->where(function ($query) use ($previous): void {
+                    $query->where('start_checkpoint_id', $previous->id)->orWhere('end_checkpoint_id', $previous->id);
+                })->exists();
+                $this->require(! $linked, 'checkpoints', 'Mốc đã gắn với kỳ hóa đơn. Hãy dùng đính chính.');
+            }
             // A corrected boundary keeps its historical scope key, which can differ from its new timestamp.
             // Reuse it rather than creating a second active period boundary at that same timestamp.
             if ($data['kind'] === 'PERIOD_BOUNDARY' && ! $previous) {
@@ -44,6 +50,7 @@ class BillingV2Evidence
                 if ($sameBoundary && BigDecimal::of($sameBoundary->reading_value)->isEqualTo($data['reading_value'])) {
                     return $sameBoundary->id;
                 }
+                $this->require(! $sameBoundary, 'checkpoints', 'Ngày giờ này đã có mốc đính chính. Hãy dùng quy trình đính chính.');
             }
             // Protect against contradictory V1 measurements on the same physical meter.
             // Legacy readings are historical, not automatically copied/updated by V2.
@@ -128,8 +135,13 @@ class BillingV2Evidence
             sort($times);
             $affected = DB::table('utility_billing_periods')->where('utility_meter_id', $meter->id)
                 ->where('usage_start_at', '<=', max($times))->where('usage_end_at', '>=', min($times))->pluck('billing_period');
+            $sourceIds = [$start->id, $end->id];
+            $linkedPeriods = DB::table('utility_meter_period_boundaries')->where('utility_meter_id', $meter->id)
+                ->where(function ($query) use ($sourceIds): void {
+                    $query->whereIn('start_checkpoint_id', $sourceIds)->orWhereIn('end_checkpoint_id', $sourceIds);
+                })->pluck('billing_period');
             $invoiceIds = DB::table('invoices')->where('room_id', $meter->room_id)
-                ->whereIn('billing_period', $affected)->pluck('id');
+                ->whereIn('billing_period', $affected->merge($linkedPeriods)->unique()->values())->pluck('id');
             $protected = DB::table('invoices')->whereIn('id', $invoiceIds)
                 ->where(function ($query) {
                     $query->where('status', '!=', 'DRAFT')->orWhereNotNull('issued_at')
@@ -154,6 +166,7 @@ class BillingV2Evidence
             foreach ([[$start, $data['start_observed_at'], $data['start_reading_value']], [$end, $data['end_observed_at'], $data['end_reading_value']]] as [$old, $time, $value]) {
                 if ($old->observed_at === $time && BigDecimal::of($old->reading_value)->isEqualTo($value)) {
                     $newIds[] = $old->id;
+
                     continue;
                 }
                 $newIds[] = DB::table('utility_checkpoints')->insertGetId([
@@ -164,6 +177,20 @@ class BillingV2Evidence
                 ]);
             }
             $this->require($newIds[0] !== $newIds[1], 'checkpoints', 'Hai mốc sau chỉnh sửa phải khác nhau.');
+            foreach (['start_checkpoint_id', 'end_checkpoint_id'] as $column) {
+                foreach ([$start, $end] as $index => $old) {
+                    if ((int) $old->id !== $newIds[$index]) {
+                        DB::table('utility_meter_period_boundaries')->where($column, $old->id)
+                            ->update([$column => $newIds[$index]]);
+                    }
+                }
+            }
+            $invalidLink = DB::table('utility_meter_period_boundaries as link')
+                ->join('utility_checkpoints as opening', 'opening.id', '=', 'link.start_checkpoint_id')
+                ->join('utility_checkpoints as closing', 'closing.id', '=', 'link.end_checkpoint_id')
+                ->where('link.utility_meter_id', $meter->id)
+                ->whereColumn('opening.observed_at', '>=', 'closing.observed_at')->exists();
+            $this->require(! $invalidLink, 'checkpoints', 'Đính chính làm đảo thứ tự mốc của kỳ dùng chung.');
             DB::table('utility_checkpoint_corrections')->insert([
                 'utility_meter_id' => $meter->id, 'old_start_checkpoint_id' => $start->id, 'old_end_checkpoint_id' => $end->id,
                 'new_start_checkpoint_id' => $newIds[0], 'new_end_checkpoint_id' => $newIds[1],

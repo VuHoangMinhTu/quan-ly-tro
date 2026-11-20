@@ -45,7 +45,7 @@ export default function BillingV2Page() {
   const client = useQueryClient()
   const statusQuery = useQuery({ queryKey: ['billing-v2-status'], queryFn: getBillingV2Status, staleTime: 30_000 })
   const enabled = statusQuery.data?.data?.data?.enabled === true
-  const query = useQuery({ queryKey: ['billing-v2', roomId, period], queryFn: () => getBillingV2(roomId, period + '-01') })
+  const query = useQuery({ queryKey: ['billing-v2', roomId, period], queryFn: () => getBillingV2(roomId, period + '-01'), enabled })
   const data = query.data?.data?.data
   const mutation = useMutation({ mutationFn: action => action() })
   const meterMutation = useMutation({
@@ -156,6 +156,11 @@ export default function BillingV2Page() {
     }
   }
   const contractOptions = <><option value="">Chọn hợp đồng</option>{contracts.map(contract => <option key={contract.id} value={contract.id}>{contract.contract_code} · {contract.status}</option>)}</>
+  if (statusQuery.isError) return <p role="alert">Không xác minh được quyền thao tác quyết toán. Vui lòng thử lại.</p>
+  if (statusQuery.isSuccess && !enabled) return <section className="space-y-3">
+    <Link to={`/rooms/${roomId}`} className="inline-flex min-h-11 items-center underline">← Quay lại phòng</Link>
+    <p role="status">Quyết toán đang tạm khóa. Bạn vẫn có thể xem lịch sử chỉ số và hóa đơn hiện có.</p>
+  </section>
   if (query.isPending) return <p role="status">Đang tải quyết toán điện nước…</p>
   if (query.isError) return <p role="alert">{getApiErrorMessage(query.error)}</p>
   return <section className="min-w-0 space-y-6">
@@ -172,8 +177,6 @@ export default function BillingV2Page() {
       </nav>
     </header>
     <p className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">Chỉ dùng sau khi đối soát mốc bàn giao và kỳ công tơ. Kỳ có hóa đơn cũ hoặc xung đột bảng giá sẽ bị chặn. Giá bán phân bổ cho phần chủ trọ chịu không phải giá vốn thực tế.</p>
-    {statusQuery.isError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-red-800">Không xác minh được quyền thao tác V2. Chế độ ghi dữ liệu đang bị khóa an toàn.</p>}
-    {statusQuery.isSuccess && !enabled && <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950">Billing V2 đang tạm khóa. Bằng chứng, phân bổ và hóa đơn hiện có vẫn được xem; các thao tác ghi và phát hành đang tắt.</p>}
     {notice && <p role="status" className="rounded-lg bg-green-50 p-3 text-green-800">{notice}</p>}
     {invoiceNotice && <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">{invoiceNotice} <Link className="underline" to={`/rooms/${roomId}/invoices`}>Xem hóa đơn của phòng</Link></p>}
     {mutation.isError && <p role="alert" className={`rounded-lg p-3 ${mutation.error?.billingV2Message ? 'bg-amber-50 text-amber-900' : 'bg-red-50 text-red-700'}`}>{mutation.error?.billingV2Message || getApiErrorMessage(mutation.error)}</p>}

@@ -13,10 +13,12 @@ use App\Models\UtilityReading;
 use App\Services\ContractService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\TestWith;
+use Tests\ExercisesLegacyBillingCalculation;
 use Tests\TestCase;
 
 class ContractLifecycleApiTest extends TestCase
 {
+    use ExercisesLegacyBillingCalculation;
     use RefreshDatabase;
 
     public function test_new_contract_endpoints_require_authentication(): void
@@ -477,7 +479,7 @@ class ContractLifecycleApiTest extends TestCase
     {
         [$contract, $owner] = $this->fixture();
         $invoice = $contract->invoices()->create(['room_id' => $contract->room_id, 'invoice_code' => 'NULL-CONTRACT', 'billing_period' => '2026-10-01', 'subtotal' => 0, 'discount_amount' => 0, 'total_amount' => 0, 'paid_amount' => 0, 'status' => 'DRAFT']);
-        $this->login($owner)->postJson("/api/invoices/{$invoice->id}/generate")->assertUnprocessable()->assertJsonValidationErrors('contract_id');
+        $this->login($owner)->postLegacyCalculation($invoice->id)->assertUnprocessable()->assertJsonValidationErrors('contract_id');
         $this->assertDatabaseCount('invoice_items', 0);
     }
 
