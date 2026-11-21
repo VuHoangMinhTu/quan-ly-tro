@@ -124,7 +124,7 @@ function Checkout({ contract, meters, checkpoints, held, refresh, close }) {
             <textarea className={field} rows={2} maxLength={2000} value={inspection.notes} onChange={e => setInspection(s => ({...s, notes:e.target.value}))} placeholder="Tình trạng thiết bị, chìa khóa, hư hỏng..." />
           </label>
           {(inspection.condition !== 'OK' || inspection.keys_status !== 'RETURNED') && inspection.notes.trim().length < 5 && <p role="alert" className="text-sm text-amber-800">Cần ghi rõ lý do (ít nhất 5 ký tự) khi còn vấn đề hoặc chưa kiểm tra đủ.</p>}
-          <p className="text-xs text-slate-600">Biên bản kiểm kê chỉ lưu bằng chứng, không tự tạo phí bồi thường.</p>
+          <p className="text-xs text-slate-600">Biên bản kiểm kê chỉ lưu bằng chứng, không tự tạo phí bồi thường. Nếu chưa nhận đủ chìa khóa hoặc phòng có vấn đề, phòng sẽ chuyển sang Bảo trì cho đến khi chủ trọ xác nhận đã sẵn sàng.</p>
         </section>
       </div>}
       {step === 1 && <div className="space-y-3">
@@ -155,7 +155,7 @@ function Checkout({ contract, meters, checkpoints, held, refresh, close }) {
         </section>
         <p className="text-sm text-slate-700">Kiểm kê: {inspection.keys_status === 'RETURNED' ? 'Đã nhận chìa khóa' : inspection.keys_status === 'MISSING' ? 'Thiếu chìa khóa' : 'Chưa xác nhận chìa khóa'} · {inspection.condition === 'OK' ? 'Tình trạng bình thường' : 'Cần kiểm tra/đối soát'}</p>
         <p className="flex justify-between gap-3 rounded-lg border border-teal-200 bg-teal-50 p-3"><span>Cọc thực tế còn giữ</span><strong className="tabular-nums">{formatCurrency(held)}</strong></p>
-        <div className="rounded-lg bg-amber-50 p-3 text-amber-900"><p className="font-semibold">Chưa quyết toán cuối kỳ</p><p className="mt-1">Tiền điện/nước cuối kỳ chưa được xác định tại bước này. Xác nhận trả phòng không tự tạo hóa đơn, ghi thanh toán hoặc khấu trừ cọc vào công nợ.</p></div>
+        <div className="rounded-lg bg-amber-50 p-3 text-amber-900"><p className="font-semibold">Chưa quyết toán cuối kỳ</p><p className="mt-1">Tiền điện/nước cuối kỳ chưa được xác định tại bước này. Trả phòng không tự miễn tiền phòng, dịch vụ hoặc điện nước, không tự thu tiền và không khấu trừ cọc. Hãy đối soát hóa đơn sau khi bàn giao.</p></div>
         {reason === 'TENANT_ABANDONMENT' && (held > 0 ? <p className="rounded-lg bg-amber-50 p-3 text-amber-900">Không tự mất cọc. Khoản cọc vẫn được giữ trên Sổ cọc đến khi chủ trọ ghi quyết định xử lý có căn cứ.</p> : <label className="flex gap-2"><input type="checkbox" disabled={mutation.isPending || uncertain} checked={confirmNoHeld} onChange={event => setConfirmNoHeld(event.target.checked)} />Tôi đã đối soát và xác nhận không có tiền cọc thực tế còn giữ.</label>)}
       </div>}
       {mutation.isError && <p role="alert" className={`rounded-lg p-3 text-sm ${uncertain ? 'bg-amber-50 text-amber-900' : 'bg-red-50 text-red-700'}`}>{mutation.error.billingV2Message || getApiErrorMessage(mutation.error)}</p>}

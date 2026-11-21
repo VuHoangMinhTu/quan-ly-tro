@@ -44,3 +44,4 @@
 
 /front-end/.env
 /backend-api/.env
+/backend-api/tests/Feature/BillingV2ApiTest.php.bak*

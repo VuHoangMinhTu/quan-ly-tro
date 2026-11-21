@@ -282,7 +282,10 @@ class BillingV2Evidence
             $this->require(! $contract->occupants()->where('status', 'ACTIVE')->whereDate('move_in_date', '>', $date)->exists(), 'actual_ended_at', 'Ngày kết thúc trước lịch sử vào ở.');
             $contract->occupants()->where('status', 'ACTIVE')->update(['status' => 'MOVED_OUT', 'move_out_date' => $date]);
             $contract->update(['status' => $data['reason'] === 'NORMAL_EXPIRY' ? 'EXPIRED' : 'TERMINATED']);
-            $contract->room->update(['status' => $contract->room->roomTenants()->where('status', 'ACTIVE')->exists() ? 'RENTED' : 'AVAILABLE']);
+            $stillOccupied = $contract->room->roomTenants()->where('status', 'ACTIVE')->exists();
+            $ready = ($data['inspection']['keys_status'] === 'RETURNED' && $data['inspection']['condition'] === 'OK');
+            // MAINTENANCE means vacant but not yet ready; owner must inspect and reactivate explicitly.
+            $contract->room->update(['status' => $stillOccupied ? 'RENTED' : ($ready ? 'AVAILABLE' : 'MAINTENANCE')]);
         }, 3);
     }
 

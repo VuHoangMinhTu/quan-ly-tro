@@ -249,9 +249,9 @@ class BillingV2Controller extends Controller
     {
         $contract = $this->contract($request, $id);
         $data = $request->validate(['actual_ended_at' => ['required', 'date_format:Y-m-d H:i:s'], 'reason' => ['required', 'in:NORMAL_EXPIRY,MUTUAL_EARLY_END,TENANT_ABANDONMENT'], 'confirm_no_held_deposit' => ['sometimes', 'boolean'], 'readings' => ['present', 'array'], 'readings.*.utility_meter_id' => ['required', 'integer', 'distinct'], 'readings.*.reading_value' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
-            'inspection' => ['sometimes', 'array'],
-            'inspection.keys_status' => ['required_with:inspection', 'in:RETURNED,MISSING,UNKNOWN'],
-            'inspection.condition' => ['required_with:inspection', 'in:OK,ISSUES,NOT_INSPECTED'],
+            'inspection' => ['required', 'array'],
+            'inspection.keys_status' => ['required', 'in:RETURNED,MISSING,UNKNOWN'],
+            'inspection.condition' => ['required', 'in:OK,ISSUES,NOT_INSPECTED'],
             'inspection.notes' => ['nullable', 'string', 'max:2000']]);
         if (isset($data['inspection']) && ($data['inspection']['keys_status'] !== 'RETURNED' || $data['inspection']['condition'] !== 'OK') && mb_strlen(trim($data['inspection']['notes'] ?? '')) < 5) {
             throw ValidationException::withMessages(['inspection.notes' => 'Cần ghi chú ít nhất 5 ký tự khi chưa bàn giao đủ hoặc có vấn đề.']);

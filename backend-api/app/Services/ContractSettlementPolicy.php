@@ -27,12 +27,12 @@ class ContractSettlementPolicy
         $existing = Invoice::withTrashed()->where('contract_id', $contract->id)->whereDate('billing_period', $period)->where('status', '!=', 'CANCELLED')->pluck('id')->all();
         $id = DB::table('contract_settlements')->insertGetId([
             'contract_id' => $contract->id, 'contract_termination_id' => $termination->id, 'billing_period' => $period,
-            'status' => 'PENDING_FINAL_SETTLEMENT', 'collection_policy' => $abandoned ? 'NO_NEW_AUTO_RECEIVABLES' : 'AGREEMENT_REQUIRED',
+            'status' => 'PENDING_FINAL_SETTLEMENT', 'collection_policy' => 'AGREEMENT_REQUIRED', // Checkout alone never waives rent, service fees or utility receivables.
             'confirmation_state' => $confirmed ? 'CONFIRMED' : 'NEEDS_OWNER_CONFIRMATION',
             'deposit_status' => $abandoned ? (BigDecimal::of($heldBefore)->isPositive() ? 'PENDING_MANUAL_REVIEW' : ($confirmed ? 'NO_HELD_DEPOSIT_CONFIRMED' : 'NEEDS_OWNER_CONFIRMATION')) : 'NOT_AUTOMATICALLY_SETTLED',
             'invoice_review_status' => $abandoned && $existing !== [] ? 'NEEDS_INVOICE_REVIEW' : 'NONE',
             'policy_snapshot' => json_encode(['version' => 1, 'reason' => $data['reason'], 'held_before_checkout' => $heldBefore, 'existing_invoice_ids' => $existing,
-                'waived_auto_components' => $abandoned ? ['RENT', 'FIXED', 'PER_PERSON', 'PER_UNIT', 'TIERED', 'OTHER_AUTO_SERVICES'] : [],
+                'waived_auto_components' => [], // Any later waiver requires a separate, supported decision.
                 'service_ids' => $contract->agreedServices()->pluck('service_id')->all(), 'supplier_cost' => null, 'no_automatic_debt_or_deposit_offset' => true], JSON_THROW_ON_ERROR),
             'confirmed_by' => $confirmed ? $actor : null, 'confirmed_at' => $confirmed ? now() : null,
             'confirmation_reason' => $abandoned && ! BigDecimal::of($heldBefore)->isPositive() && $confirmed ? 'Owner explicitly confirmed no held deposit at checkout.' : null,
@@ -45,7 +45,7 @@ class ContractSettlementPolicy
                 'contract_settlement_id' => $id, 'utility_meter_id' => $out->utility_meter_id, 'check_in_checkpoint_id' => $in->id, 'check_out_checkpoint_id' => $out->id,
                 'period_opening_checkpoint_id' => null, 'quantity_since_check_in' => (string) BigDecimal::of($out->reading_value)->minus($in->reading_value),
                 'checkout_period_quantity' => null,
-                'final_period_quantity' => null, 'tariff_amount' => null, 'responsible_party' => $abandoned ? 'LANDLORD' : 'TENANT', 'status' => 'PENDING_FINAL_SETTLEMENT',
+                'final_period_quantity' => null, 'tariff_amount' => null, 'responsible_party' => 'TENANT', 'status' => 'PENDING_FINAL_SETTLEMENT',
                 'created_at' => now(), 'updated_at' => now(),
             ]);
         }
@@ -59,7 +59,9 @@ class ContractSettlementPolicy
             if ($settlement->confirmation_state === 'CONFIRMED') {
                 return;
             }
-            if ($settlement->collection_policy !== 'NO_NEW_AUTO_RECEIVABLES' || DB::table('contract_deposit_entries')->where('contract_id', $contract->id)->where('event', 'FORFEITED')->exists()) {
+            if (! in_array($settlement->collection_policy, ['AGREEMENT_REQUIRED', 'NO_NEW_AUTO_RECEIVABLES'], true)
+                || ! BigDecimal::of(app(BillingV2Evidence::class)->heldDeposit($contract))->isZero()
+                || DB::table('contract_deposit_entries')->where('contract_id', $contract->id)->where('event', 'FORFEITED')->exists()) {
                 throw ValidationException::withMessages(['settlement' => 'Cần đối soát lịch sử cọc; không thể tự xác nhận số dư.']);
             }
             DB::table('contract_settlements')->where('id', $settlement->id)->update(['confirmation_state' => 'CONFIRMED', 'deposit_status' => 'NO_HELD_DEPOSIT_CONFIRMED', 'confirmed_by' => $actor, 'confirmed_at' => now(), 'confirmation_reason' => $reason, 'updated_at' => now()]);
@@ -73,6 +75,9 @@ class ContractSettlementPolicy
             return false;
         }
         $case = DB::table('contract_settlements')->where('contract_id', $contractId)->first();
+        if ($case && $case->collection_policy !== 'NO_NEW_AUTO_RECEIVABLES') {
+            return false; // New checkout: never infer waiver from reason alone.
+        }
         if (! $case || $case->confirmation_state !== 'CONFIRMED') {
             throw ValidationException::withMessages(['settlement_confirmation' => 'Bỏ ngang chưa đủ xác nhận về cọc/bằng chứng. Cần chủ trọ xác nhận, không tự suy diễn.']);
         }
@@ -88,6 +93,9 @@ class ContractSettlementPolicy
             return false;
         }
         $case = DB::table('contract_settlements')->where('contract_id', $contractId)->first();
+        if ($case && $case->collection_policy !== 'NO_NEW_AUTO_RECEIVABLES') {
+            return false; // New checkout: preserve chargeable usage for later reconciliation.
+        }
         if (! $case || $case->confirmation_state !== 'CONFIRMED') {
             throw ValidationException::withMessages(['settlement_confirmation' => 'Bỏ ngang chưa đủ xác nhận về cọc/bằng chứng. Cần chủ trọ xác nhận, không tự suy diễn.']);
         }
@@ -97,6 +105,11 @@ class ContractSettlementPolicy
 
     public function assertInvoiceWriteAllowed(Invoice $invoice): void
     {
+        if ($invoice->contract_id !== null && DB::table('contract_settlements')->where('contract_id', $invoice->contract_id)
+            ->where('billing_period', $invoice->billing_period->toDateString())
+            ->where('invoice_review_status', 'NEEDS_INVOICE_REVIEW')->exists()) {
+            throw ValidationException::withMessages(['settlement_review' => 'Kỳ trả phòng có hóa đơn cũ. Cần kiểm tra, không tự sửa/xóa hoặc ghi lại các khoản cũ.']);
+        }
         if ($invoice->contract_id !== null && $this->abandoned($invoice->contract_id, $invoice->billing_period->toDateString())) {
             throw ValidationException::withMessages(['settlement_review' => 'TENANT_ABANDONMENT: không tạo thêm khoản phải thu trong kỳ quyết toán. Khoản nháp/nợ/chứng từ có sẵn được giữ nguyên và cần quy trình kiểm tra riêng.']);
         }
@@ -104,9 +117,12 @@ class ContractSettlementPolicy
 
     public function assertRoomReviewComplete(Room $room, string $period): void
     {
-        $cases = DB::table('contract_settlements')->whereIn('contract_id', $room->contracts()->select('id'))->where('billing_period', $period)->where('collection_policy', 'NO_NEW_AUTO_RECEIVABLES')->get();
+        $cases = DB::table('contract_settlements')->whereIn('contract_id', $room->contracts()->select('id'))->where('billing_period', $period)->where(function ($q) { $q->where('collection_policy', 'NO_NEW_AUTO_RECEIVABLES')
+                    ->orWhere('invoice_review_status', 'NEEDS_INVOICE_REVIEW'); })->get();
         foreach ($cases as $case) {
-            $this->abandoned($case->contract_id, $period);
+            if ($case->collection_policy === 'NO_NEW_AUTO_RECEIVABLES') {
+                $this->abandoned($case->contract_id, $period);
+            }
             if (Invoice::withTrashed()->where('contract_id', $case->contract_id)->whereDate('billing_period', $period)->where('status', '!=', 'CANCELLED')->exists()) {
                 throw ValidationException::withMessages(['settlement_review' => 'Kỳ bỏ ngang đã có hóa đơn/khoản thu. Cần kiểm tra nguồn gốc và điều chỉnh có lịch sử, không tự xóa hoặc chuyển sang người mới.']);
             }

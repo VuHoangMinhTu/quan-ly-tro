@@ -24,21 +24,21 @@ class BillingV2ApiTest extends TestCase
         $url = '/api/billing-v2/boarding-houses/'.$room->boarding_house_id.'/monthly-invoices';
         $this->postJson($url, ['billing_period' => '2026-10-01', 'usage_start_at' => '2026-10-01 00:00:00', 'usage_end_at' => '2026-11-01 00:00:00'])->assertOk()->assertJsonPath('data.0.status', 'BLOCKED');
         $this->assertDatabaseCount('invoices', 0);
-        $data = ['billing_period' => '2026-10-01', 'usage_start_at' => '2026-10-01 00:00:00', 'usage_end_at' => '2026-11-01 00:00:00', 'confirmations' => [['contract_id' => $b->id, 'rent_amount' => '1500000', 'reason' => 'Thỏa thuận kỳ đầu của B']]];
+        $data = ['billing_period' => '2026-10-01', 'usage_start_at' => '2026-10-01 00:00:00', 'usage_end_at' => '2026-11-01 00:00:00', 'confirmations' => [['contract_id' => $a->id, 'rent_amount' => '1000000', 'reason' => 'Xac nhan tien phong ky le A'], ['contract_id' => $b->id, 'rent_amount' => '1500000', 'reason' => 'Thỏa thuận kỳ đầu của B']]];
         $this->postJson($url, $data)->assertOk()->assertJsonPath('data.0.status', 'CREATED');
         $this->postJson($url, $data)->assertOk()->assertJsonPath('data.0.status', 'EXISTING');
-        $this->assertDatabaseCount('invoices', 1);
+        $this->assertDatabaseCount('invoices', 2);
         $this->assertDatabaseHas('invoices', ['contract_id' => $b->id, 'total_amount' => 1548000, 'status' => 'DRAFT']);
-        $this->assertDatabaseMissing('invoices', ['contract_id' => $a->id]);
+        $this->assertDatabaseHas('invoices', ['contract_id' => $a->id, 'status' => 'DRAFT']);
         $this->assertSame(50, (int) DB::table('utility_charge_allocations')->sum('quantity'));
-        $this->assertSame(35, (int) DB::table('utility_charge_allocations')->where('responsible_party', 'LANDLORD')->sum('quantity'));
+        $this->assertSame(5, (int) DB::table('utility_charge_allocations')->where('responsible_party', 'LANDLORD')->sum('quantity'));
         $this->point($meter->id, 'PERIOD_BOUNDARY', '2026-11-01 00:00:00', 155);
         $prefix = '/api/billing-v2/rooms/'.$room->id.'/monthly-recalculations';
         $preview = $this->postJson($prefix.'/preview', ['billing_period' => '2026-10-01', 'usage_start_at' => '2026-10-01 00:00:00', 'usage_end_at' => '2026-11-01 00:00:00'])->assertOk();
         $this->assertSame('PREVIEWED', $preview->json('data.status'));
         $this->postJson($prefix.'/'.$preview->json('data.token').'/confirm', ['confirmed' => true, 'reason' => 'Sửa mốc chốt cuối kỳ'])->assertOk();
-        $this->assertDatabaseCount('invoices', 1);
-        $this->assertDatabaseMissing('invoices', ['contract_id' => $a->id]);
+        $this->assertDatabaseCount('invoices', 2);
+        $this->assertDatabaseHas('invoices', ['contract_id' => $a->id, 'status' => 'DRAFT']);
         $this->assertDatabaseHas('invoices', ['contract_id' => $b->id, 'total_amount' => 1565454]);
         $this->assertSame(55, (int) DB::table('utility_charge_allocations')->sum('quantity'));
         $this->assertSame(180000, (int) DB::table('utility_charge_allocations')->sum('tariff_amount'));
@@ -197,6 +197,7 @@ class BillingV2ApiTest extends TestCase
         $payload = [
             'actual_ended_at' => '2026-10-15 10:00:00', 'reason' => 'MUTUAL_EARLY_END',
             'readings' => [['utility_meter_id' => $meter->id, 'reading_value' => 130]],
+            'inspection' => ['keys_status' => 'RETURNED', 'condition' => 'OK', 'notes' => 'Bàn giao đủ.'],
         ];
         $this->postJson($url, $payload)->assertOk();
         $this->postJson($url, $payload)->assertOk();
@@ -216,6 +217,7 @@ class BillingV2ApiTest extends TestCase
         $this->postJson("/api/billing-v2/contracts/{$contract->id}/checkout", [
             'actual_ended_at' => '2026-10-15 10:00:00', 'reason' => 'MUTUAL_EARLY_END',
             'readings' => [['utility_meter_id' => $meter->id, 'reading_value' => 130]],
+            'inspection' => ['keys_status' => 'RETURNED', 'condition' => 'OK'],
         ])->assertUnprocessable()->assertJsonValidationErrors('room_id');
         $this->assertDatabaseCount('contract_terminations', 0);
         $this->assertDatabaseCount('contract_deposit_entries', 0);
@@ -255,7 +257,7 @@ class BillingV2ApiTest extends TestCase
 
     private function leave(Contract $contract, int $meter, string $at, int $value, string $reason = 'MUTUAL_EARLY_END'): void
     {
-        $this->postJson("/api/billing-v2/contracts/{$contract->id}/checkout", ['actual_ended_at' => $at, 'reason' => $reason, 'confirm_no_held_deposit' => $reason === 'TENANT_ABANDONMENT', 'readings' => [['utility_meter_id' => $meter, 'reading_value' => $value]]])->assertOk();
+        $this->postJson("/api/billing-v2/contracts/{$contract->id}/checkout", ['actual_ended_at' => $at, 'reason' => $reason, 'confirm_no_held_deposit' => $reason === 'TENANT_ABANDONMENT', 'readings' => [['utility_meter_id' => $meter, 'reading_value' => $value]], 'inspection' => ['keys_status' => 'RETURNED', 'condition' => 'OK', 'notes' => 'Đã bàn giao.']])->assertOk();
     }
 
     private function next(Contract $old, int $meter, string $at, int $value): Contract
@@ -357,10 +359,10 @@ class BillingV2ApiTest extends TestCase
         $this->assertSame(160000, (int) DB::table('utility_billing_periods')->sum('tariff_total'));
     }
 
-    public function test_custom_tiered_window_keeps_abandonment_and_vacancy_with_landlord_when_b_is_billed_next_month(): void
+    public function test_custom_tiered_window_keeps_abandonment_usage_for_review_and_vacancy_with_landlord(): void
     {
         [$a, $room, $meter] = $this->fixture('TIERED');
-        $this->postJson("/api/billing-v2/contracts/{$a->id}/deposits", ['event' => 'RECEIVED', 'amount' => 3000000, 'request_key' => 'custom-cycle-deposit', 'occurred_at' => '2026-10-01 00:00:00'])->assertOk();
+        $this->postJson("/api/billing-v2/contracts/{$a->id}/deposits", ['event' => 'RECEIVED', 'decision_confirmed' => true, 'amount' => 3000000, 'request_key' => 'custom-cycle-deposit', 'occurred_at' => '2026-10-01 00:00:00'])->assertOk();
         $this->point($meter->id, 'PERIOD_BOUNDARY', '2026-11-02 08:30:00', 100);
         $this->leave($a, $meter->id, '2026-11-15 10:00:00', 130, 'TENANT_ABANDONMENT');
         $b = $this->next($a, $meter->id, '2026-11-20 10:00:00', 135);
@@ -370,20 +372,20 @@ class BillingV2ApiTest extends TestCase
             'billing_period' => '2026-12-01', 'usage_start_at' => '2026-11-02 08:30:00', 'usage_end_at' => '2026-12-02 09:00:00',
         ])->assertOk()->assertJsonPath('data.0.status', 'CREATED');
 
-        $this->assertCount(1, $response->json('data.0.invoices'));
-        $this->assertDatabaseHas('utility_charge_allocations', ['contract_id' => $a->id, 'quantity' => 30, 'responsible_party' => 'LANDLORD', 'reason' => 'ABANDONMENT']);
+        $this->assertCount(2, $response->json('data.0.invoices'));
+        $this->assertDatabaseHas('utility_charge_allocations', ['contract_id' => $a->id, 'quantity' => 30, 'responsible_party' => 'TENANT', 'reason' => 'OCCUPIED']);
         $this->assertDatabaseHas('utility_charge_allocations', ['contract_id' => null, 'quantity' => 5, 'responsible_party' => 'LANDLORD', 'reason' => 'VACANT']);
         $this->assertDatabaseHas('utility_charge_allocations', ['contract_id' => $b->id, 'quantity' => 15, 'responsible_party' => 'TENANT']);
-        $this->assertDatabaseMissing('invoices', ['contract_id' => $a->id, 'billing_period' => '2026-12-01']);
+        $this->assertDatabaseHas('invoices', ['contract_id' => $a->id, 'billing_period' => '2026-12-01', 'status' => 'DRAFT']);
         $this->assertDatabaseHas('invoices', ['contract_id' => $b->id, 'billing_period' => '2026-12-01']);
         $settlementId = DB::table('contract_settlements')->where('contract_id', $a->id)->value('id');
-        $this->assertDatabaseHas('contract_settlement_usages', ['contract_settlement_id' => $settlementId, 'checkout_period_quantity' => 30, 'responsible_party' => 'LANDLORD', 'status' => 'FINAL_RECONCILED']);
+        $this->assertDatabaseHas('contract_settlement_usages', ['contract_settlement_id' => $settlementId, 'checkout_period_quantity' => 30, 'responsible_party' => 'TENANT', 'status' => 'FINAL_RECONCILED']);
         $this->assertSame(50, (int) DB::table('utility_charge_allocations')->sum('quantity'));
     }
 
     #[TestWith([false, 'MUTUAL_EARLY_END', 30, 20, 0])]
     #[TestWith([true, 'MUTUAL_EARLY_END', 30, 15, 5])]
-    #[TestWith([true, 'TENANT_ABANDONMENT', 0, 15, 35])]
+    #[TestWith([true, 'TENANT_ABANDONMENT', 30, 15, 5])]
     public function test_cases_b_c_f_g_partition_one_tiered_total_without_resetting_tiers(bool $vacancy, string $reason, int $aQuantity, int $bQuantity, int $ownerQuantity): void
     {
         [$a, $room, $meter] = $this->fixture('TIERED');
@@ -456,6 +458,36 @@ class BillingV2ApiTest extends TestCase
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'amount' => 150000]);
     }
 
+    public function test_checkout_requires_inspection_before_any_contract_or_room_mutation(): void
+    {
+        [$contract, $room, $meter] = $this->fixture();
+        $url = "/api/billing-v2/contracts/{$contract->id}/checkout";
+        $payload = ['actual_ended_at' => '2026-10-15 10:00:00', 'reason' => 'MUTUAL_EARLY_END',
+            'readings' => [['utility_meter_id' => $meter->id, 'reading_value' => 130]]];
+        $beforeRoomStatus = $room->fresh()->status;
+        $this->postJson($url, $payload)->assertUnprocessable()->assertJsonValidationErrors('inspection');
+        $this->assertSame('ACTIVE', $contract->fresh()->status);
+        $this->assertDatabaseCount('contract_terminations', 0);
+        $this->assertDatabaseCount('contract_settlements', 0);
+        $this->assertDatabaseCount('payments', 0);
+        $this->assertSame($beforeRoomStatus, $room->fresh()->status);
+    }
+
+    public function test_checkout_with_unresolved_handover_marks_room_maintenance_not_available(): void
+    {
+        [$contract, $room, $meter] = $this->fixture();
+        $this->postJson("/api/billing-v2/contracts/{$contract->id}/checkout", [
+            'actual_ended_at' => '2026-10-15 10:00:00', 'reason' => 'MUTUAL_EARLY_END',
+            'readings' => [['utility_meter_id' => $meter->id, 'reading_value' => 130]],
+            'inspection' => ['keys_status' => 'MISSING', 'condition' => 'ISSUES', 'notes' => 'Thiếu chìa khóa phòng và cần sửa ổ khóa.'],
+        ])->assertOk();
+        $this->assertSame('MAINTENANCE', $room->fresh()->status);
+        $this->assertSame('TERMINATED', $contract->fresh()->status);
+        $new = Contract::factory()->create(['room_id' => $room->id, 'status' => 'DRAFT', 'start_date' => '2026-10-20']);
+        $this->putJson("/api/contracts/{$new->id}", ['status' => 'ACTIVE'])->assertUnprocessable()->assertJsonValidationErrors('room_id');
+        $this->assertSame('DRAFT', $new->fresh()->status);
+    }
+
     public function test_checkout_records_inspection_without_auto_forfeiture(): void
     {
         [$contract, , $meter] = $this->fixture();
@@ -476,7 +508,7 @@ class BillingV2ApiTest extends TestCase
     {
         [$a, , $meter] = $this->fixture();
         $debt = $a->invoices()->create(['room_id' => $a->room_id, 'billing_period' => '2026-09-01', 'status' => 'UNPAID', 'subtotal' => 100000, 'total_amount' => 100000]);
-        $payload = ['event' => 'RECEIVED', 'amount' => 1000000, 'request_key' => 'receipt-1', 'occurred_at' => '2026-10-01 00:00:00'];
+        $payload = ['event' => 'RECEIVED', 'decision_confirmed' => true, 'amount' => 1000000, 'request_key' => 'receipt-1', 'occurred_at' => '2026-10-01 00:00:00'];
         $this->postJson("/api/billing-v2/contracts/{$a->id}/deposits", $payload)->assertOk();
         $this->postJson("/api/billing-v2/contracts/{$a->id}/deposits", $payload)->assertOk();
         $this->postJson("/api/billing-v2/contracts/{$a->id}/deposits", [...$payload, 'event' => 'REFUNDED', 'amount' => 200000, 'request_key' => 'refund-1'])->assertOk();
@@ -560,7 +592,7 @@ class BillingV2ApiTest extends TestCase
     {
         [$a, , $meter] = $this->fixture();
         $a->update(['end_date' => '2026-10-31']);
-        $this->postJson("/api/billing-v2/contracts/{$a->id}/deposits", ['event' => 'RECEIVED', 'amount' => 1000000, 'request_key' => 'cash-1', 'occurred_at' => '2026-10-01 00:00:00'])->assertOk();
+        $this->postJson("/api/billing-v2/contracts/{$a->id}/deposits", ['event' => 'RECEIVED', 'decision_confirmed' => true, 'amount' => 1000000, 'request_key' => 'cash-1', 'occurred_at' => '2026-10-01 00:00:00'])->assertOk();
 
         $this->leave($a, $meter->id, '2026-10-31 10:00:00', 150, 'NORMAL_EXPIRY');
 
@@ -573,7 +605,7 @@ class BillingV2ApiTest extends TestCase
     {
         [$a] = $this->fixture();
 
-        $this->postJson("/api/billing-v2/contracts/{$a->id}/checkout", ['actual_ended_at' => '2026-10-15 10:00:00', 'reason' => 'TENANT_ABANDONMENT', 'readings' => []])->assertUnprocessable()->assertJsonValidationErrors('readings');
+        $this->postJson("/api/billing-v2/contracts/{$a->id}/checkout", ['actual_ended_at' => '2026-10-15 10:00:00', 'reason' => 'TENANT_ABANDONMENT', 'inspection' => ['keys_status' => 'RETURNED', 'condition' => 'OK'], 'readings' => []])->assertUnprocessable()->assertJsonValidationErrors('readings');
 
         $this->assertSame('ACTIVE', $a->fresh()->status);
         $this->assertDatabaseCount('contract_terminations', 0);
@@ -622,7 +654,7 @@ class BillingV2ApiTest extends TestCase
     {
         [$a] = $this->fixture();
         $url = "/api/billing-v2/contracts/{$a->id}/deposits";
-        $data = ['event' => 'RECEIVED', 'amount' => 1000, 'request_key' => 'cash-1', 'occurred_at' => '2026-10-01 00:00:00'];
+        $data = ['event' => 'RECEIVED', 'decision_confirmed' => true, 'amount' => 1000, 'request_key' => 'cash-1', 'occurred_at' => '2026-10-01 00:00:00'];
         $this->postJson($url, $data)->assertOk();
 
         $this->postJson($url, [...$data, 'amount' => 2000])->assertUnprocessable()->assertJsonValidationErrors('request_key');
@@ -899,7 +931,7 @@ class BillingV2ApiTest extends TestCase
         $this->assertDatabaseCount('invoice_items', 1);
     }
 
-    public function test_confirmed_abandonment_keeps_deposit_pending_and_excludes_new_auto_components(): void
+    public function test_confirmed_abandonment_keeps_deposit_pending_and_usage_chargeable_as_draft(): void
     {
         [$a, $room, $meter] = $this->fixture('TIERED');
         foreach (['FIXED', 'PER_PERSON', 'PER_UNIT', 'TIERED'] as $method) {
@@ -909,7 +941,7 @@ class BillingV2ApiTest extends TestCase
         }
         $oldDebt = $a->invoices()->create(['room_id' => $room->id, 'billing_period' => '2026-09-01', 'status' => 'UNPAID', 'subtotal' => 100000, 'total_amount' => 100000]);
         $before = $oldDebt->fresh()->getAttributes();
-        $this->postJson("/api/billing-v2/contracts/{$a->id}/deposits", ['event' => 'RECEIVED', 'amount' => 3000000, 'request_key' => 'actual-three-million', 'occurred_at' => '2026-10-01 00:00:00'])->assertOk();
+        $this->postJson("/api/billing-v2/contracts/{$a->id}/deposits", ['event' => 'RECEIVED', 'decision_confirmed' => true, 'amount' => 3000000, 'request_key' => 'actual-three-million', 'occurred_at' => '2026-10-01 00:00:00'])->assertOk();
 
         $this->leave($a, $meter->id, '2026-10-20 10:00:00', 130, 'TENANT_ABANDONMENT');
 
@@ -917,16 +949,17 @@ class BillingV2ApiTest extends TestCase
         $this->assertDatabaseMissing('contract_deposit_entries', ['contract_id' => $a->id, 'event' => 'FORFEITED']);
         $this->assertDatabaseHas('contract_settlements', ['contract_id' => $a->id, 'deposit_status' => 'PENDING_MANUAL_REVIEW']);
         $case = DB::table('contract_settlements')->where('contract_id', $a->id)->first();
-        $this->assertSame('NO_NEW_AUTO_RECEIVABLES', $case->collection_policy);
+        $this->assertSame('AGREEMENT_REQUIRED', $case->collection_policy);
         $this->assertSame('CONFIRMED', $case->confirmation_state);
-        $this->assertSame(['RENT', 'FIXED', 'PER_PERSON', 'PER_UNIT', 'TIERED', 'OTHER_AUTO_SERVICES'], json_decode($case->policy_snapshot, true)['waived_auto_components']);
-        $this->assertDatabaseHas('contract_settlement_usages', ['contract_settlement_id' => $case->id, 'checkout_period_quantity' => null, 'status' => 'PENDING_FINAL_SETTLEMENT', 'tariff_amount' => null, 'responsible_party' => 'LANDLORD']);
+        $this->assertSame([], json_decode($case->policy_snapshot, true)['waived_auto_components']);
+        $this->assertDatabaseHas('contract_settlement_usages', ['contract_settlement_id' => $case->id, 'checkout_period_quantity' => null, 'status' => 'PENDING_FINAL_SETTLEMENT', 'tariff_amount' => null, 'responsible_party' => 'TENANT']);
         $this->assertSame(0, $a->invoices()->whereDate('billing_period', '2026-10-01')->count());
         $b = $this->next($a, $meter->id, '2026-10-25 10:00:00', 135);
         $this->point($meter->id, 'PERIOD_BOUNDARY', '2026-11-01 00:00:00', 150);
         $this->postJson("/api/billing-v2/rooms/{$room->id}/generate", ['billing_period' => '2026-10-01', 'usage_start_at' => '2026-10-01 00:00:00', 'usage_end_at' => '2026-11-01 00:00:00'])->assertOk();
 
-        $this->assertSame(0, $a->invoices()->whereDate('billing_period', '2026-10-01')->count());
+        $this->assertDatabaseHas('invoices', ['contract_id' => $a->id, 'billing_period' => '2026-10-01', 'status' => 'DRAFT']);
+        $this->assertDatabaseHas('utility_charge_allocations', ['contract_id' => $a->id, 'quantity' => 30, 'responsible_party' => 'TENANT']);
         $this->assertSame('48000.00', $b->invoices()->firstOrFail()->total_amount);
         $this->assertSame($before, $oldDebt->fresh()->getAttributes());
         $this->assertDatabaseHas('contract_settlement_usages', ['contract_settlement_id' => $case->id, 'final_period_quantity' => 30, 'tariff_amount' => 96000, 'status' => 'FINAL_RECONCILED']);
@@ -954,10 +987,10 @@ class BillingV2ApiTest extends TestCase
     public function test_abandonment_without_actual_held_deposit_needs_owner_confirmation_and_never_invents_forfeiture(): void
     {
         [$a, $room, $meter] = $this->fixture('TIERED');
-        $this->postJson("/api/billing-v2/contracts/{$a->id}/checkout", ['actual_ended_at' => '2026-10-20 10:00:00', 'reason' => 'TENANT_ABANDONMENT', 'readings' => [['utility_meter_id' => $meter->id, 'reading_value' => 130]]])->assertOk();
+        $this->postJson("/api/billing-v2/contracts/{$a->id}/checkout", ['actual_ended_at' => '2026-10-20 10:00:00', 'reason' => 'TENANT_ABANDONMENT', 'readings' => [['utility_meter_id' => $meter->id, 'reading_value' => 130]], 'inspection' => ['keys_status' => 'RETURNED', 'condition' => 'OK']])->assertOk();
         $this->point($meter->id, 'PERIOD_BOUNDARY', '2026-11-01 00:00:00', 150);
 
-        $this->postJson("/api/billing-v2/rooms/{$room->id}/generate", ['billing_period' => '2026-10-01', 'usage_start_at' => '2026-10-01 00:00:00', 'usage_end_at' => '2026-11-01 00:00:00'])->assertUnprocessable()->assertJsonValidationErrors('settlement_confirmation');
+        $this->postJson("/api/billing-v2/rooms/{$room->id}/generate", ['billing_period' => '2026-10-01', 'usage_start_at' => '2026-10-01 00:00:00', 'usage_end_at' => '2026-11-01 00:00:00'])->assertOk();
 
         $this->assertSame('TERMINATED', $a->fresh()->status);
         $this->assertDatabaseHas('contract_settlements', ['contract_id' => $a->id, 'confirmation_state' => 'NEEDS_OWNER_CONFIRMATION']);
@@ -966,7 +999,7 @@ class BillingV2ApiTest extends TestCase
         $this->postJson("/api/billing-v2/rooms/{$room->id}/generate", ['billing_period' => '2026-10-01', 'usage_start_at' => '2026-10-01 00:00:00', 'usage_end_at' => '2026-11-01 00:00:00'])->assertOk();
         $this->assertDatabaseHas('contract_settlements', ['contract_id' => $a->id, 'deposit_status' => 'NO_HELD_DEPOSIT_CONFIRMED', 'status' => 'FINAL_RECONCILED']);
         $this->assertDatabaseCount('contract_deposit_entries', 0);
-        $this->assertDatabaseCount('invoices', 0);
+        $this->assertDatabaseHas('invoices', ['contract_id' => $a->id, 'billing_period' => '2026-10-01', 'status' => 'DRAFT']);
     }
 
     public function test_existing_draft_manual_and_auto_charges_are_flagged_for_review_not_deleted_by_abandonment(): void

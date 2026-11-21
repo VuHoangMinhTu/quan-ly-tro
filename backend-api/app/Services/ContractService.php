@@ -314,6 +314,9 @@ class ContractService
         if ($room->status === 'INACTIVE') {
             throw ValidationException::withMessages(['room_id' => 'Phòng đã ngừng sử dụng, không thể kích hoạt hợp đồng.']);
         }
+        if ($room->status === 'MAINTENANCE' && $room->room_type === 'PRIVATE_ROOM') {
+            throw ValidationException::withMessages(['room_id' => 'Phòng đang cần kiểm tra/bảo trì sau bàn giao. Chủ trọ phải đánh dấu phòng sẵn sàng trước khi kích hoạt hợp đồng mới.']);
+        }
         $errors = [];
         foreach (['start_date', 'monthly_rent', 'lessor_representative_user_id'] as $key) {
             if ($contract->{$key} === null) {
