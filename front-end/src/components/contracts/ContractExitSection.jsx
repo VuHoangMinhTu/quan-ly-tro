@@ -15,7 +15,7 @@ const apiTime = value => value.replace('T', ' ') + (value.length === 16 ? ':00' 
 const field = 'mt-1 block min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 tabular-nums'
 const primary = 'min-h-11 rounded-lg bg-teal-700 px-4 text-sm font-semibold text-white disabled:opacity-50'
 const secondary = 'min-h-11 rounded-lg border border-slate-300 px-4 text-sm disabled:opacity-50'
-const eventLabel = { RECEIVED: 'Nhận cọc', REFUNDED: 'Hoàn cọc', FORFEITED: 'Mất cọc theo chính sách' }
+const eventLabel = { RECEIVED: 'Nhận cọc', REFUNDED: 'Hoàn cọc', FORFEITED: 'Mất cọc đã xác nhận thủ công' }
 const reasons = { MUTUAL_EARLY_END: 'Kết thúc theo thỏa thuận', NORMAL_EXPIRY: 'Hết hạn bình thường', TENANT_ABANDONMENT: 'Người thuê bỏ ngang' }
 const sameId = (a, b) => String(a) === String(b)
 const money = value => value != null && Number.isFinite(Number(value)) ? formatCurrency(value) : 'Chưa có dữ liệu'
@@ -81,6 +81,7 @@ function Checkout({ contract, meters, checkpoints, held, refresh, close }) {
   const [reason, setReason] = useState('MUTUAL_EARLY_END')
   const [readings, setReadings] = useState({})
   const [confirmNoHeld, setConfirmNoHeld] = useState(false)
+  const [inspection, setInspection] = useState({ keys_status: 'RETURNED', condition: 'OK', notes: '' })
   const invoices = useQuery({ queryKey: ['checkout-invoices', String(contract.room_id)], queryFn: () => roomInvoices(contract.room_id), enabled: step === 2, staleTime: 0 })
   const debt = invoices.isSuccess ? contractDebt(invoices.data, contract.id) : null
   const measurement = meter => checkoutMeasurement(checkpoints, meter.id, contract.id, endedAt, readings[meter.id])
@@ -89,6 +90,7 @@ function Checkout({ contract, meters, checkpoints, held, refresh, close }) {
       actual_ended_at: apiTime(endedAt), reason,
       confirm_no_held_deposit: reason === 'TENANT_ABANDONMENT' && held === 0 && confirmNoHeld,
       readings: meters.map(meter => ({ utility_meter_id: meter.id, reading_value: readings[meter.id] })),
+      inspection: { ...inspection, notes: inspection.notes.trim() },
     }, { quiet: true }),
     onSuccess: async () => { await refresh(); close() },
   })
@@ -97,6 +99,7 @@ function Checkout({ contract, meters, checkpoints, held, refresh, close }) {
   const submit = event => {
     event.preventDefault()
     if (mutation.isPending || !validTime) return
+    if ((inspection.condition !== 'OK' || inspection.keys_status !== 'RETURNED') && inspection.notes.trim().length < 5) { setStep(0); return }
     if (step < 2) setStep(step + 1)
     else mutation.mutate()
   }
@@ -105,6 +108,24 @@ function Checkout({ contract, meters, checkpoints, held, refresh, close }) {
       {step === 0 && <div className="space-y-4">
         <TransactionTime label="Thời điểm trả phòng" value={endedAt} onChange={setEndedAt} />
         <label className="block text-sm font-medium">Lý do kết thúc<select className={field} value={reason} onChange={event => { setReason(event.target.value); setConfirmNoHeld(false) }}>{Object.entries(reasons).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+        <section className="space-y-3 rounded-xl border border-slate-200 p-3">
+          <h4 className="font-semibold">Kiểm tra bàn giao</h4>
+          <label className="block text-sm">Chìa khóa
+            <select className={field} value={inspection.keys_status} onChange={e => setInspection(s => ({...s, keys_status:e.target.value}))}>
+              <option value="RETURNED">Đã nhận đủ</option><option value="MISSING">Thiếu chìa khóa</option><option value="UNKNOWN">Chưa xác nhận</option>
+            </select>
+          </label>
+          <label className="block text-sm">Tình trạng tài sản/phòng
+            <select className={field} value={inspection.condition} onChange={e => setInspection(s => ({...s, condition:e.target.value}))}>
+              <option value="OK">Đã kiểm tra, bình thường</option><option value="ISSUES">Có hư hỏng/vấn đề cần đối soát</option><option value="NOT_INSPECTED">Chưa kiểm tra được</option>
+            </select>
+          </label>
+          <label className="block text-sm">Ghi chú kiểm kê
+            <textarea className={field} rows={2} maxLength={2000} value={inspection.notes} onChange={e => setInspection(s => ({...s, notes:e.target.value}))} placeholder="Tình trạng thiết bị, chìa khóa, hư hỏng..." />
+          </label>
+          {(inspection.condition !== 'OK' || inspection.keys_status !== 'RETURNED') && inspection.notes.trim().length < 5 && <p role="alert" className="text-sm text-amber-800">Cần ghi rõ lý do (ít nhất 5 ký tự) khi còn vấn đề hoặc chưa kiểm tra đủ.</p>}
+          <p className="text-xs text-slate-600">Biên bản kiểm kê chỉ lưu bằng chứng, không tự tạo phí bồi thường.</p>
+        </section>
       </div>}
       {step === 1 && <div className="space-y-3">
         {meters.length === 0 && <p className="text-sm text-slate-600">Phòng chưa có công tơ đang hoạt động.</p>}
@@ -132,9 +153,10 @@ function Checkout({ contract, meters, checkpoints, held, refresh, close }) {
             {debt.unassigned && <p className="text-amber-800">Có hóa đơn của phòng chưa gắn hợp đồng. Chưa cộng vào công nợ hợp đồng này; cần đối soát riêng.</p>}
           </>}
         </section>
+        <p className="text-sm text-slate-700">Kiểm kê: {inspection.keys_status === 'RETURNED' ? 'Đã nhận chìa khóa' : inspection.keys_status === 'MISSING' ? 'Thiếu chìa khóa' : 'Chưa xác nhận chìa khóa'} · {inspection.condition === 'OK' ? 'Tình trạng bình thường' : 'Cần kiểm tra/đối soát'}</p>
         <p className="flex justify-between gap-3 rounded-lg border border-teal-200 bg-teal-50 p-3"><span>Cọc thực tế còn giữ</span><strong className="tabular-nums">{formatCurrency(held)}</strong></p>
         <div className="rounded-lg bg-amber-50 p-3 text-amber-900"><p className="font-semibold">Chưa quyết toán cuối kỳ</p><p className="mt-1">Tiền điện/nước cuối kỳ chưa được xác định tại bước này. Xác nhận trả phòng không tự tạo hóa đơn, ghi thanh toán hoặc khấu trừ cọc vào công nợ.</p></div>
-        {reason === 'TENANT_ABANDONMENT' && (held > 0 ? <p className="rounded-lg bg-amber-50 p-3 text-amber-900">Theo chính sách bỏ ngang hiện có, Billing V2 sẽ ghi mất số cọc thực tế còn giữ.</p> : <label className="flex gap-2"><input type="checkbox" disabled={mutation.isPending || uncertain} checked={confirmNoHeld} onChange={event => setConfirmNoHeld(event.target.checked)} />Tôi đã đối soát và xác nhận không có tiền cọc thực tế còn giữ.</label>)}
+        {reason === 'TENANT_ABANDONMENT' && (held > 0 ? <p className="rounded-lg bg-amber-50 p-3 text-amber-900">Không tự mất cọc. Khoản cọc vẫn được giữ trên Sổ cọc đến khi chủ trọ ghi quyết định xử lý có căn cứ.</p> : <label className="flex gap-2"><input type="checkbox" disabled={mutation.isPending || uncertain} checked={confirmNoHeld} onChange={event => setConfirmNoHeld(event.target.checked)} />Tôi đã đối soát và xác nhận không có tiền cọc thực tế còn giữ.</label>)}
       </div>}
       {mutation.isError && <p role="alert" className={`rounded-lg p-3 text-sm ${uncertain ? 'bg-amber-50 text-amber-900' : 'bg-red-50 text-red-700'}`}>{mutation.error.billingV2Message || getApiErrorMessage(mutation.error)}</p>}
       <footer className="flex justify-end gap-2 border-t border-slate-200 bg-white py-3">
@@ -149,22 +171,31 @@ function DepositLedger({ contract, rows, held, refresh }) {
   const [draft, setDraft] = useState(null)
   const [success, setSuccess] = useState('')
   const mutation = useMutation({
-    mutationFn: values => recordBillingDeposit(contract.id, { event: values.event, amount: values.amount, occurred_at: apiTime(values.occurredAt), request_key: values.key }, { quiet: true }),
+    mutationFn: values => recordBillingDeposit(contract.id, { event: values.event, amount: Number(values.amount), occurred_at: apiTime(values.occurredAt), request_key: values.key, ...(values.event === 'FORFEITED' ? { decision_reason: values.decisionReason.trim(), decision_confirmed: values.confirmed } : {}) }, { quiet: true }),
     onSuccess: async () => { setSuccess('Đã xác nhận giao dịch cọc thành công.'); setDraft(null); await refresh() },
   })
   const uncertain = mutation.isError && !!mutation.error.billingV2Message
-  const open = event => { mutation.reset(); setSuccess(''); setDraft({ event, amount: '', occurredAt: localNow(), key: crypto.randomUUID() }) }
+  const open = event => { mutation.reset(); setSuccess(''); setDraft({ event, amount: '', occurredAt: localNow(), decisionReason: '', confirmed: false, key: crypto.randomUUID() }) }
   return <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+    <p className="text-xs text-slate-600">Sổ cọc chỉ phản ánh khoản tiền đã nhận/đã hoàn/quyết định xử lý được chủ trọ ghi nhận; không tự bù trừ hóa đơn.</p>
     <header className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-semibold">Sổ cọc</h3><p className="text-sm text-slate-500">Tiền thực tế còn giữ</p><p className="mt-1 text-2xl font-semibold tabular-nums text-teal-800">{formatCurrency(held)}</p></div>
-      <div className="flex flex-wrap gap-2">{contract.status === 'ACTIVE' && <button type="button" className={primary} onClick={() => open('RECEIVED')}>Ghi nhận cọc</button>}<button type="button" className={secondary} disabled={held <= 0} onClick={() => open('REFUNDED')}>Ghi hoàn cọc</button></div>
+      <div className="flex flex-wrap gap-2">{contract.status === 'ACTIVE' && <button type="button" className={primary} onClick={() => open('RECEIVED')}>Ghi nhận cọc</button>}<button type="button" className={secondary} disabled={held <= 0} onClick={() => open('REFUNDED')}>Ghi hoàn cọc</button>
+        {contract.termination_reason === 'TENANT_ABANDONMENT' && held > 0 && <button type="button" className={secondary} onClick={() => open('FORFEITED')}>Ghi quyết định mất cọc</button>}</div>
     </header>
     {success && <p role="status" className="rounded-lg bg-teal-50 p-3 text-sm text-teal-800">{success}</p>}
     {draft && <ExitDialog title={eventLabel[draft.event]} subtitle={contract.contract_code} close={() => setDraft(null)} busy={mutation.isPending || uncertain}>
       <form className="space-y-4" onSubmit={event => { event.preventDefault(); if (!mutation.isPending && /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/.test(draft.occurredAt)) mutation.mutate(draft) }}>
         <p className="text-sm text-slate-600">Cọc thực tế đang giữ: <strong>{formatCurrency(held)}</strong></p>
         <fieldset disabled={mutation.isPending || uncertain} className="space-y-4">
-          <label className="block text-sm font-medium">Số tiền (đ)<input aria-label="Số tiền (đ)" type="number" inputMode="numeric" min="1" step="1" max={draft.event === 'REFUNDED' ? held : undefined} required className={`${field} text-lg`} value={draft.amount} aria-invalid={draft.event === 'REFUNDED' && Number(draft.amount) > held} onChange={event => setDraft({ ...draft, amount: event.target.value })} />{draft.event === 'REFUNDED' && Number(draft.amount) > held && <p role="alert" className="mt-1 text-sm text-red-700">Số tiền hoàn vượt số dư cọc còn giữ.</p>}</label>
+          <label className="block text-sm font-medium">Số tiền (đ)<input aria-label="Số tiền (đ)" type="number" inputMode="numeric" min="1" step="1" max={draft.event !== 'RECEIVED' ? held : undefined} required className={`${field} text-lg`} value={draft.amount} aria-invalid={draft.event !== 'RECEIVED' && Number(draft.amount) > held} onChange={event => setDraft({ ...draft, amount: event.target.value })} />{draft.event !== 'RECEIVED' && Number(draft.amount) > held && <p role="alert" className="mt-1 text-sm text-red-700">Số tiền hoàn vượt số dư cọc còn giữ.</p>}</label>
           <TransactionTime label="Thời điểm giao dịch" value={draft.occurredAt} onChange={occurredAt => setDraft({ ...draft, occurredAt })} />
+          {draft.event === 'FORFEITED' && <>
+            <label className="block text-sm font-medium">Căn cứ xử lý cọc (bắt buộc)
+              <textarea className={field} minLength={10} required maxLength={1000} value={draft.decisionReason} onChange={e => setDraft({ ...draft, decisionReason:e.target.value })} placeholder="Nêu điều khoản/thỏa thuận và bằng chứng đã đối chiếu" />
+            </label>
+            <label className="flex gap-2 text-sm"><input type="checkbox" required checked={draft.confirmed} onChange={e => setDraft({...draft,confirmed:e.target.checked})} />Tôi đã đối chiếu thỏa thuận, xác nhận quyết định này và chịu trách nhiệm về số tiền ghi nhận.</label>
+          </>}
+
         </fieldset>
         {mutation.isError && <p role="alert" className={`rounded-lg p-3 text-sm ${uncertain ? 'bg-amber-50 text-amber-900' : 'bg-red-50 text-red-700'}`}>{mutation.error.billingV2Message || getApiErrorMessage(mutation.error)}</p>}
         <footer className="flex justify-end gap-2 border-t border-slate-200 pt-3"><button type="button" className={secondary} disabled={mutation.isPending || uncertain} onClick={() => setDraft(null)}>Đóng</button><button className={primary} disabled={mutation.isPending}>{uncertain ? 'Thử lại giao dịch' : 'Lưu giao dịch'}</button></footer>

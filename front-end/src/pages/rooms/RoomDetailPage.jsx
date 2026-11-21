@@ -12,6 +12,7 @@ import RoomOccupantsSection from '../../components/rooms/RoomOccupantsSection'
 import RoomBedsSection from '../../components/rooms/RoomBedsSection'
 import RoomUtilitiesSection from '../../components/rooms/RoomUtilitiesSection'
 import RoomServicesSection from '../../components/rooms/RoomServicesSection'
+import RoomCheckoutCard from '../../components/rooms/RoomCheckoutCard'
 import AmenityIcon from '../../components/amenities/AmenityIcon'
 import RoomAmenitiesModal from '../../components/amenities/RoomAmenitiesModal'
 import { getInvoicesByRoom } from '../../api/invoiceApi'
@@ -74,6 +75,7 @@ export default function RoomDetailPage() {
   const room = roomQuery.data.data.data
   const contracts = contractsQuery.data?.data?.data || []
   const activeContract = contracts.find((contract) => contract.status === 'ACTIVE')
+  const latestEndedContract = contracts.filter(c => ['TERMINATED', 'EXPIRED'].includes(c.status)).sort((a,b) => Number(b.id) - Number(a.id))[0]
   const isDorm = room.room_type === 'DORMITORY'
   const roomStatus = roomStatusLabels[room.status] || room.status || 'Chưa cập nhật'
   const roomStatusStyle = roomStatusStyles[room.status] || 'border-slate-200 bg-slate-100 text-slate-700'
@@ -117,6 +119,10 @@ export default function RoomDetailPage() {
       {location.state?.message && <p className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{location.state.message}</p>}
       {deleteError && <p className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{deleteError}</p>}
 
+<div id="room-checkout" className="mt-4 min-w-0 scroll-mt-24">
+  {room.room_type === 'PRIVATE_ROOM' && <RoomCheckoutCard room={room} contract={activeContract || (room.status !== 'RENTED' ? latestEndedContract : null)} />}
+  {room.room_type === 'DORMITORY' && <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">Trả giường KTX được xử lý theo hợp đồng từng người, không trả cả phòng. Luồng riêng chưa được triển khai.</p>}
+</div>
 <section aria-labelledby="room-overview-title" className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
   <div className="flex flex-wrap items-center justify-between gap-2">
     <h3 id="room-overview-title" className="text-lg font-bold text-slate-900">Tổng quan phòng</h3>

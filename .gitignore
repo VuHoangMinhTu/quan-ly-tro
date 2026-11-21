@@ -24,6 +24,7 @@
 /front-end/tests/**/videos/
 /front-end/tests/**/traces/
 
+
 # Temporary test databases and captured request/log output.
 /tests/**/*.sqlite
 /tests/**/*.sqlite-*
@@ -40,3 +41,6 @@
 /front-end/tests/**/*.log
 /front-end/tests/**/trace*.zip
 
+
+/front-end/.env
+/backend-api/.env

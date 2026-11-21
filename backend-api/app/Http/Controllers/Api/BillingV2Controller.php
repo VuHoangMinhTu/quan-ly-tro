@@ -248,7 +248,14 @@ class BillingV2Controller extends Controller
     public function checkout(Request $request, int $id, BillingV2Evidence $evidence): JsonResponse
     {
         $contract = $this->contract($request, $id);
-        $data = $request->validate(['actual_ended_at' => ['required', 'date_format:Y-m-d H:i:s'], 'reason' => ['required', 'in:NORMAL_EXPIRY,MUTUAL_EARLY_END,TENANT_ABANDONMENT'], 'confirm_no_held_deposit' => ['sometimes', 'boolean'], 'readings' => ['present', 'array'], 'readings.*.utility_meter_id' => ['required', 'integer', 'distinct'], 'readings.*.reading_value' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999999999.99']]);
+        $data = $request->validate(['actual_ended_at' => ['required', 'date_format:Y-m-d H:i:s'], 'reason' => ['required', 'in:NORMAL_EXPIRY,MUTUAL_EARLY_END,TENANT_ABANDONMENT'], 'confirm_no_held_deposit' => ['sometimes', 'boolean'], 'readings' => ['present', 'array'], 'readings.*.utility_meter_id' => ['required', 'integer', 'distinct'], 'readings.*.reading_value' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
+            'inspection' => ['sometimes', 'array'],
+            'inspection.keys_status' => ['required_with:inspection', 'in:RETURNED,MISSING,UNKNOWN'],
+            'inspection.condition' => ['required_with:inspection', 'in:OK,ISSUES,NOT_INSPECTED'],
+            'inspection.notes' => ['nullable', 'string', 'max:2000']]);
+        if (isset($data['inspection']) && ($data['inspection']['keys_status'] !== 'RETURNED' || $data['inspection']['condition'] !== 'OK') && mb_strlen(trim($data['inspection']['notes'] ?? '')) < 5) {
+            throw ValidationException::withMessages(['inspection.notes' => 'Cần ghi chú ít nhất 5 ký tự khi chưa bàn giao đủ hoặc có vấn đề.']);
+        }
         $evidence->checkout($contract, $data, $request->user()->id);
 
         return ApiResponse::success(null, 'Xác nhận trả phòng thành công.');
@@ -266,7 +273,7 @@ class BillingV2Controller extends Controller
     public function deposit(Request $request, int $id, BillingV2Evidence $evidence): JsonResponse
     {
         $contract = $this->contract($request, $id);
-        $data = $request->validate(['event' => ['required', 'in:RECEIVED,REFUNDED'], 'amount' => ['required', 'integer', 'min:1', 'max:999999999999999'], 'request_key' => ['required', 'string', 'max:80', 'not_regex:/^CHECK_OUT:/'], 'occurred_at' => ['required', 'date_format:Y-m-d H:i:s']]);
+        $data = $request->validate(['event' => ['required', 'in:RECEIVED,REFUNDED,FORFEITED'], 'amount' => ['required', 'integer', 'min:1', 'max:999999999999999'], 'request_key' => ['required', 'string', 'max:80', 'not_regex:/^CHECK_OUT:/'], 'occurred_at' => ['required', 'date_format:Y-m-d H:i:s'], 'decision_reason' => ['required_if:event,FORFEITED', 'nullable', 'string', 'min:10', 'max:1000'], 'decision_confirmed' => ['required_if:event,FORFEITED', 'accepted']]);
 
         return ApiResponse::success(['id' => $evidence->deposit($contract, $data, $request->user()->id), 'held_amount' => $evidence->heldDeposit($contract)], 'Ghi nhận sổ cọc thành công.');
     }

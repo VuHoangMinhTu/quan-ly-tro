@@ -456,7 +456,23 @@ class BillingV2ApiTest extends TestCase
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'amount' => 150000]);
     }
 
-    public function test_abandonment_forfeits_only_actual_held_deposit_and_preserves_previous_debt(): void
+    public function test_checkout_records_inspection_without_auto_forfeiture(): void
+    {
+        [$contract, , $meter] = $this->fixture();
+        $inspection = ['keys_status' => 'RETURNED', 'condition' => 'OK', 'notes' => 'Chìa khóa và tài sản bàn giao đủ.'];
+        $this->postJson("/api/billing-v2/contracts/{$contract->id}/checkout", [
+            'actual_ended_at' => '2026-10-15 10:00:00',
+            'reason' => 'MUTUAL_EARLY_END',
+            'readings' => [['utility_meter_id' => $meter->id, 'reading_value' => 130]],
+            'inspection' => $inspection,
+        ])->assertOk();
+        $report = DB::table('contract_handover_reports')->where('contract_id', $contract->id)->where('type', 'CHECK_OUT')->first();
+        $this->assertNotNull($report);
+        $this->assertSame($inspection, json_decode($report->inspection, true));
+        $this->assertDatabaseCount('payments', 0);
+    }
+
+    public function test_abandonment_keeps_held_deposit_until_explicit_owner_decision(): void
     {
         [$a, , $meter] = $this->fixture();
         $debt = $a->invoices()->create(['room_id' => $a->room_id, 'billing_period' => '2026-09-01', 'status' => 'UNPAID', 'subtotal' => 100000, 'total_amount' => 100000]);
@@ -468,6 +484,10 @@ class BillingV2ApiTest extends TestCase
         $this->leave($a, $meter->id, '2026-10-15 10:00:00', 130, 'TENANT_ABANDONMENT');
         $this->leave($a, $meter->id, '2026-10-15 10:00:00', 130, 'TENANT_ABANDONMENT');
 
+        $this->assertDatabaseMissing('contract_deposit_entries', ['contract_id' => $a->id, 'event' => 'FORFEITED']);
+        $this->assertDatabaseCount('contract_deposit_entries', 2);
+        $this->assertDatabaseHas('contract_settlements', ['contract_id' => $a->id, 'deposit_status' => 'PENDING_MANUAL_REVIEW']);
+        $this->postJson("/api/billing-v2/contracts/{$a->id}/deposits", ['event' => 'FORFEITED', 'amount' => 800000, 'request_key' => 'manual-forfeit-after-review', 'occurred_at' => '2026-10-15 12:00:00', 'decision_reason' => 'Chủ trọ đã đối chiếu điều khoản và biên bản bàn giao.', 'decision_confirmed' => true])->assertOk();
         $this->assertDatabaseHas('contract_deposit_entries', ['contract_id' => $a->id, 'event' => 'FORFEITED', 'amount' => 800000]);
         $this->assertDatabaseCount('contract_deposit_entries', 3);
         $this->assertSame('100000.00', $debt->fresh()->total_amount);
@@ -879,7 +899,7 @@ class BillingV2ApiTest extends TestCase
         $this->assertDatabaseCount('invoice_items', 1);
     }
 
-    public function test_confirmed_abandonment_forfeits_actual_three_million_and_excludes_all_new_auto_components(): void
+    public function test_confirmed_abandonment_keeps_deposit_pending_and_excludes_new_auto_components(): void
     {
         [$a, $room, $meter] = $this->fixture('TIERED');
         foreach (['FIXED', 'PER_PERSON', 'PER_UNIT', 'TIERED'] as $method) {
@@ -894,7 +914,8 @@ class BillingV2ApiTest extends TestCase
         $this->leave($a, $meter->id, '2026-10-20 10:00:00', 130, 'TENANT_ABANDONMENT');
 
         $this->assertSame('TERMINATED', $a->fresh()->status);
-        $this->assertDatabaseHas('contract_deposit_entries', ['contract_id' => $a->id, 'event' => 'FORFEITED', 'amount' => 3000000]);
+        $this->assertDatabaseMissing('contract_deposit_entries', ['contract_id' => $a->id, 'event' => 'FORFEITED']);
+        $this->assertDatabaseHas('contract_settlements', ['contract_id' => $a->id, 'deposit_status' => 'PENDING_MANUAL_REVIEW']);
         $case = DB::table('contract_settlements')->where('contract_id', $a->id)->first();
         $this->assertSame('NO_NEW_AUTO_RECEIVABLES', $case->collection_policy);
         $this->assertSame('CONFIRMED', $case->confirmation_state);

@@ -29,7 +29,7 @@ class ContractSettlementPolicy
             'contract_id' => $contract->id, 'contract_termination_id' => $termination->id, 'billing_period' => $period,
             'status' => 'PENDING_FINAL_SETTLEMENT', 'collection_policy' => $abandoned ? 'NO_NEW_AUTO_RECEIVABLES' : 'AGREEMENT_REQUIRED',
             'confirmation_state' => $confirmed ? 'CONFIRMED' : 'NEEDS_OWNER_CONFIRMATION',
-            'deposit_status' => $abandoned ? (BigDecimal::of($heldBefore)->isPositive() ? 'FORFEITED_ACTUAL_BALANCE' : ($confirmed ? 'NO_HELD_DEPOSIT_CONFIRMED' : 'NEEDS_OWNER_CONFIRMATION')) : 'NOT_AUTOMATICALLY_SETTLED',
+            'deposit_status' => $abandoned ? (BigDecimal::of($heldBefore)->isPositive() ? 'PENDING_MANUAL_REVIEW' : ($confirmed ? 'NO_HELD_DEPOSIT_CONFIRMED' : 'NEEDS_OWNER_CONFIRMATION')) : 'NOT_AUTOMATICALLY_SETTLED',
             'invoice_review_status' => $abandoned && $existing !== [] ? 'NEEDS_INVOICE_REVIEW' : 'NONE',
             'policy_snapshot' => json_encode(['version' => 1, 'reason' => $data['reason'], 'held_before_checkout' => $heldBefore, 'existing_invoice_ids' => $existing,
                 'waived_auto_components' => $abandoned ? ['RENT', 'FIXED', 'PER_PERSON', 'PER_UNIT', 'TIERED', 'OTHER_AUTO_SERVICES'] : [],

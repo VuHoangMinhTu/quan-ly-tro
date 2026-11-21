@@ -530,6 +530,7 @@ class ContractService
             'operational_role' => $this->access->role($user, $contract->room->boardingHouse),
             'requires_checkout' => $this->requiresCheckout($contract),
             'actual_ended_at' => DB::table('contract_terminations')->where('contract_id', $contract->id)->value('actual_ended_at'),
+            'termination_reason' => DB::table('contract_terminations')->where('contract_id', $contract->id)->value('reason'),
             'active_occupants_count' => $contract->occupants->where('status', 'ACTIVE')->count()];
     }
 
