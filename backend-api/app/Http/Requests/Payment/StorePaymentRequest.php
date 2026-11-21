@@ -23,6 +23,7 @@ class StorePaymentRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'idempotency_key' => ['nullable', 'uuid'],
             'amount' => ['required', 'numeric', 'gt:0'], 'payment_method' => ['required', 'in:CASH,BANK_TRANSFER,CARD,OTHER'], 'paid_at' => ['required', 'date'], 'reference_code' => ['nullable', 'string', 'max:255'], 'note' => ['nullable', 'string', 'max:500'],
         ];
     }

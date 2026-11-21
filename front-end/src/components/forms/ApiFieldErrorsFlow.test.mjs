@@ -13,6 +13,7 @@ import { contractKeys } from '../../api/contractKeys.js'
 import { tenantKeys } from '../../api/tenantKeys.js'
 import { invoiceStatusLabels } from '../../utils/invoiceStatus.js'
 import * as dates from '../../utils/date.js'
+import { paymentDateTime } from '../../utils/paymentDateTime.js'
 import { toFormString } from '../../utils/form.js'
 import * as serviceHelpers from '../../utils/service.js'
 import * as validation from '../../utils/formValidation.js'
@@ -36,12 +37,18 @@ async function harness(path, props = {}, extraBindings = {}) {
   let form
   let mutation
   let stateCursor = 0
+  let refCursor = 0
+  const refs = []
   const states = []
   let previousDependencies
   const input = (inputProps) => React.createElement('input', inputProps)
   const bindings = { AuthLayout: 'auth-layout', handleFormSubmit, notifyInvalidSubmit, TenantPicker: props => React.createElement("tenant-picker", props),
-    ...dates, ...serviceHelpers, ...validation, toFormString, applyApiFieldErrors, getApiErrorMessage, z, zodResolver, contractKeys, tenantKeys, invoiceStatusLabels,
-    useRef: (initial) => ({ current: initial }),
+    ...dates, ...serviceHelpers, ...validation, paymentDateTime, toFormString, applyApiFieldErrors, getApiErrorMessage, z, zodResolver, contractKeys, tenantKeys, invoiceStatusLabels,
+    useRef: (initial) => {
+      const index = refCursor++
+      if (!refs[index]) refs[index] = { current: initial }
+      return refs[index]
+    },
     useState: (initial) => {
       const index = stateCursor++
       if (!(index in states)) states[index] = initial
@@ -75,7 +82,7 @@ async function harness(path, props = {}, extraBindings = {}) {
   const name = source.match(/function (RegisterPage|ContractForm|InvoiceForm|TenantForm|ServiceForm|PaymentForm|ProtectedRoute)\(/)[1]
   const { code } = await transformWithOxc(source, `${name}.jsx`, { jsx: { runtime: 'classic' } })
   const Component = new Function('React', ...Object.keys(bindings), `${code}\nreturn ${name}`)(React, ...Object.values(bindings))
-  const render = () => { stateCursor = 0; return elements(Component(props)) }
+  const render = () => { stateCursor = 0; refCursor = 0; return elements(Component(props)) }
   render()
   return { form, render, fail: (error) => mutation.onError(error), submit: () => render().find(node => node.type === 'form').props.onSubmit() }
 }
@@ -83,6 +90,58 @@ async function harness(path, props = {}, extraBindings = {}) {
 const apiError = (status, message, errors) => ({ response: { status, data: { success: false, message, errors } } })
 
 const validContract = { tenant_id: 2, contract_code: 'HD001', start_date: '2026-11-16', monthly_rent: 2000000, deposit_amount: 1000000 }
+
+test('payment retains values and the request key after a lost response, then rotates after success', async () => {
+  const payloads = []
+  const page = await harness('./PaymentForm.jsx', { remaining: 1000000, label: 'Lưu', onSubmit: async payload => {
+    payloads.push(payload)
+    if (payloads.length === 1) throw new Error('Mất kết nối')
+  } })
+  page.form.setValue('amount', 200000)
+  page.form.setValue('note', 'Thu một phần')
+  await page.submit()
+  page.render()
+  assert.equal(page.form.getValues('amount'), 200000)
+  assert.equal(page.form.getValues('note'), 'Thu một phần')
+  await page.submit()
+  assert.match(payloads[0].idempotency_key, /^[0-9a-f-]{36}$/)
+  assert.deepEqual(payloads[1], payloads[0])
+  await page.submit()
+  assert.notEqual(payloads[2].idempotency_key, payloads[0].idempotency_key)
+})
+
+test('editing an existing manual payment does not create a new payment key', async () => {
+  let payload
+  const page = await harness('./PaymentForm.jsx', { remaining: 1000000, initialValues: { id: 7, amount: 200000 }, onSubmit: async value => { payload = value } })
+  await page.submit()
+  assert.equal(payload.amount, 200000)
+  assert.equal('idempotency_key' in payload, false)
+})
+
+test('payment key conflict is visible inline inside the modal and preserves the entered amount', async () => {
+  const message = 'Lần gửi trước đã được ghi nhận với nội dung khác. Tải lại hóa đơn để kiểm tra trước khi tạo khoản thu mới.'
+  const page = await harness('./PaymentForm.jsx', { remaining: 1000000, onSubmit: async () => { throw apiError(422, 'Dữ liệu không hợp lệ.', { idempotency_key: [message] }) } })
+  page.form.setValue('amount', 300000)
+  await page.submit()
+  assert.ok(page.render().some(node => node.props.role === 'alert' && text(node) === message))
+  assert.equal(page.form.getValues('amount'), 300000)
+})
+
+test('deleted-payment rejection does not rotate the key or silently turn retry into a new receipt', async () => {
+  const payloads = []
+  const message = 'Khoản thu của yêu cầu này đã bị xóa hoặc hủy ghi nhận.'
+  const page = await harness('./PaymentForm.jsx', { remaining: 1000000, onSubmit: async payload => {
+    payloads.push(payload)
+    throw apiError(409, message)
+  } })
+  page.form.setValue('amount', 200000)
+  await page.submit()
+  await page.submit()
+  assert.equal(payloads.length, 2)
+  assert.equal(payloads[0].idempotency_key, payloads[1].idempotency_key)
+  assert.ok(page.render().some(node => node.props.role === 'alert' && text(node) === message))
+  assert.equal(page.form.getValues('amount'), 200000)
+})
 
 test('invalid invoice blocks the API call and renders separate field errors, then accepts corrected input', async () => {
   const payloads = []

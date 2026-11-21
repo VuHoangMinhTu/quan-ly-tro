@@ -9,9 +9,9 @@ class InvoicePaymentService
     public function recalculate(Invoice $invoice): void
     {
         $oldRemaining = (float) $invoice->total_amount - (float) $invoice->paid_amount;
-        $paid = $invoice->payments()->sum('amount');
+        $paid = $invoice->payments()->lockForUpdate()->sum('amount');
         $status = $paid == 0 ? 'UNPAID' : ($paid >= $invoice->total_amount ? 'PAID' : 'PARTIALLY_PAID');
-        $invoice->update(['paid_amount' => $paid, 'status' => $status, 'paid_at' => $status === 'PAID' ? $invoice->payments()->max('paid_at') : null]);
+        $invoice->update(['paid_amount' => $paid, 'status' => $status, 'paid_at' => $status === 'PAID' ? $invoice->payments()->lockForUpdate()->max('paid_at') : null]);
         $updatedInvoice = $invoice->fresh();
         app(PayOSService::class)->invalidateRequestsForAmountChange(
             $updatedInvoice,
