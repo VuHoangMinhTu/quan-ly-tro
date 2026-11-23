@@ -8,7 +8,7 @@ export default function ContractDraftServicesEditor({ availableServices, value, 
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState('')
   const sync = async () => {
-    if (!window.confirm('Đồng bộ sẽ thay toàn bộ lựa chọn và giá dịch vụ đang chỉnh bằng dịch vụ hiện tại của phòng. Bạn có muốn tiếp tục?')) return
+    if (!window.confirm('Cập nhật danh sách dịch vụ từ phòng? Các dịch vụ và giá đã chọn trong hợp đồng sẽ được giữ lại; dịch vụ mới sẽ hiển thị để bạn lựa chọn.')) return
     setSyncing(true); setError('')
     try { await onSync() } catch (failure) { setError(getApiErrorMessage(failure)) } finally { setSyncing(false) }
   }

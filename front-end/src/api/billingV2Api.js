@@ -10,7 +10,14 @@ async function write(url, payload, { quiet = false } = {}) {
     const result = response.data?.data
     const needsAttention = Array.isArray(result) ? result.some(row => ['BLOCKED', 'PENDING_FINAL_SETTLEMENT'].includes(row.status)) : ['BLOCKED', 'PENDING_FINAL_SETTLEMENT'].includes(result?.status)
     if (!quiet) {
-      if (needsAttention) toast.warning('Có phòng hoặc khoản tính toán đang chờ/bị chặn. Xem lý do chi tiết trước khi tiếp tục.')
+      if (needsAttention) {
+        const rows = (Array.isArray(result) ? result : [result]).flatMap(row => [row, ...(row?.bed_results || [])])
+        const messages = rows.flatMap(row => Object.values(row?.errors || {}).flatMap(value =>
+          (Array.isArray(value) ? value : [value]).flatMap(nested =>
+            typeof nested === 'string' ? [nested] : Object.values(nested || {}).flat())))
+        const reason = messages.find(message => typeof message === 'string' && message.trim())
+        toast.warning(reason || 'Có phòng hoặc khoản tính toán đang chờ/bị chặn. Xem lý do chi tiết trước khi tiếp tục.')
+      }
       else toast.success(response.data?.message || 'Đã ghi nhận thành công.')
     }
     return response

@@ -534,6 +534,10 @@ class ContractService
             'requires_checkout' => $this->requiresCheckout($contract),
             'actual_ended_at' => DB::table('contract_terminations')->where('contract_id', $contract->id)->value('actual_ended_at'),
             'termination_reason' => DB::table('contract_terminations')->where('contract_id', $contract->id)->value('reason'),
+            'renewal_history' => $this->access->isOwner($user, $contract->room->boardingHouse)
+                ? DB::table('contract_renewals')->where('contract_id', $contract->id)
+                    ->orderByDesc('id')->get(['id', 'old_end_date', 'new_end_date', 'reason', 'extended_by', 'created_at'])->all()
+                : [],
             'active_occupants_count' => $contract->occupants->where('status', 'ACTIVE')->count()];
     }
 

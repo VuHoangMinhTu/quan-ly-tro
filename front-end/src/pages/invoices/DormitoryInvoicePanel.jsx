@@ -1,21 +1,30 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { generateDormitoryBedInvoice, getMonthlyBillingOptions } from '../../api/billingV2Api'
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
+import { getContractsByRoom } from '../../api/contractApi'
+import { cycleEndCoverage, formatDay } from '../../utils/dormitoryInvoiceEligibility.mjs'
 import { formatCurrency } from '../../utils/formatters'
 import { dormitoryBedCycle } from '../../utils/dormitoryBedCycle.mjs'
 import MonthlyDraftUpdatePanel from './MonthlyDraftUpdatePanel'
 
 const messageFor = row => Object.values(row?.errors || {}).flat().join(' · ') || 'Chưa đủ điều kiện tính tiền. Vui lòng kiểm tra hợp đồng.'
+const isContractExpiryError = value => Boolean(value?.errors?.contract_expired || value?.response?.data?.errors?.contract_expired || value?.response?.data?.data?.errors?.contract_expired)
 const optInAllowed = term => term.billing_method !== 'TIERED'
   && !(term.billing_method === 'PER_UNIT' && ['ELECTRICITY', 'WATER'].includes(term.service_type))
 
 export default function DormitoryInvoicePanel({ houseId, roomId }) {
-  const [month, setMonth] = useState(() => new Date().toLocaleDateString('sv-SE').slice(0, 7))
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [month, setMonth] = useState(() => {
+    const requested = searchParams.get('month')
+    return /^\d{4}-(0[1-9]|1[0-2])$/.test(requested || '')
+      ? requested : new Date().toLocaleDateString('sv-SE').slice(0, 7)
+  })
   const [inputs, setInputs] = useState({})
   const [results, setResults] = useState({})
   const [errors, setErrors] = useState({})
+  const [expiryErrors, setExpiryErrors] = useState({})
   const [busy, setBusy] = useState(false)
   const client = useQueryClient()
   const period = `${month}-01`
@@ -24,10 +33,29 @@ export default function DormitoryInvoicePanel({ houseId, roomId }) {
     queryFn: () => getMonthlyBillingOptions(houseId, period),
     enabled: Boolean(houseId && month),
   })
+  // The room contract endpoint is the authoritative source for end_date.
+  // It shares the same React Query cache with the existing top-of-page renewal shortcuts.
+  const roomContractsQuery = useQuery({
+    queryKey: ['contracts', String(roomId)],
+    queryFn: () => getContractsByRoom(roomId),
+    enabled: Boolean(roomId),
+    staleTime: 15_000,
+  })
+  const roomContractsData = roomContractsQuery.data?.data?.data
+  const byId = new Map((Array.isArray(roomContractsData) ? roomContractsData : [])
+    .map(contract => [String(contract.id), contract]))
   const contracts = (options.data?.data?.data || [])
     .filter(c => Number(c.room_id) === Number(roomId) && c.contract_type === 'DORM_BED')
     .slice().sort((a, b) => String(a.bed?.bed_code || '').localeCompare(String(b.bed?.bed_code || ''))
       || String(a.start_date || '').localeCompare(String(b.start_date || '')))
+  const bedRows = contracts.map(contract => {
+    const detailed = byId.get(String(contract.id))
+    const endDate = detailed && Object.prototype.hasOwnProperty.call(detailed, 'end_date')
+      ? detailed.end_date : contract.end_date
+    const cycle = dormitoryBedCycle(contract.start_date, month)
+    return { contract, cycle, coverage: cycleEndCoverage(endDate, cycle) }
+  })
+  const billableRows = bedRows.filter(row => row.cycle && !row.coverage.expired)
   const setField = (id, field, value) => setInputs(previous => ({
     ...previous, [id]: { ...previous[id], [field]: value },
   }))
@@ -49,6 +77,7 @@ export default function DormitoryInvoicePanel({ houseId, roomId }) {
     const result = response.data.data
     setResults(previous => ({ ...previous, [contract.id]: result }))
     setErrors(previous => ({ ...previous, [contract.id]: result.status === 'BLOCKED' ? messageFor(result) : '' }))
+    setExpiryErrors(previous => ({ ...previous, [contract.id]: isContractExpiryError(result) }))
     if (result.status === 'CREATED' || result.status === 'EXISTING') {
       await client.invalidateQueries({ queryKey: ['invoices'] })
     }
@@ -61,10 +90,14 @@ export default function DormitoryInvoicePanel({ houseId, roomId }) {
     try {
       // Deliberately isolate requests. One bed failing does not roll back another bed.
       for (const contract of contractList) {
+        // UI guard; Laravel remains authoritative if dates change on the server.
+        const row = bedRows.find(item => String(item.contract.id) === String(contract.id))
+        if (!row?.cycle || row.coverage.expired) continue
         try {
           await createOne(contract)
         } catch (error) {
           setErrors(previous => ({ ...previous, [contract.id]: error.billingV2Message || getApiErrorMessage(error) }))
+          setExpiryErrors(previous => ({ ...previous, [contract.id]: isContractExpiryError(error) }))
         }
       }
     } finally { setBusy(false) }
@@ -75,15 +108,15 @@ export default function DormitoryInvoicePanel({ houseId, roomId }) {
     <p className="text-sm text-slate-600">Mỗi hợp đồng có một kỳ thuê và hóa đơn riêng. Ngày trên từng thẻ được lấy từ ngày bắt đầu hợp đồng. Điện, nước, mạng và dịch vụ đã bao gồm trong giá giường, mặc định không thu thêm.</p>
     <label className="block text-sm">Tháng quản lý hóa đơn
       <input type="month" value={month} disabled={busy} className="mt-1 block min-h-11 w-full max-w-xs rounded border p-2"
-        onChange={e => { setMonth(e.target.value); setResults({}); setErrors({}) }} />
+        onChange={e => { const selected = e.target.value; setMonth(selected); setSearchParams(previous => { const next = new URLSearchParams(previous); if (selected) next.set('month', selected); else next.delete('month'); return next }, { replace: true }); setResults({}); setErrors({}); setExpiryErrors({}) }} />
     </label>
     {options.isPending && <p>Đang tải các hợp đồng thuê giường...</p>}
     {options.isError && <p role="alert" className="text-red-700">{getApiErrorMessage(options.error)}</p>}
     {!options.isPending && !options.isError && contracts.length === 0 && <p className="rounded bg-slate-50 p-3 text-sm">Không có hợp đồng thuê giường hợp lệ trong tháng này.</p>}
-    {contracts.map(contract => {
-      const cycle = dormitoryBedCycle(contract.start_date, month)
+    {bedRows.map(({ contract, cycle, coverage }) => {
       const values = inputs[contract.id] || {}
       const result = results[contract.id]
+      const mustRenew = coverage.expired || Boolean(expiryErrors[contract.id])
       const allowed = (contract.agreed_services || []).filter(term => term.is_active && optInAllowed(term))
       return <article key={contract.id} className="space-y-3 rounded-lg border border-slate-300 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -93,9 +126,23 @@ export default function DormitoryInvoicePanel({ houseId, roomId }) {
           </div>
           <span className="rounded bg-slate-100 px-2 py-1 text-xs">{contract.status}</span>
         </div>
-        {cycle ? <p className="rounded bg-blue-50 p-3 text-sm text-blue-900"><strong>Kỳ thuê riêng:</strong> {cycle.start.split('-').reverse().join('/')} → {cycle.end.split('-').reverse().join('/')}. Không dùng kỳ của người thuê giường khác.</p>
+        {cycle ? <p className="rounded bg-blue-50 p-3 text-sm text-blue-900"><strong>Kỳ thuê riêng:</strong> {formatDay(cycle.start)} → {formatDay(cycle.end)}. Không dùng kỳ của người thuê giường khác.</p>
           : <p className="text-sm text-amber-800">Hợp đồng chưa bắt đầu trong tháng này; không tạo hóa đơn.</p>}
-        <details className="rounded border bg-slate-50 p-3 text-sm">
+        {coverage.endDate && <p className="text-sm text-slate-700">Ngày kết thúc theo hợp đồng: <strong>{formatDay(coverage.endDate)}</strong>.</p>}
+        {mustRenew && cycle && <div role="alert" className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+          <p className="font-semibold">Hợp đồng không còn đủ thời hạn cho kỳ thu này.</p>
+          <p>{coverage.endDate ? `Hợp đồng kết thúc ngày ${formatDay(coverage.endDate)}. ` : ''}Kỳ yêu cầu: {formatDay(cycle.start)} → {formatDay(cycle.end)}. Chủ trọ cần gia hạn hợp lệ trước khi tạo hóa đơn; nhập tiền thủ công không thể vượt qua điều kiện này.</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link to={`/contracts/${contract.id}#contract-renewal`} state={{ returnTo: `/rooms/${roomId}/invoices/new?month=${month}`, returnLabel: 'Tạo hóa đơn' }}
+              className="inline-flex min-h-11 items-center rounded-lg bg-teal-700 px-4 py-2 font-semibold text-white">Gia hạn / xem hợp đồng</Link>
+            <span className="text-xs">Nếu không gia hạn, bỏ qua kỳ thu này.</span>
+          </div>
+        </div>}
+        {coverage.shortened && !mustRenew && cycle && <div role="note" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+          Hợp đồng kết thúc ngày {formatDay(coverage.endDate)}, giữa kỳ {formatDay(cycle.start)} → {formatDay(cycle.end)}.
+          Đây là kỳ thuê ngắn; chủ trọ phải xác nhận tiền thuê theo thỏa thuận, hoặc <Link to={`/contracts/${contract.id}#contract-renewal`} state={{ returnTo: `/rooms/${roomId}/invoices/new?month=${month}` }} className="font-semibold underline">gia hạn hợp đồng</Link> nếu hai bên tiếp tục thuê.
+        </div>}
+        {!mustRenew && <details className="rounded border bg-slate-50 p-3 text-sm">
           <summary className="cursor-pointer font-medium">Trả sớm hoặc có thỏa thuận thu riêng? (tùy chọn)</summary>
           <p className="mt-2 text-slate-600">Chỉ nhập tiền giường xác nhận khi hợp đồng bị kết thúc giữa kỳ. Không tự chia tiền theo ngày.</p>
           <label className="mt-2 block">Tiền giường chủ trọ xác nhận cho kỳ lẻ (đ)
@@ -121,9 +168,9 @@ export default function DormitoryInvoicePanel({ houseId, roomId }) {
             <textarea className="mt-1 block min-h-20 w-full rounded border p-2" maxLength={1000} value={values.reason || ''} disabled={busy}
               onChange={e => setField(contract.id, 'reason', e.target.value)} placeholder="Ví dụ: Chủ trọ xác nhận số tiền thuê do trả giường giữa kỳ" />
           </label>
-        </details>
-        <button type="button" disabled={busy || !cycle} onClick={() => submit([contract])}
-          className="min-h-11 rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-50">{busy ? 'Đang xử lý...' : 'Tạo / xem hóa đơn giường này'}</button>
+        </details>}
+        <button type="button" disabled={busy || !cycle || mustRenew} onClick={() => submit([contract])}
+          className="min-h-11 rounded bg-slate-900 px-4 py-2 text-white disabled:opacity-50">{mustRenew ? 'Cần gia hạn hợp đồng' : busy ? 'Đang xử lý...' : 'Tạo / xem hóa đơn giường này'}</button>
         {errors[contract.id] && <p role="alert" className="rounded bg-amber-50 p-3 text-sm text-amber-900">{errors[contract.id]}</p>}
         {result?.status === 'CREATED' && <p className="text-sm text-green-800">Đã tạo hóa đơn nháp cho hợp đồng này.</p>}
         {result?.status === 'EXISTING' && <p className="text-sm text-slate-700">Hóa đơn hợp đồng này đã tồn tại, không tạo trùng.</p>}
@@ -151,8 +198,11 @@ export default function DormitoryInvoicePanel({ houseId, roomId }) {
         </div>)}
       </article>
     })}
-    {contracts.length > 1 && <button type="button" disabled={busy} onClick={() => submit(contracts.filter(c => dormitoryBedCycle(c.start_date, month)))}
-      className="min-h-11 rounded border border-slate-700 px-4 py-2 text-sm disabled:opacity-50">Tạo / kiểm tra lần lượt tất cả hợp đồng trong tháng</button>}
+    {contracts.length > 1 && billableRows.length > 0 && <div className="space-y-2">
+      <button type="button" disabled={busy} onClick={() => submit(billableRows.map(row => row.contract))}
+        className="min-h-11 rounded border border-slate-700 px-4 py-2 text-sm disabled:opacity-50">Tạo / kiểm tra lần lượt các hợp đồng còn hạn</button>
+      {billableRows.length < contracts.length && <p className="text-xs text-amber-800">Đã bỏ qua {contracts.length - billableRows.length} hợp đồng chưa đủ điều kiện kỳ thu (hết hạn hoặc chưa bắt đầu).</p>}
+    </div>}
     <p className="text-xs text-slate-600">Chỉ tạo bản nháp hoặc hiển thị hóa đơn đã có. Không tự phát hành, không ghi nhận thanh toán. Nếu hợp đồng trả sớm hoặc bỏ ngang, hệ thống có thể yêu cầu đối soát riêng.</p>
   </section>
 }
