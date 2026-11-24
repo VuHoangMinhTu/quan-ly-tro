@@ -17,9 +17,12 @@ use App\Services\ContractSettlementPolicy;
 use App\Services\InvoiceContractEligibility;
 use App\Services\InvoicePaymentInfoService;
 use App\Services\PayOSService;
+use Brick\Math\BigDecimal;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -105,6 +108,11 @@ class InvoiceController extends Controller
     {
         $invoice = Invoice::query()->whereHas('room', fn ($query) => $query->whereIn('boarding_house_id', $access->houses($r->user())->select('boarding_houses.id')))
             ->with(['room.boardingHouse', 'contract.tenant', 'contract.bed', 'items', 'payosPaymentRequest'])->findOrFail($id);
+        $payosRequest = $invoice->payosPaymentRequest;
+        $remaining = BigDecimal::of($invoice->total_amount)->minus($invoice->paid_amount);
+        if ($payosRequest && (! $remaining->isPositive() || ! $remaining->isEqualTo($payosRequest->amount))) {
+            $invoice->setRelation('payosPaymentRequest', null);
+        }
         $invoice->setAttribute('can_manage', $access->isOwner($r->user(), $invoice->room->boardingHouse));
         $invoice->setAttribute('billing_engine_version', DB::table('invoice_obligations')->where('invoice_id', $invoice->id)->exists() ? 2 : 1);
         $composition = DB::table('monthly_invoice_compositions')->where('invoice_id', $invoice->id)->first();
@@ -132,7 +140,28 @@ class InvoiceController extends Controller
 
     public function update(UpdateInvoiceRequest $r, int $id): JsonResponse
     {
-        $i = $this->invoice($r, $id);
+        $owned = $this->invoice($r, $id);
+        [$invoice, $oldRemaining, $newRemaining] = DB::transaction(function () use ($owned, $r): array {
+            Room::query()->whereKey($owned->room_id)->lockForUpdate()->firstOrFail();
+            $invoice = Invoice::query()->lockForUpdate()->findOrFail($owned->id);
+
+            return $this->updateLockedInvoice($r, $invoice);
+        });
+        try {
+            app(PayOSService::class)->invalidateRequestsForAmountChange($invoice, $oldRemaining, $newRemaining);
+        } catch (QueryException $exception) {
+            // The invoice already committed. The detail response independently rejects an outdated QR.
+            Log::warning('Invoice updated but legacy PayOS invalidation could not be persisted.', [
+                'invoice_id' => $invoice->id,
+                'sqlstate' => (string) $exception->getCode(),
+            ]);
+        }
+
+        return ApiResponse::success(null, 'Cập nhật hóa đơn thành công.');
+    }
+
+    private function updateLockedInvoice(UpdateInvoiceRequest $r, Invoice $i): array
+    {
         app(ContractSettlementPolicy::class)->assertInvoiceWriteAllowed($i);
         $this->assertNotMonthlyComposed($i);
         if ($this->hasV2Obligation($i->id)) {
@@ -169,14 +198,8 @@ class InvoiceController extends Controller
             throw ValidationException::withMessages(['discount_amount' => 'Tổng tiền hóa đơn không được nhỏ hơn số tiền đã thanh toán.']);
         }
         $i->update([...$d, 'total_amount' => $i->subtotal - ($d['discount_amount'] ?? 0)]);
-        $updatedInvoice = $i->fresh();
-        app(PayOSService::class)->invalidateRequestsForAmountChange(
-            $updatedInvoice,
-            $oldRemaining,
-            (float) $updatedInvoice->total_amount - (float) $updatedInvoice->paid_amount,
-        );
 
-        return ApiResponse::success(null, 'Cập nhật hóa đơn thành công.');
+        return [$i, $oldRemaining, (float) $i->total_amount - (float) $i->paid_amount];
     }
 
     public function destroy(Request $r, int $id): JsonResponse

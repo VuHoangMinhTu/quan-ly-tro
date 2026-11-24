@@ -570,6 +570,46 @@ class PayOSApiTest extends TestCase
         $this->assertSame('STALE', $request->fresh()->status);
     }
 
+    #[DataProvider('invoiceEditInvalidationFailures')]
+    public function test_invoice_edit_hides_old_qr_if_invalidation_fails(string $failure): void
+    {
+        [$user, $invoice] = $this->ownerAndInvoice(3_000_000);
+        $request = $this->paymentRequest($invoice, 3_000_000);
+        config(['services.payos.new_requests_enabled' => false]);
+        $service = Mockery::mock(PayOSService::class)->makePartial()->shouldAllowMockingProtectedMethods();
+        $this->instance(PayOSService::class, $service);
+        if ($failure === 'database') {
+            // Force an actual database error on the local STALE write, after the invoice update.
+            DB::unprepared("CREATE TEMP TRIGGER fail_legacy_payos_update BEFORE UPDATE ON payos_payment_requests BEGIN SELECT RAISE(ABORT, 'QA invalidation failure'); END");
+            $service->shouldNotReceive('cancelPaymentLink');
+        } else {
+            $service->shouldReceive('cancelPaymentLink')->once()->andThrow(new \RuntimeException('QA remote cancellation failure'));
+        }
+
+        try {
+            $this->withToken($user->createToken('test')->plainTextToken)
+                ->putJson("/api/invoices/{$invoice->id}", [
+                    'billing_period' => '2026-09-01', 'status' => 'UNPAID', 'discount_amount' => 500_000,
+                ])->assertOk();
+            $this->assertSame('2500000.00', $invoice->fresh()->total_amount);
+            $this->assertSame($failure === 'database' ? 'PENDING' : 'STALE', $request->fresh()->status);
+            $this->getJson("/api/invoices/{$invoice->id}")
+                ->assertOk()->assertJsonPath('data.payos_payment_request', null)
+                ->assertJsonPath('data.payos_new_requests_enabled', false);
+            $this->assertDatabaseCount('payos_payment_requests', 1);
+            $this->assertDatabaseCount('payments', 0);
+        } finally {
+            if ($failure === 'database') {
+                DB::unprepared('DROP TRIGGER IF EXISTS fail_legacy_payos_update');
+            }
+        }
+    }
+
+    public static function invoiceEditInvalidationFailures(): array
+    {
+        return ['local database write' => ['database'], 'remote cancellation' => ['remote']];
+    }
+
     public function test_verified_webhook_creates_one_payos_payment_and_recalculates_invoice(): void
     {
         [, $invoice] = $this->ownerAndInvoice(3_000_000);
