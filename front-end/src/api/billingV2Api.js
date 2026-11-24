@@ -46,3 +46,5 @@ export const confirmBillingCheckout = (contract, payload, options) => write(`/bi
 export const recordBillingDeposit = (contract, payload, options) => write(`/billing-v2/contracts/${contract}/deposits`, payload, options)
 export const issueBillingV2 = invoice => write(`/billing-v2/invoices/${invoice}/issue`, {})
 export const confirmBillingSettlement = contract => write(`/billing-v2/contracts/${contract}/settlement-confirmation`, { confirm_no_held_deposit: true, reason: 'Chủ trọ xác nhận không có tiền cọc thực tế còn giữ; không tạo giao dịch mất cọc giả.' })
+
+export const generateBillingV2 = (room, billingPeriod, usageStartAt, usageEndAt, meterPeriods = []) => write(`/billing-v2/rooms/${room}/generate`, { billing_period: billingPeriod, usage_start_at: usageStartAt, usage_end_at: usageEndAt, meter_periods: meterPeriods })

@@ -62,7 +62,8 @@ export default function UtilityLedgerHistory({ rooms, room, selectRoom, year, da
           return <tr ref={key === selectedPeriod ? selectedRow : undefined} key={key} className={`border-t border-slate-100 ${key === selectedPeriod ? 'bg-teal-50/50' : ''}`}>
             <th scope="row" className="whitespace-nowrap p-3 text-left font-semibold">T{i + 1}</th>
             {col(electricMeters)}{col(waterMeters)}
-            <td className="p-3"><span className="ledger-badge" data-status={status}>{entries.length && !enough ? 'Thiếu một phần' : status}</span>
+            <td className="p-3"><span className="ledger-badge" data-status={status}>{status === 'Ghi một phần' ? 'Thiếu một phần' : status}</span>
+              {entries.length > 0 && entries.every(row => row.settled && !row.needsReview) && <p className="text-xs text-slate-600">Đã quyết toán</p>}
               {invoices.map(invoice => <Link key={invoice.invoice_id} className="mt-1 block text-xs text-teal-800 underline" to={`/invoices/${invoice.invoice_id}`}>Hóa đơn #{invoice.invoice_id}</Link>)}
             </td>
             <td className="p-3"><button type="button" disabled={!canWrite || !meters.length} onClick={() => open(key)}

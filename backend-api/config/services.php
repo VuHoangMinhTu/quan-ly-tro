@@ -9,6 +9,7 @@ return [
     ],
 
     'payos' => [
+        'new_requests_enabled' => env('PAYOS_NEW_REQUESTS_ENABLED', false),
         // Legacy credentials are available only to this one landlord during migration.
         'global_fallback_landlord_id' => env('PAYOS_GLOBAL_FALLBACK_LANDLORD_ID'),
         'client_id' => env('PAYOS_CLIENT_ID'),

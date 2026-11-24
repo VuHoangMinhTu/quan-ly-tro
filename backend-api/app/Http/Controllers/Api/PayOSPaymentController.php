@@ -20,6 +20,7 @@ class PayOSPaymentController extends Controller
             ->whereHas('room.boardingHouse', fn ($query) => $query->where('landlord_id', $request->user()->landlord->id))
             ->findOrFail($invoiceId);
 
+        abort_unless(config('services.payos.new_requests_enabled', false), 503, 'PayOS đang tạm ngừng. Vui lòng dùng QR ngân hàng hoặc thanh toán thủ công.');
         $paymentRequest = $payos->createOrReuse($invoice);
 
         return ApiResponse::success([

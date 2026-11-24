@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Contract;
+use App\Models\Invoice;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -11,6 +12,25 @@ use Tests\TestCase;
 class UtilityLedgerApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_new_invoice_can_be_created(): void
+    {
+        $room = Contract::factory()->create()->room;
+
+        $invoice = $room->invoices()->create([
+            'invoice_code' => 'TEST-UTILITY-001',
+            'billing_period' => '2026-10-01',
+            'status' => 'DRAFT',
+            'subtotal' => 0,
+            'total_amount' => 0,
+            'paid_amount' => 0,
+        ]);
+
+        $this->assertDatabaseHas('invoices', [
+            'id' => $invoice->id,
+            'room_id' => $room->id,
+        ]);
+    }
 
     public function test_explicit_periods_share_a_checkpoint_and_survive_correction(): void
     {

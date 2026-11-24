@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Invoice;
+
 use App\Models\Contract;
 use App\Models\Tenant;
 use App\Models\User;
