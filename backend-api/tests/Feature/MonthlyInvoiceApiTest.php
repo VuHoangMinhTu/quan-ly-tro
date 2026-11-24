@@ -198,9 +198,9 @@ class MonthlyInvoiceApiTest extends TestCase
         $this->assertDatabaseCount('invoice_items', 4);
         $this->postJson('/api/invoices/'.$id.'/generate')->assertUnprocessable()->assertJsonValidationErrors('invoice_id');
         $this->putJson('/api/invoices/'.$id, ['billing_period' => '2026-10-01', 'status' => 'UNPAID'])->assertUnprocessable()->assertJsonValidationErrors('invoice_id');
-        $this->deleteJson('/api/invoices/'.$id)->assertUnprocessable()->assertJsonValidationErrors('invoice_id');
-        $this->assertDatabaseHas('invoices', ['id' => $id, 'status' => 'DRAFT', 'total_amount' => 3825000]);
-        $this->assertDatabaseCount('invoice_items', 4);
+        $this->deleteJson('/api/invoices/'.$id)->assertOk();
+        $this->assertNull(Invoice::withTrashed()->find($id));
+        $this->assertDatabaseCount('invoice_items', 0);
         $this->assertDatabaseCount('payments', 0);
         $this->assertDatabaseCount('payos_payment_requests', 0);
     }

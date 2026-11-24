@@ -19,7 +19,7 @@ export default function InvoiceCreatePage() {
 
   return <section className="w-full min-w-0 max-w-3xl space-y-4">
     <Link to={`/rooms/${roomId}`} className="inline-flex min-h-11 items-center text-sm underline">← Quay lại chi tiết phòng</Link>
-    <h2 className="text-xl font-bold sm:text-2xl">Tạo hóa đơn tháng · Billing V2</h2>
+    <h2 className="text-xl font-bold sm:text-2xl">Tạo hóa đơn tháng</h2>
     {roomQuery.isPending && <p>Đang tải thông tin phòng...</p>}
     {roomQuery.isError && <p role="alert" className="text-red-700">{getApiErrorMessage(roomQuery.error)}</p>}
     {room && <>

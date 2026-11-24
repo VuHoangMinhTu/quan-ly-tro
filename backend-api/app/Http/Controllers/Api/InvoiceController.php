@@ -14,6 +14,7 @@ use App\Services\BillingService;
 use App\Services\BoardingHouseAccessService;
 use App\Services\ContractService;
 use App\Services\ContractSettlementPolicy;
+use App\Services\DraftInvoiceHardDeletion;
 use App\Services\InvoiceContractEligibility;
 use App\Services\InvoicePaymentInfoService;
 use App\Services\PayOSService;
@@ -178,20 +179,12 @@ class InvoiceController extends Controller
         return ApiResponse::success(null, 'Cập nhật hóa đơn thành công.');
     }
 
-    public function destroy(Request $r, int $id): JsonResponse
+    public function destroy(Request $r, int $id, DraftInvoiceHardDeletion $deletion): JsonResponse
     {
-        $i = $this->invoice($r, $id);
-        app(ContractSettlementPolicy::class)->assertInvoiceWriteAllowed($i);
-        $this->assertNotMonthlyComposed($i);
-        if ($this->hasV2Obligation($i->id)) {
-            throw ValidationException::withMessages(['status' => 'Hóa đơn V2 đang liên kết phân bổ; không tự xóa nghĩa vụ tài chính.']);
-        }
-        if ($i->status !== 'DRAFT') {
-            throw ValidationException::withMessages(['status' => 'Chỉ có thể xóa hóa đơn ở trạng thái nháp.']);
-        }
-        $i->delete();
+        $invoice = $this->invoice($r, $id);
+        $deletion->delete($invoice);
 
-        return ApiResponse::success(null, 'Xóa hóa đơn thành công.');
+        return ApiResponse::success(null, 'Đã xóa hẳn hóa đơn nháp.');
     }
 
     public function generate(Request $r, int $id, BillingService $billing): JsonResponse

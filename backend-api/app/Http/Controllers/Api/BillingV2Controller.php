@@ -96,7 +96,7 @@ class BillingV2Controller extends Controller
             ->whereIn('room_id', $roomIds)->where('is_active', true)->orderBy('id')->get();
         $meterIds = $meters->pluck('id');
         $latestCheckpoints = DB::table('utility_checkpoints')->whereIn('utility_meter_id', $meterIds)
-            ->where('kind', 'PERIOD_BOUNDARY')->orderByDesc('revision')->get()
+            ->whereIn('kind', ['PERIOD_BOUNDARY', 'CHECK_IN', 'CHECK_OUT']) /* BEHOUSE_LEDGER_HANDOVER_POINTS_20261124 */->orderByDesc('revision')->get()
             ->unique(fn ($point) => $point->utility_meter_id.':'.$point->scope_key)->values();
         $periods = DB::table('utility_billing_periods')->whereIn('utility_meter_id', $meterIds)
             ->where('billing_period', '>=', $from)->where('billing_period', '<', $until)->get();
@@ -108,7 +108,7 @@ class BillingV2Controller extends Controller
             ->select('invoice_obligations.room_id', 'invoice_obligations.billing_period', 'invoice_obligations.invoice_id', 'invoices.status')
             ->get();
         $tenants = Contract::query()->whereIn('room_id', $roomIds)->where('status', 'ACTIVE')
-            ->with('tenant:id,full_name')->get(['id', 'room_id', 'tenant_id', 'contract_code']);
+            ->with('tenant:id,full_name')->get(['id', 'room_id', 'tenant_id', 'contract_code', 'start_date', 'end_date']) /* BEHOUSE_LEDGER_CONTRACT_DATES_20261124 */;
 
         return ApiResponse::success([
             'year' => (int) $data['year'], 'boarding_house' => $house->only(['id', 'name']), 'rooms' => $rooms,

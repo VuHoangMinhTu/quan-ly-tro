@@ -1,124 +1,78 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { correctBillingPeriodBoundaries } from '../../api/billingV2Api'
-import { getApiErrorMessage } from '../../api/getApiErrorMessage'
-import { display, formatLedgerDate, readingError, readingWindowError, usageStatus } from './utilityLedgerDisplay.mjs'
-import LedgerDateTime from './LedgerDateTime'
+import { display, usageStatus } from './utilityLedgerDisplay.mjs'
+import UtilityLedgerMonthDialog from './UtilityLedgerMonthDialog'
 
-const localInput = value => value.replace(' ', 'T')
-const apiInput = value => value.replace('T', ' ') + (value.length === 16 ? ':00' : '')
+const monthKey = (year, month) => `${year}-${String(month).padStart(2, '0')}-01`
+const byMeter = (rows, meter) => rows.find(row => Number(row.utility_meter_id) === Number(meter.id))
+const formatPair = (item, unit) => item?.start && item?.end
+  ? <><strong>{display(item.start.reading_value)} → {display(item.end.reading_value)}</strong><span className="block text-xs text-slate-500">{display(item.quantity)} {unit}</span></>
+  : <span className="text-slate-400">—</span>
 
-function Correction({ row, onClose, onSaved }) {
-  const [start, setStart] = useState(row.start.reading_value)
-  const [end, setEnd] = useState(row.end.reading_value)
-  const [from, setFrom] = useState(localInput(row.start.observed_at))
-  const [to, setTo] = useState(localInput(row.end.observed_at))
-  const [reason, setReason] = useState('')
-  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID())
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-  const validation = readingError(end, start)
-  const windowError = readingWindowError(from, to)
-  const setDraft = (setter, value) => {
-    setter(value)
-    setRequestKey(crypto.randomUUID())
-    setError('')
+export default function UtilityLedgerHistory({ rooms, room, selectRoom, year, data, meters, canWrite, onSaved, recordMonth, onMonthChange, actionRequest, clearActionRequest }) {
+  const [editingMonth, setEditingMonth] = useState('')
+  const selectedRow = useRef(null)
+  const selectedPeriod = recordMonth ? `${recordMonth}-01` : ''
+
+  useEffect(() => {
+    if (!room?.id || !selectedRow.current) return
+    selectedRow.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [room?.id, selectedPeriod])
+
+  useEffect(() => {
+    if (!actionRequest || !room?.id || String(actionRequest.roomId) !== String(room.id)) return
+    if (actionRequest.key) setEditingMonth(actionRequest.key)
+    clearActionRequest?.()
+  }, [actionRequest, room?.id, clearActionRequest])
+
+  const open = (key) => {
+    const month = key.slice(0, 7)
+    if (month !== recordMonth) onMonthChange?.(month)
+    setEditingMonth(key)
   }
-  const change = setter => event => setDraft(setter, event.target.value)
-  async function save(event) {
-    event.preventDefault()
-    if (busy || validation || windowError || start === '' || end === '') return
-    setBusy(true)
-    try {
-      await correctBillingPeriodBoundaries(row.utility_meter_id, {
-        start_checkpoint_id: row.start_checkpoint_id, end_checkpoint_id: row.end_checkpoint_id,
-        start_reading_value: start, end_reading_value: end,
-        start_observed_at: apiInput(from), end_observed_at: apiInput(to),
-        reason, request_key: requestKey,
-      })
-      await onSaved()
-      onClose()
-    } catch (error) {
-      setError(getApiErrorMessage(error))
-    } finally {
-      setBusy(false)
-    }
-  }
-  return <div role="dialog" aria-modal="true" aria-labelledby="correction-title" className="ledger-dialog fixed inset-0 z-50 grid place-items-center bg-slate-950/35 p-3">
-    <form onSubmit={save} className="max-h-[92dvh] w-full max-w-lg space-y-4 overflow-auto rounded-xl border border-slate-200 bg-white p-5">
-      <h2 id="correction-title" className="text-xl font-bold">Đính chính {row.meter.service?.name}</h2>
-      <fieldset disabled={busy} className="grid gap-3 sm:grid-cols-2">
-        <label>Chỉ số đầu kỳ<input required type="number" min="0" step="0.01" inputMode="decimal" className="block w-full rounded border p-2" value={start} onChange={change(setStart)} /></label>
-        <label>Chỉ số cuối kỳ<input required type="number" min="0" step="0.01" inputMode="decimal" aria-invalid={Boolean(validation)} className="block w-full rounded border p-2" value={end} onChange={change(setEnd)} />
-          {validation && <span role="alert" className="text-sm text-red-700">{validation}</span>}
-        </label>
-        <div className="sm:col-span-2"><LedgerDateTime label="Ngày đầu kỳ" required value={from} onValueChange={value => setDraft(setFrom, value)} /></div>
-        <div className="sm:col-span-2"><LedgerDateTime label="Ngày cuối kỳ" required value={to}
-          aria-invalid={Boolean(windowError)} aria-describedby={windowError ? 'ledger-correction-window-error' : undefined}
-          onValueChange={value => setDraft(setTo, value)} />
-          {windowError && <p id="ledger-correction-window-error" role="alert" className="mt-1 text-sm text-red-700">{windowError}</p>}
-        </div>
-        <label className="sm:col-span-2">Lý do đính chính<textarea required minLength={5} maxLength={1000} className="block w-full rounded border p-2" value={reason} onChange={change(setReason)} /></label>
-      </fieldset>
-      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <button type="button" disabled={busy} onClick={onClose} className="min-h-11 rounded border px-4">Đóng</button>
-        <button disabled={busy || Boolean(validation || windowError)} className="min-h-11 rounded bg-teal-700 px-4 text-white">Lưu đính chính</button>
-      </div>
-    </form>
-  </div>
-}
+  const entriesFor = key => data.periods.filter(row => row.billing_period === key && meters.some(meter => Number(meter.id) === Number(row.utility_meter_id)))
+  const activeMonthRows = editingMonth ? entriesFor(editingMonth) : []
+  const chosenMonthReady = !!editingMonth && editingMonth.slice(0, 7) === recordMonth
 
-export default function UtilityLedgerHistory({ rooms, room, selectRoom, year, data, meters, canWrite, onRecord, onSaved }) {
-  const [editing, setEditing] = useState(null)
-  const meterById = new Map(meters.map(meter => [Number(meter.id), meter]))
   return <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-3">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <label className="text-sm font-semibold">Chọn phòng
-        <select className="mt-1 block min-h-11 min-w-48 rounded-lg border border-slate-300 px-3" value={room?.id || ''} onChange={event => selectRoom(Number(event.target.value))}>
+        <select className="mt-1 block min-h-11 min-w-48 rounded-lg border border-slate-300 px-3" value={room?.id || ''} onChange={event => { setEditingMonth(''); selectRoom(Number(event.target.value)) }}>
           <option value="">Chọn phòng</option>
           {rooms.map(item => <option key={item.id} value={item.id}>{item.room_code}</option>)}
         </select>
       </label>
-      {room && <><p className="text-sm text-slate-600">{room.tenant || 'Chưa có người thuê'} · Năm {year}</p>
-        <button type="button" disabled={!canWrite} onClick={onRecord} className="min-h-11 rounded-lg bg-teal-700 px-4 font-semibold text-white disabled:opacity-50">Ghi chỉ số</button></>}
+      {room && <p className="text-sm text-slate-600">{room.tenant || 'Chưa có người thuê'} · Năm {year}</p>}
     </div>
     {room && <div className="overflow-x-auto">
-      <table aria-label="Lịch sử chỉ số 12 tháng" className="ledger-history-table w-full min-w-[780px] text-sm tabular-nums">
-        <thead className="bg-slate-50 text-left text-slate-700">
-          <tr>{['Tháng', 'Điện đầu → cuối', 'kWh', 'Nước đầu → cuối', 'm³', 'Trạng thái', 'Thao tác'].map(label => <th key={label} scope="col" className="p-3">{label}</th>)}</tr>
-        </thead>
-        <tbody>{Array.from({ length: 12 }, (_, index) => {
-          const key = `${year}-${String(index + 1).padStart(2, '0')}-01`
-          const entries = data.periods.filter(row => row.billing_period === key && meterById.has(Number(row.utility_meter_id)))
-            .map(row => ({ ...row, meter: meterById.get(Number(row.utility_meter_id)) }))
-          const invoices = data.invoices.filter(invoice => Number(invoice.room_id) === room.id && invoice.billing_period === key)
-          const pair = type => {
-            const group = entries.filter(row => row.meter.service?.type === type)
-            return <><td className="p-3">{group.length ? group.map(row => <div key={row.utility_meter_id}>
-              {row.start && row.end ? `${display(row.start.reading_value)} → ${display(row.end.reading_value)}` : '—'}
-            </div>) : '—'}</td><td className="p-3">{group.length ? group.map(row => <div key={row.utility_meter_id}>{display(row.quantity)}</div>) : '—'}</td></>
-          }
+      <table aria-label="Lịch sử chỉ số điện nước 12 tháng" className="w-full min-w-[690px] text-sm tabular-nums">
+        <thead className="bg-slate-50 text-left text-slate-700"><tr>
+          {['Tháng', 'Điện', 'Nước', 'Trạng thái', 'Thao tác'].map(x => <th key={x} scope="col" className="p-3">{x}</th>)}
+        </tr></thead>
+        <tbody>{Array.from({ length: 12 }, (_, i) => {
+          const key = monthKey(year, i + 1)
+          const entries = entriesFor(key)
+          const electricMeters = meters.filter(m => m.service?.type === 'ELECTRICITY')
+          const waterMeters = meters.filter(m => m.service?.type === 'WATER')
+          const enough = meters.length > 0 && entries.length >= meters.length
           const status = usageStatus(entries, meters.length)
-          return <tr key={key} className="h-13 border-t border-slate-100 align-middle hover:bg-slate-50">
-            <th scope="row" className="whitespace-nowrap p-3 text-left">Tháng {index + 1}</th>
-            {pair('ELECTRICITY')}{pair('WATER')}
-            <td className="p-3"><span className="ledger-badge" data-status={status}>{status}</span>
-              {entries.length > 0 && entries.every(row => row.settled && !row.needsReview) && <p className="text-xs text-slate-600">Đã quyết toán</p>}
-              {invoices.map(invoice => <Link key={invoice.invoice_id} className="block text-teal-800 underline" to={`/invoices/${invoice.invoice_id}`}>Hóa đơn #{invoice.invoice_id}</Link>)}
+          const label = entries.length === 0 ? 'Ghi chỉ số' : enough ? 'Đính chính' : 'Bổ sung / đính chính'
+          const invoices = data.invoices.filter(x => Number(x.room_id) === Number(room.id) && x.billing_period === key)
+          const col = items => <td className="p-3">{items.length ? items.map(m => <div key={m.id} className="mb-1">{formatPair(byMeter(entries, m), m.service?.unit || '')}</div>) : '—'}</td>
+          return <tr ref={key === selectedPeriod ? selectedRow : undefined} key={key} className={`border-t border-slate-100 ${key === selectedPeriod ? 'bg-teal-50/50' : ''}`}>
+            <th scope="row" className="whitespace-nowrap p-3 text-left font-semibold">T{i + 1}</th>
+            {col(electricMeters)}{col(waterMeters)}
+            <td className="p-3"><span className="ledger-badge" data-status={status}>{entries.length && !enough ? 'Thiếu một phần' : status}</span>
+              {invoices.map(invoice => <Link key={invoice.invoice_id} className="mt-1 block text-xs text-teal-800 underline" to={`/invoices/${invoice.invoice_id}`}>Hóa đơn #{invoice.invoice_id}</Link>)}
             </td>
-            <td className="p-3">{entries.length > 0 && <details>
-              <summary className="cursor-pointer font-semibold text-teal-800">Xem chi tiết</summary>
-              {entries.map(row => <div className="mt-2 border-t pt-2" key={row.utility_meter_id}>
-                <p>{row.meter.service?.name} {row.meter.meter_code}</p>
-                {row.start && row.end && <p>{formatLedgerDate(row.start.observed_at)} → {formatLedgerDate(row.end.observed_at)}</p>}
-                {canWrite && row.correctable && <button type="button" className="min-h-11 text-teal-800 underline" onClick={() => setEditing(row)}>Đính chính</button>}
-              </div>)}
-            </details>}</td>
+            <td className="p-3"><button type="button" disabled={!canWrite || !meters.length} onClick={() => open(key)}
+              className="min-h-10 whitespace-nowrap rounded-lg bg-teal-50 px-3 font-semibold text-teal-800 hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-40">{label}</button></td>
           </tr>
         })}</tbody>
       </table>
     </div>}
-    {editing && <Correction row={editing} onClose={() => setEditing(null)} onSaved={onSaved} />}
+    {room && chosenMonthReady && <UtilityLedgerMonthDialog key={`${room.id}:${editingMonth}`} room={room} periodKey={editingMonth}
+      meters={meters.filter(m => m.service?.type === 'ELECTRICITY' || m.service?.type === 'WATER')}
+      entries={activeMonthRows} canWrite={canWrite} onSaved={onSaved} onClose={() => setEditingMonth('')} />}
   </section>
 }

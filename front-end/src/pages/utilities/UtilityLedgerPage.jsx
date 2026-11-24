@@ -1,6 +1,7 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useState, useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
+import { Link as RoomReturnLink } from "react-router-dom";
 import {
   ChevronLeft,
   ChevronRight,
@@ -37,6 +38,29 @@ const meterKind = (meter) =>
       : "other";
 const statuses = ["Tất cả", "Chưa ghi", "Ghi một phần", "Đã ghi", "Cần đối soát"];
 
+// BEHOUSE_CONTRACT_UTILITY_CYCLE_20261124: ledger month is a label; meter dates follow the contract's anniversary.
+const ledgerDateOnly = value => String(value || '').slice(0, 10)
+function anniversaryDate(origin, year, monthIndex) {
+  const day = Number(origin.slice(8, 10))
+  const last = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
+  const d = new Date(Date.UTC(year, monthIndex, Math.min(day, last)))
+  return d.toISOString().slice(0, 10)
+}
+function contractWindowForMonth(contract, month) {
+  const origin = ledgerDateOnly(contract?.start_date)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(origin) || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return null
+  const [year, num] = month.split('-').map(Number)
+  const start = anniversaryDate(origin, year, num - 1)
+  const end = anniversaryDate(origin, year, num)
+  const until = ledgerDateOnly(contract.end_date)
+  if (start < origin || (until && until < start)) return null
+  return { start: start + 'T00:00', end: end + 'T00:00', partial: Boolean(until && until < end) }
+}
+function contractForLedgerRoom(list, roomId, month) {
+  const matches = (list || []).filter(c => Number(c.room_id) === Number(roomId) && contractWindowForMonth(c, month))
+  return matches.length === 1 ? matches[0] : null
+}
+
 function usageFor(periods, meterId, period) {
   const row = periods.find(
     (item) =>
@@ -55,7 +79,7 @@ function sumUsage(periods, meters, period, kind) {
 function readingPayload(meter, period, end, value, start) {
   return {
     billing_period: period.key,
-    start_observed_at: start ? apiTime(start) : meter.previousAt || apiTime(period.start),
+    start_observed_at: start ? apiTime(start) : meter.previousAt || (meter.cycleStart ? apiTime(meter.cycleStart) : ''),
     end_observed_at: apiTime(end),
     start_reading_value: meter.previous,
     end_reading_value: value,
@@ -79,7 +103,7 @@ function MeterInputs({ meters, initial, onChange, dates, setDate, observedAt, pe
           </p>
           <p className="mt-2 text-sm">Chỉ số cũ: {display(meter.previous)}</p>
           {(!meter.previousAt || dates[meter.id]?.start) && <p className="mt-1 text-xs font-medium text-amber-800">
-            Kiểm tra ngày đầu kỳ: {formatLedgerDate(dates[meter.id]?.start ?? period.start)}
+            Kiểm tra ngày đầu kỳ: {formatLedgerDate(dates[meter.id]?.start ?? meter.cycleStart)}
           </p>}
           <label className="mt-2 block text-sm font-medium text-slate-700">
             Chỉ số mới
@@ -101,7 +125,7 @@ function MeterInputs({ meters, initial, onChange, dates, setDate, observedAt, pe
             <summary className="min-h-11 content-center">Khoảng đo</summary>
             <div className="space-y-2">
               <LedgerDateTime label={meter.previousAt && dates[meter.id]?.start == null ? "Ngày đầu kỳ · Mốc đã xác nhận" : "Ngày đầu kỳ · Cần xác nhận"}
-                value={dates[meter.id]?.start ?? (meter.previousAt?.replace(" ", "T") || period.start)}
+                value={dates[meter.id]?.start ?? (meter.cycleStart || '')}
                 onValueChange={value => setDate(meter.id, "start", value)} />
               <LedgerDateTime label="Ngày cuối kỳ" value={dates[meter.id]?.end ?? observedAt}
                 onValueChange={value => setDate(meter.id, "end", value)} />
@@ -119,15 +143,15 @@ function ReadingDialog({ room, meters: initialMeters, period, onClose, onSaved, 
   const [dates, setDates] = useState({});
   const [observedAt, setObservedAt] = useState(localDateTime());
   const [error, setError] = useState("");
-  const invalid = meters.some(meter => readingError(readings[meter.id], meter.previous));
+  const invalid = meters.some(meter => meter.needsOpening || meter.needsContract || readingError(readings[meter.id], meter.previous));
   const mutation = useMutation({
     mutationFn: async () => {
       const requests = [];
-      if (invalid) throw new Error("Kiểm tra lại chỉ số được đánh dấu.");
+      if (invalid) throw new Error("Thiếu mốc nhận phòng/đầu kỳ đã xác nhận hoặc chỉ số không hợp lệ.");
       for (const meter of meters) {
         const next = readings[meter.id];
         if (next === undefined || next === "") continue;
-        const start = dates[meter.id]?.start ?? meter.previousAt ?? period.start;
+        const start = dates[meter.id]?.start ?? meter.previousAt ?? meter.cycleStart ?? '';
         const end = dates[meter.id]?.end ?? observedAt;
         const error = readingWindowError(start, end);
         if (error) throw new Error(error);
@@ -170,6 +194,8 @@ function ReadingDialog({ room, meters: initialMeters, period, onClose, onSaved, 
             <X />
           </button>
         </div>
+        <p className="mt-4 rounded-lg bg-teal-50 p-3 text-sm text-teal-900">Chu kỳ dự kiến theo hợp đồng: {formatLedgerDate(meters[0]?.cycleStart)} → {formatLedgerDate(meters[0]?.cycleEnd)}. Ngày ghi là ngày đọc thực tế; không tự xác nhận chỉ số tương lai.</p>
+        {meters.some(m => m.needsOpening || m.needsContract) && <p role="alert" className="mt-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Chưa có mốc đầu kỳ/bàn giao CHECK_IN đã xác nhận, hoặc chưa xác định được hợp đồng duy nhất. Hãy xác nhận bàn giao công tơ trước khi ghi số để không tính nhầm điện nước của người thuê khác.</p>}
         <div className="mt-4"><LedgerDateTime label="Ngày ghi" value={observedAt}
           onValueChange={value => { setObservedAt(value); setError(""); }} /></div>
         <div className="mt-4">
@@ -248,7 +274,7 @@ function BulkDialog({ rooms, metersByRoom: initialMetersByRoom, period, onClose,
         const value = values[meter.id];
         if (value == null || value === "" || outcome[meter.id] === "Đã lưu" || (retry && !outcome[meter.id])) continue;
         const end = meterDates[meter.id] ?? observedAt;
-        const invalid = readingError(value, meter.previous) || readingWindowError(meter.previousAt ?? period.start, end);
+        const invalid = (meter.needsOpening || meter.needsContract ? 'Cần mốc bàn giao hợp đồng đã xác nhận.' : '') || readingError(value, meter.previous) || readingWindowError(meter.previousAt ?? meter.cycleStart ?? '', end);
         if (invalid) {
           next[meter.id] = invalid;
           continue;
@@ -437,6 +463,7 @@ export default function UtilityLedgerPage() {
   const [filter, setFilter] = useState(statuses[0]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [dialogRoom, setDialogRoom] = useState(null);
+  const [monthAction, setMonthAction] = useState(null); // BEHOUSE_UNIFIED_MONTH_MODAL_20261124
   const [bulk, setBulk] = useState(false);
   const houses = useQuery({
     queryKey: ["boarding-houses"],
@@ -479,30 +506,28 @@ export default function UtilityLedgerPage() {
     return { ...raw, periods: [...periods.values()] };
   }, [raw]);
   const rooms = data?.rooms || [];
+  // beehouse-back-to-room-link-v1
+  const roomReturnId = params.get("room");
+  const roomReturn = roomReturnId && /^\d+$/.test(roomReturnId)
+    ? rooms.find((item) => String(item.id) === roomReturnId)
+    : null;
   const metersByRoom = useMemo(
-    () =>
-      (data?.meters || [])
-        .map((meter) => {
-          // The starting point is only a suggestion from previously confirmed V2
-          // evidence. It does not declare or infer a billing period.
-          const previous = (data?.checkpoints || [])
-            .filter(
-              (point) =>
-                Number(point.utility_meter_id) === Number(meter.id) &&
-                point.observed_at <= `${recordMonth}-01 00:00:00`,
-            )
-            .sort((a, b) => a.observed_at.localeCompare(b.observed_at))
-            .at(-1);
-          return {
-            ...meter,
-            previous: previous?.reading_value ?? meter.initial_reading,
-            previousAt: previous?.observed_at,
-          };
-        })
-        .reduce((result, meter) => {
-          (result[meter.room_id] ||= []).push(meter);
-          return result;
-        }, {}),
+    () => (data?.meters || []).map(meter => {
+      const contract = contractForLedgerRoom(data?.active_contracts, meter.room_id, recordMonth)
+      const cycle = contractWindowForMonth(contract, recordMonth)
+      const points = (data?.checkpoints || []).filter(p => Number(p.utility_meter_id) === Number(meter.id))
+      const linked = (data?.periods || []).find(p => Number(p.utility_meter_id) === Number(meter.id) && p.billing_period === recordMonth + '-01')
+      const first = Boolean(contract && cycle && ledgerDateOnly(contract.start_date).slice(0, 7) === recordMonth)
+      const checkIn = first ? points.find(p => p.kind === 'CHECK_IN' && Number(p.contract_id) === Number(contract.id)) : null
+      const prior = !first && cycle ? (data?.periods || []).filter(p => Number(p.utility_meter_id) === Number(meter.id) && p.billing_period < recordMonth + '-01' && p.end && p.end.observed_at <= (cycle.start.replace('T', ' ') + ':00')).sort((a,b) => b.end.observed_at.localeCompare(a.end.observed_at))[0] : null
+      const fallback = !first && cycle ? points.filter(p => p.observed_at <= (cycle.start.replace('T', ' ') + ':00') && p.observed_at >= ledgerDateOnly(contract.start_date) + ' 00:00:00').sort((a,b) => b.observed_at.localeCompare(a.observed_at))[0] : null
+      const opening = linked?.start || checkIn || prior?.end || fallback || null
+      // Never silently take another tenant's reading or treat the meter's physical initial value as CHECK_IN.
+      const cycleStart = opening?.observed_at?.replace(' ', 'T')?.slice(0, 16) || cycle?.start || null
+      return { ...meter, previous: opening?.reading_value ?? null, previousAt: opening?.observed_at || null,
+        cycleStart, cycleEnd: cycle?.end || null, partialContractCycle: Boolean(cycle?.partial),
+        needsOpening: !opening, needsContract: !contract, recordedPeriod: Boolean(linked) }
+    }).reduce((rows, meter) => { (rows[meter.room_id] ||= []).push(meter); return rows }, {}),
     [data, recordMonth],
   );
   const contracts = useMemo(
@@ -528,14 +553,40 @@ export default function UtilityLedgerPage() {
     (filter === statuses[0] || statusFor(room) === filter));
   const writable = room => data?.can_record && room.room_type === "PRIVATE_ROOM" &&
     (metersByRoom[room.id] || []).some(meter => meterKind(meter) !== "other");
-  const openRoom = (room) =>
-    setDialogRoom({ ...room, tenant: contracts[room.id] });
+  const openRoom = room => {
+    const chosen = { ...room, tenant: contracts[room.id] };
+    setSelectedRoom(chosen);
+    setTab('room');
+    setDialogRoom(null);
+    setMonthAction({ roomId: room.id, key: period.key });
+  };
   const queue = rooms.filter(writable);
   const position = queue.findIndex(room => room.id === dialogRoom?.id);
   const nextRoom = position >= 0 ? queue[position + 1] : null;
   const previousRoom = position > 0 ? queue[position - 1] : null;
   const saved = () =>
     client.invalidateQueries({ queryKey: ["utility-ledger", houseId, year] });
+  // BEHOUSE_UTILITY_ROOM_DEEPLINK_V3: select the room already known from the Room Detail page.
+  // Never re-save readings or automatically associate meter periods here.
+  const lastDeepLinkKey = useRef('');
+  useEffect(() => {
+    const linkRoomId = params.get('room');
+    if (!houseId || !linkRoomId || !data || !Array.isArray(data.rooms)) return;
+    const found = data.rooms.find(item => String(item.id) === String(linkRoomId));
+    if (!found) return;
+    const action = params.get('action') || 'history';
+    const key = [houseId, linkRoomId, recordMonth, action].join(':');
+    if (lastDeepLinkKey.current === key) return;
+    lastDeepLinkKey.current = key;
+    const chosen = { ...found, tenant: contracts[found.id] };
+    setTab('room');
+    setSelectedRoom(chosen);
+    if (action !== 'record' || !data.can_record || found.room_type !== 'PRIVATE_ROOM') return;
+    const eligible = (metersByRoom[found.id] || []).filter(m => meterKind(m) !== 'other');
+    if (!eligible.length) return;
+    setMonthAction({ roomId: found.id, key: recordMonth + '-01' });
+  }, [params, houseId, data, recordMonth, contracts, metersByRoom]);
+
   if (houses.isPending || (houseId && ledger.isPending))
     return (
       <p role="status" className="p-5 text-slate-600">
@@ -551,6 +602,11 @@ export default function UtilityLedgerPage() {
   return (
     <>
       <section className="ledger-page mx-auto max-w-[1500px] space-y-4">
+        {roomReturn && (
+          <RoomReturnLink to={`/rooms/${roomReturn.id}`} className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-teal-800 underline underline-offset-4 hover:text-teal-950">
+            {"\u2190 Quay l\u1ea1i ph\u00f2ng"} {roomReturn.room_code}
+          </RoomReturnLink>
+        )}
         <header className="flex items-center gap-3 pb-1">
           <span className="grid size-11 shrink-0 place-items-center rounded-lg border border-teal-100 bg-teal-50 text-teal-700"><Gauge size={22} aria-hidden="true" /></span>
           <div><h1 className="text-2xl font-semibold tracking-tight">Sổ điện nước</h1>
@@ -604,7 +660,7 @@ export default function UtilityLedgerPage() {
                 if (!event.target.value) return;
                 setRecordMonth(event.target.value);
                 setYear(Number(event.target.value.slice(0, 4)));
-                setParams({ house: houseId, period: event.target.value }, { replace: true });
+                setParams({ house: houseId, ...(roomReturnId ? { room: roomReturnId } : {}), period: event.target.value }, { replace: true });
               }}
               className="mt-1 min-h-11 rounded-lg border border-slate-300 px-3"
             />
@@ -750,14 +806,17 @@ export default function UtilityLedgerPage() {
               setSelectedRoom(room ? { ...room, tenant: contracts[id] } : null);
             }}
             canWrite={Boolean(selectedRoom && writable(selectedRoom))}
-            onRecord={() => openRoom(selectedRoom)} onSaved={saved} />
+            onRecord={() => openRoom(selectedRoom)} onSaved={saved} recordMonth={recordMonth /* BEHOUSE_LEDGER_HISTORY_RECORD_MONTH_20261124 */}  onMonthChange={month => {
+              setRecordMonth(month); setYear(Number(month.slice(0, 4)));
+              setParams({ house: houseId, room: String(selectedRoom?.id || ''), period: month, action: 'history' }, { replace: true });
+            }} actionRequest={monthAction} clearActionRequest={() => setMonthAction(null)} />
         )}
       </section>
       {dialogRoom && (
         <ReadingDialog
           key={dialogRoom.id}
           room={dialogRoom}
-          meters={(metersByRoom[dialogRoom.id] || []).filter(meter => meterKind(meter) !== "other")}
+          meters={(metersByRoom[dialogRoom.id] || []).filter(meter => meterKind(meter) !== "other" && !meter.recordedPeriod)}
           period={period}
           onClose={() => setDialogRoom(null)}
           onSaved={saved}
@@ -769,7 +828,7 @@ export default function UtilityLedgerPage() {
       {bulk && houseId && data && queue.length > 0 && (
         <BulkDialog
           rooms={rooms.filter(writable)}
-          metersByRoom={metersByRoom}
+          metersByRoom={Object.fromEntries(Object.entries(metersByRoom).map(([id, list]) => [id, list.filter(m => !m.recordedPeriod)]))}
           statusFor={statusFor} contracts={contracts}
           period={period}
           onClose={() => setBulk(false)}

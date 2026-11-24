@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+﻿import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
 import BoardingHouseCreatePage from '../pages/boarding-houses/BoardingHouseCreatePage'
 import BoardingHouseDetailPage from '../pages/boarding-houses/BoardingHouseDetailPage'
@@ -31,7 +31,6 @@ import ServiceListPage from '../pages/services/ServiceListPage'
 import UtilityMeterDetailPage from '../pages/utilities/UtilityMeterDetailPage'
 import UtilityLedgerPage from '../pages/utilities/UtilityLedgerPage'
 import InvoiceCreatePage from '../pages/invoices/InvoiceCreatePage'
-import BillingV2Page from '../pages/invoices/BillingV2Page'
 import InvoiceDetailPage from '../pages/invoices/InvoiceDetailPage'
 import InvoiceEditPage from '../pages/invoices/InvoiceEditPage'
 import InvoiceListPage from '../pages/invoices/InvoiceListPage'
@@ -112,7 +111,7 @@ export default function AppRoutes() {
             <Route path="/boarding-houses/:boardingHouseId/services" element={<ServiceListPage />} />
             <Route path="/utility-meters/:id" element={<UtilityMeterDetailPage />} />
             <Route path="/rooms/:roomId/invoices" element={<InvoiceListPage />} />
-            <Route path="/rooms/:roomId/billing-v2" element={<BillingV2Page />} />
+            <Route path="/rooms/:roomId/billing-v2" element={<Navigate to="/utilities" replace />} />
             <Route path="/rooms/:roomId/invoices/new" element={<InvoiceCreatePage />} />
             <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
             <Route path="/invoices/:id/edit" element={<InvoiceEditPage />} />

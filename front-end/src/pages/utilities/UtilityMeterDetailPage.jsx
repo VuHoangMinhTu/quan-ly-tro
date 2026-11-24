@@ -150,7 +150,7 @@ export default function UtilityMeterDetailPage() {
         >
           Ghi chỉ số công tơ chung
         </button> : meter.room?.room_type === 'PRIVATE_ROOM' && (
-          <Link to={`/rooms/${meter.room_id}/billing-v2`} className="inline-flex min-h-11 items-center underline">Ghi / đính chính tại Quyết toán</Link>
+          <Link to="/utilities" className="inline-flex min-h-11 items-center underline">Ghi / đính chính trong Sổ điện nước</Link>
         )}
       </div>
 

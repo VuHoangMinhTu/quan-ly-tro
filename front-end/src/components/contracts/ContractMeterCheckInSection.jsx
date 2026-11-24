@@ -59,7 +59,7 @@ export default function ContractMeterCheckInSection({ contract }) {
     {!contract.is_demo && query.isPending && <p role="status">Đang kiểm tra dữ liệu công tơ…</p>}
     {!contract.is_demo && query.isError && <p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Không đọc được trạng thái CHECK_IN: {getApiErrorMessage(query.error)}. Không xác nhận khi chưa đối chiếu được dữ liệu.</p>}
     {!contract.is_demo && data && <>
-      {meters.length === 0 ? <p className="rounded-lg bg-amber-50 p-3 text-sm">Phòng chưa có đồng hồ được áp dụng. <Link className="underline" to={`/rooms/${roomId}/billing-v2`}>Kiểm tra quản lý công tơ</Link>.</p> : <>
+      {meters.length === 0 ? <p className="rounded-lg bg-amber-50 p-3 text-sm">Phòng chưa có đồng hồ được áp dụng. <Link className="underline" to="/utilities">Kiểm tra quản lý công tơ</Link>.</p> : <>
         {!draft && (missing.length === 0 ? <p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-green-900">Đã xác nhận CHECK_IN cho toàn bộ {meters.length} công tơ hiện tại. Các tháng sau chỉ cần ghi mốc cuối kỳ.</p> : <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Còn {missing.length}/{meters.length} công tơ chưa có CHECK_IN cho hợp đồng này. Hãy hoàn tất trước khi tính điện nước.</p>)}
         {!draft && missing.length > 0 && <label className="block text-sm font-medium">Ngày giờ bàn giao thực tế
           <input type="datetime-local" className={fieldClass} value={time} onChange={event => { setTime(event.target.value); setAcknowledged({}) }} />
@@ -78,7 +78,7 @@ export default function ContractMeterCheckInSection({ contract }) {
               {time && <div className="rounded-lg bg-slate-50 p-3">
                 <p>{review.reference ? `Mốc tham chiếu: ${review.reference.reading_value} ${unit} lúc ${review.reference.observed_at}` : 'Chưa có mốc xác nhận trước thời điểm bàn giao.'}</p>
                 <p className={review.allowed ? 'mt-1 text-emerald-800' : 'mt-1 text-amber-900'}>{review.message}</p>
-                {review.reason === 'SAME_TIME_CONFLICT' && <Link className="mt-2 inline-block underline" to={`/rooms/${roomId}/billing-v2`}>Đối soát, đính chính mốc tại trang công tơ</Link>}
+                {review.reason === 'SAME_TIME_CONFLICT' && <Link className="mt-2 inline-block underline" to="/utilities">Đối soát, đính chính mốc trong Sổ điện nước</Link>}
               </div>}
               <label className="flex items-start gap-2"><input type="checkbox" checked={Boolean(acknowledged[meter.id])} onChange={event => setAcknowledged(current => ({ ...current, [meter.id]: event.target.checked }))} />Tôi đã đọc và đối chiếu số trên công tơ vật lý khi bàn giao.</label>
               <button type="button" disabled={Boolean(saving) || !time || time.slice(0, 10) < contract.start_date?.slice(0, 10) || !review.allowed || !acknowledged[meter.id]} onClick={() => save(meter)} className="min-h-11 rounded-lg bg-slate-900 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50">{saving === meter.id ? 'Đang lưu…' : 'Xác nhận CHECK_IN'}</button>
@@ -86,7 +86,7 @@ export default function ContractMeterCheckInSection({ contract }) {
           </div>
         })}</div>
       </>}
-      <Link to={`/rooms/${roomId}/billing-v2`} className="inline-flex min-h-11 items-center underline">Đi tới quyết toán điện nước V2</Link>
+      <Link to="/utilities" className="inline-flex min-h-11 items-center underline">Mở Sổ điện nước</Link>
     </>}
     {message && <p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-green-900">{message}</p>}
     {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}

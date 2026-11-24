@@ -800,10 +800,10 @@ class BillingV2ApiTest extends TestCase
         $invoice = $a->invoices()->firstOrFail();
 
         $this->putJson("/api/invoices/{$invoice->id}", ['contract_id' => $a->id, 'billing_period' => '2026-10-01', 'status' => 'UNPAID'])->assertUnprocessable()->assertJsonValidationErrors('billing_period');
-        $this->deleteJson("/api/invoices/{$invoice->id}")->assertUnprocessable()->assertJsonValidationErrors('status');
+        $this->deleteJson("/api/invoices/{$invoice->id}")->assertOk();
 
-        $this->assertSame('DRAFT', $invoice->fresh()->status);
-        $this->assertDatabaseCount('utility_charge_allocations', 1);
+        $this->assertNull(Invoice::withTrashed()->find($invoice->id));
+        $this->assertDatabaseCount('utility_charge_allocations', 0);
     }
 
     public function test_legacy_status_transition_requires_checkout_for_a_v2_contract(): void

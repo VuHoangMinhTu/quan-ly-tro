@@ -1,4 +1,4 @@
-import { getApiErrorMessage } from '../../api/getApiErrorMessage'
+﻿import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
@@ -43,6 +43,13 @@ function getConsumptionSinceInitialReading(meter) {
 
   const consumption = Number(currentReading.reading_value) - Number(meter.initial_reading)
   return Number.isFinite(consumption) && consumption >= 0 ? consumption : null
+}
+
+// BEHOUSE_UTILITY_ROOM_URL_V3: preserve house, room and billing month in the ledger link.
+function utilityRoomLedgerUrl(room, action = "history") {
+  const month = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Ho_Chi_Minh" }).slice(0, 7)
+  const query = new URLSearchParams({ house: String(room.boarding_house_id), room: String(room.id), period: month, action })
+  return `/utilities?${query.toString()}`
 }
 
 export default function RoomUtilitiesSection({ room }) {
@@ -102,9 +109,9 @@ export default function RoomUtilitiesSection({ room }) {
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h3 className="text-lg font-semibold text-slate-900">Điện và nước</h3>
-        <p className="mt-1 text-sm text-slate-500">{useV2 ? 'Tóm tắt chỉ số đã ghi nhận. Ghi và đính chính chỉ số tại Quyết toán.' : legacyDorm ? 'Ghi chỉ số công tơ chung khi ký túc xá có cấu hình thu riêng.' : 'Tra cứu lịch sử chỉ số.'}</p>
+        <p className="mt-1 text-sm text-slate-500">{useV2 ? 'Tóm tắt chỉ số đã ghi nhận. Ghi và đính chính chỉ số tại sổ điện nước.' : legacyDorm ? 'Ghi chỉ số công tơ chung khi ký túc xá có cấu hình thu riêng.' : 'Tra cứu lịch sử chỉ số.'}</p>
       </div>
-      {useV2 ? <Link to={`/rooms/${room.id}/billing-v2`} className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white active:brightness-95 sm:w-auto">Mở quyết toán</Link> : <button type="button" disabled={!canAddMeter} onClick={() => setEditingMeter({})} className="min-h-11 sm:min-h-0 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50">Thêm đồng hồ</button>}
+      {useV2 ? <Link to={utilityRoomLedgerUrl(room)} className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white active:brightness-95 sm:w-auto">Mở sổ điện nước</Link> : <button type="button" disabled={!canAddMeter} onClick={() => setEditingMeter({})} className="min-h-11 sm:min-h-0 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50">Thêm đồng hồ</button>}
     </div>
 
     {!servicesQuery.isPending && !servicesQuery.isError && meterServices.length === 0 && <p className="mt-4 text-sm text-slate-500">Muốn thêm đồng hồ, hãy chọn dịch vụ Theo đơn vị hoặc Bậc thang ở phần Dịch vụ áp dụng. Dịch vụ Cố định / Theo người không cần đồng hồ.</p>}
@@ -113,7 +120,7 @@ export default function RoomUtilitiesSection({ room }) {
 
     {metersQuery.isPending ? <p className="mt-5 text-sm text-slate-500">Đang tải đồng hồ...</p>
       : metersQuery.isError ? <p className="mt-5 text-sm text-red-600">{getApiErrorMessage(metersQuery.error)}</p>
-        : meters.length === 0 ? <div className="mt-5 rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center"><p className="text-sm text-slate-500">Phòng này chưa có đồng hồ điện/nước.</p>{useV2 ? <Link to={`/rooms/${room.id}/billing-v2`} className="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-slate-900 underline underline-offset-4">Mở quyết toán để ghi mốc</Link> : <button type="button" disabled={!canAddMeter} onClick={() => setEditingMeter({})} className="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-slate-900 underline underline-offset-4 disabled:cursor-not-allowed disabled:opacity-50 lg:min-h-0">Thêm đồng hồ</button>}</div>
+        : meters.length === 0 ? <div className="mt-5 rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center"><p className="text-sm text-slate-500">Phòng này chưa có đồng hồ điện/nước.</p>{useV2 ? <Link to={utilityRoomLedgerUrl(room)} className="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-slate-900 underline underline-offset-4">Mở sổ điện nước để ghi mốc</Link> : <button type="button" disabled={!canAddMeter} onClick={() => setEditingMeter({})} className="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-slate-900 underline underline-offset-4 disabled:cursor-not-allowed disabled:opacity-50 lg:min-h-0">Thêm đồng hồ</button>}</div>
           : <div className="mt-5 space-y-3">
               <div
                 className="grid grid-cols-2 gap-2 xl:hidden"
@@ -177,13 +184,13 @@ export default function RoomUtilitiesSection({ room }) {
 
               <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-4">
                 <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{useV2 ? 'Chỉ số gốc đồng hồ' : 'Chỉ số đầu'}</dt><dd className="mt-1 break-words text-sm font-semibold text-slate-800">{formatMeterValue(meter.initial_reading, unit)}</dd></div>
-                <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Chỉ số hiện tại</dt><dd className="mt-1 break-words text-sm font-semibold text-slate-900">{hasLatestReading ? formatMeterValue(currentReading.reading_value, unit) : 'Chưa ghi chỉ số'}</dd>{currentReading?.source === 'CONTRACT_HANDOVER' && <p className="mt-1 text-xs text-slate-500">Theo chỉ số bàn giao hợp đồng</p>}{currentReading?.source === 'BILLING_V2_CHECKPOINT' && <p className="mt-1 text-xs text-emerald-700">Mốc đã xác nhận</p>}{useV2 && currentReading?.source === 'UTILITY_READING' && <p className="mt-1 text-xs text-amber-700">Chỉ số lịch sử — cần đối chiếu khi quyết toán</p>}</div>
-                <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{useV2 ? 'Chênh hai mốc xác nhận gần nhất' : 'Tiêu thụ'}</dt><dd className="mt-1 break-words text-sm font-semibold text-slate-800">{consumption == null ? '—' : formatMeterValue(consumption, unit)}</dd>{useV2 && <p className="mt-1 text-xs text-slate-500">Tham khảo từ các mốc xác nhận; tiền hóa đơn tính riêng tại Quyết toán</p>}</div>
+                <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Chỉ số hiện tại</dt><dd className="mt-1 break-words text-sm font-semibold text-slate-900">{hasLatestReading ? formatMeterValue(currentReading.reading_value, unit) : 'Chưa ghi chỉ số'}</dd>{currentReading?.source === 'CONTRACT_HANDOVER' && <p className="mt-1 text-xs text-slate-500">Theo chỉ số bàn giao hợp đồng</p>}{currentReading?.source === 'BILLING_V2_CHECKPOINT' && <p className="mt-1 text-xs text-emerald-700">Mốc đã xác nhận</p>}{useV2 && currentReading?.source === 'UTILITY_READING' && <p className="mt-1 text-xs text-amber-700">Chỉ số lịch sử — cần đối chiếu với mốc kỳ</p>}</div>
+                <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{useV2 ? 'Chênh hai mốc xác nhận gần nhất' : 'Tiêu thụ'}</dt><dd className="mt-1 break-words text-sm font-semibold text-slate-800">{consumption == null ? '—' : formatMeterValue(consumption, unit)}</dd>{useV2 && <p className="mt-1 text-xs text-slate-500">Tham khảo từ các mốc xác nhận; tiền hóa đơn được tổng hợp khi tạo hóa đơn</p>}</div>
                 <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Cập nhật</dt><dd className="mt-1 break-words text-sm font-medium text-slate-700">{hasLatestReading && currentReading?.reading_date ? formatDate(currentReading.reading_date) : 'Chưa ghi chỉ số'}</dd></div>
               </dl>
 
               <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                {useV2 ? <Link to={`/rooms/${room.id}/billing-v2`} className="inline-flex min-h-11 sm:min-h-0 items-center rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-700">Ghi / đính chính chỉ số</Link> : null}
+                {useV2 ? <Link to={utilityRoomLedgerUrl(room, 'record')} className="inline-flex min-h-11 sm:min-h-0 items-center rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-700">Ghi / đính chính chỉ số</Link> : null}
                   {legacyDorm && <button type="button" disabled={!meter.is_active} onClick={() => setMeterForNewReading(meter)} className="min-h-11 sm:min-h-0 rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50">+ Ghi chỉ số công tơ chung</button>}
                   <Link to={`/utility-meters/${meter.id}`} className="inline-flex min-h-11 sm:min-h-0 items-center rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50">Lịch sử chỉ số</Link>
 
