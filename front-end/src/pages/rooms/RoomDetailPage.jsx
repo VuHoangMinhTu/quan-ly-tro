@@ -1,6 +1,6 @@
 // BEEHOUSE_NAV_CONTEXT_V1
 import { backTarget } from '../../utils/navigationContext'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Trash2 } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -12,6 +12,7 @@ import RoomOccupantsSection from '../../components/rooms/RoomOccupantsSection'
 import RoomBedsSection from '../../components/rooms/RoomBedsSection'
 import RoomUtilitiesSection from '../../components/rooms/RoomUtilitiesSection'
 import RoomServicesSection from '../../components/rooms/RoomServicesSection'
+import RoomCheckoutCard from '../../components/rooms/RoomCheckoutCard'
 import AmenityIcon from '../../components/amenities/AmenityIcon'
 import RoomAmenitiesModal from '../../components/amenities/RoomAmenitiesModal'
 import { getInvoicesByRoom } from '../../api/invoiceApi'
@@ -21,6 +22,7 @@ import { roomKeys } from '../../api/roomKeys'
 import { deleteRoom, getRoom } from '../../api/roomApi'
 import { formatArea, formatCurrency, formatDate } from '../../utils/formatters'
 import { privateRoomTypeLabel, roomTypeLabel } from '../../utils/roomTypes'
+import { reviewableRoomContracts } from '../../utils/roomContractFlow.mjs'
 
 const placeholders = []
 
@@ -52,6 +54,12 @@ export default function RoomDetailPage() {
   const roomQuery = useQuery({ queryKey: roomKeys.detail(id), queryFn: () => getRoom(id) })
   const contractsQuery = useQuery({ queryKey: contractKeys.byRoom(id), queryFn: () => getContractsByRoom(id) })
   const invoicesQuery = useQuery({ queryKey: invoiceKeys.byRoom(id), queryFn: () => getInvoicesByRoom(id) })
+  // The target anchor is rendered after the room API resolves.
+  useEffect(() => {
+    if (roomQuery.isSuccess && location.hash === '#room-services') {
+      document.getElementById('room-services')?.scrollIntoView({ block: 'start' })
+    }
+  }, [roomQuery.isSuccess, location.hash])
   const deleteMutation = useMutation({
     mutationFn: () => deleteRoom(id),
     onSuccess: async (response) => {
@@ -74,6 +82,8 @@ export default function RoomDetailPage() {
   const room = roomQuery.data.data.data
   const contracts = contractsQuery.data?.data?.data || []
   const activeContract = contracts.find((contract) => contract.status === 'ACTIVE')
+  const pendingAndActiveContracts = reviewableRoomContracts(contracts)
+  const latestEndedContract = contracts.filter(c => ['TERMINATED', 'EXPIRED'].includes(c.status)).sort((a,b) => Number(b.id) - Number(a.id))[0]
   const isDorm = room.room_type === 'DORMITORY'
   const roomStatus = roomStatusLabels[room.status] || room.status || 'Chưa cập nhật'
   const roomStatusStyle = roomStatusStyles[room.status] || 'border-slate-200 bg-slate-100 text-slate-700'
@@ -117,6 +127,10 @@ export default function RoomDetailPage() {
       {location.state?.message && <p className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{location.state.message}</p>}
       {deleteError && <p className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{deleteError}</p>}
 
+<div id="room-checkout" className="mt-4 min-w-0 scroll-mt-24">
+  {room.room_type === 'PRIVATE_ROOM' && <RoomCheckoutCard room={room} contract={activeContract || (room.status !== 'RENTED' ? latestEndedContract : null)} />}
+  {room.room_type === 'DORMITORY' && <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">Trả giường KTX được xử lý theo hợp đồng từng người, không trả cả phòng. Luồng riêng chưa được triển khai.</p>}
+</div>
 <section aria-labelledby="room-overview-title" className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
   <div className="flex flex-wrap items-center justify-between gap-2">
     <h3 id="room-overview-title" className="text-lg font-bold text-slate-900">Tổng quan phòng</h3>
@@ -210,28 +224,31 @@ export default function RoomDetailPage() {
 <section id="room-contracts" aria-label="Hợp đồng" className="mt-4 min-w-0 scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
   <div className="flex flex-wrap items-center justify-between gap-3">
     <h3 className="text-lg font-semibold">Hợp đồng</h3>
-    <button type="button" onClick={() => setIsContractPickerOpen(true)} className="min-h-11 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white active:opacity-90">Thêm hợp đồng</button>
+    <button type="button" onClick={() => setIsContractPickerOpen(true)} className="min-h-11 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white active:opacity-90">Thêm / chọn hợp đồng</button>
   </div>
   {contractsQuery.isPending ? <p className="mt-3 text-sm text-slate-500">Đang tải hợp đồng…</p>
     : contractsQuery.isError ? <p role="alert" className="mt-3 text-sm text-red-600">{getApiErrorMessage(contractsQuery.error)}</p>
-    : activeContract ? (
-      <div className="mt-3 min-w-0 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5">
+    : pendingAndActiveContracts.length > 0 ? <div className="mt-3 space-y-3">
+      {pendingAndActiveContracts.slice(0, 5).map(contract => <article key={contract.id} className={`min-w-0 rounded-xl border p-3.5 ${contract.status === 'DRAFT' ? 'border-amber-200 bg-amber-50/60' : 'border-emerald-100 bg-emerald-50/60'}`}>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="break-words text-sm font-bold text-slate-900">{activeContract.contract_code}</p>
-            <p className="mt-1 text-sm text-slate-600">Người thuê: {activeContract.tenant?.full_name || 'Chưa cập nhật'}</p>
+            <p className="break-words text-sm font-bold text-slate-900">{contract.contract_code || `Hợp đồng #${contract.id}`}</p>
+            <p className="mt-1 text-sm text-slate-600">Người thuê: {contract.tenant?.full_name || 'Chưa cập nhật'}</p>
+            {isDorm && contract.bed?.bed_code && <p className="mt-1 text-xs text-slate-600">Giường {contract.bed.bed_code}</p>}
           </div>
-          <ContractStatusBadge status={activeContract.status} />
+          <ContractStatusBadge status={contract.status} />
         </div>
-        <p className="mt-2 break-words text-xs text-slate-600">{formatDate(activeContract.start_date)} – {formatDate(activeContract.end_date)}</p>
-        <p className="mt-1 break-words text-sm font-semibold tabular-nums text-slate-900">{formatCurrency(activeContract.monthly_rent)}/tháng</p>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <Link to={`/contracts/${activeContract.id}`} state={{ returnTo: location.pathname + location.search, returnLabel: 'Phòng' }} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-800 active:bg-slate-100">Xem</Link>
-          <Link to={`/contracts/${activeContract.id}/edit`} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-800 active:bg-slate-100">Sửa</Link>
+        <p className="mt-2 break-words text-xs text-slate-600">{formatDate(contract.start_date)} – {formatDate(contract.end_date)}</p>
+        <p className="mt-1 break-words text-sm font-semibold tabular-nums text-slate-900">{formatCurrency(contract.monthly_rent)}/tháng</p>
+        {contract.status === 'DRAFT' && <p className="mt-2 text-sm text-amber-900">Bản nháp đã lưu, chưa kích hoạt. Có thể tiếp tục sửa và bổ sung dịch vụ; để chốt hợp đồng cần xác nhận biên bản bàn giao.</p>}
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <Link to={`/contracts/${contract.id}/edit`} state={{ returnTo: location.pathname + location.search, returnLabel: 'Phòng' }} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800">{contract.status === 'DRAFT' ? 'Tiếp tục sửa nháp' : 'Sửa ghi chú'}</Link>
+          <Link to={contract.status === 'DRAFT' ? `/contracts/${contract.id}#contract-handover` : `/contracts/${contract.id}`} state={{ returnTo: location.pathname + location.search, returnLabel: 'Phòng' }} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800">{contract.status === 'DRAFT' ? 'Bàn giao / chốt hợp đồng' : 'Xem hợp đồng'}</Link>
         </div>
-      </div>
-    ) : <p className="mt-3 text-sm text-slate-500">{contracts.length > 0 ? 'Hiện không có hợp đồng đang hiệu lực.' : 'Phòng này chưa có hợp đồng.'}</p>}
-  {contracts.length > 0 && <Link to={`/rooms/${id}/contracts`} state={{ returnTo: location.pathname + location.search, returnLabel: 'Phòng' }} className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-teal-800 underline-offset-4 hover:underline">Xem lịch sử hợp đồng</Link>}
+      </article>)}
+      {pendingAndActiveContracts.length > 5 && <p className="text-xs text-slate-600">Còn {pendingAndActiveContracts.length - 5} hợp đồng nháp/đang hiệu lực. Xem danh sách đầy đủ bên dưới.</p>}
+    </div> : <p className="mt-3 text-sm text-slate-500">{contracts.length > 0 ? 'Hiện không có hợp đồng đang hiệu lực hoặc bản nháp đang chỉnh.' : 'Phòng này chưa có hợp đồng.'}</p>}
+  {contracts.length > 0 && <Link to={`/rooms/${id}/contracts`} state={{ returnTo: location.pathname + location.search, returnLabel: 'Phòng' }} className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-teal-800 underline-offset-4 hover:underline">Xem tất cả hợp đồng / lịch sử</Link>}
 </section>
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         {placeholders.map((title) => <div key={title} className="rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500">{title} sẽ được triển khai ở phase tiếp theo.</div>)}

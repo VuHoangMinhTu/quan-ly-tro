@@ -5,6 +5,7 @@ import { getBillingV2Status } from '../../api/billingV2Api'
 import { getApiErrorMessage } from '../../api/getApiErrorMessage'
 import MonthlyInvoicePanel from './MonthlyInvoicePanel'
 import DormitoryInvoicePanel from './DormitoryInvoicePanel'
+import DormitoryRenewalShortcuts from './DormitoryRenewalShortcuts'
 
 // V1 creation is retired. Reuse the existing V2 monthly flow rather than
 // silently redirecting a "create" action to the read-only invoice list.
@@ -18,7 +19,7 @@ export default function InvoiceCreatePage() {
 
   return <section className="w-full min-w-0 max-w-3xl space-y-4">
     <Link to={`/rooms/${roomId}`} className="inline-flex min-h-11 items-center text-sm underline">← Quay lại chi tiết phòng</Link>
-    <h2 className="text-xl font-bold sm:text-2xl">Tạo hóa đơn tháng · Billing V2</h2>
+    <h2 className="text-xl font-bold sm:text-2xl">Tạo hóa đơn tháng</h2>
     {roomQuery.isPending && <p>Đang tải thông tin phòng...</p>}
     {roomQuery.isError && <p role="alert" className="text-red-700">{getApiErrorMessage(roomQuery.error)}</p>}
     {room && <>
@@ -29,6 +30,7 @@ export default function InvoiceCreatePage() {
       {statusQuery.isPending && <p>Đang kiểm tra quyền tạo hóa đơn V2...</p>}
       {statusQuery.isError && <p role="alert" className="text-red-700">Không kiểm tra được trạng thái Billing V2. {getApiErrorMessage(statusQuery.error)}</p>}
       {!statusQuery.isPending && !statusQuery.isError && !enabled && <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">Tạo hóa đơn Billing V2 hiện tạm khóa. Không chuyển về luồng V1.</p>}
+      {enabled && room.boarding_house_id && room.room_type === 'DORMITORY' && <DormitoryRenewalShortcuts roomId={roomId} />}
       {enabled && room.boarding_house_id && (room.room_type === 'DORMITORY' ? <DormitoryInvoicePanel houseId={room.boarding_house_id} roomId={roomId} /> : <MonthlyInvoicePanel houseId={room.boarding_house_id} roomId={roomId} />)}
     </>}
   </section>

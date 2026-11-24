@@ -10,7 +10,14 @@ async function write(url, payload, { quiet = false } = {}) {
     const result = response.data?.data
     const needsAttention = Array.isArray(result) ? result.some(row => ['BLOCKED', 'PENDING_FINAL_SETTLEMENT'].includes(row.status)) : ['BLOCKED', 'PENDING_FINAL_SETTLEMENT'].includes(result?.status)
     if (!quiet) {
-      if (needsAttention) toast.warning('Có phòng hoặc khoản tính toán đang chờ/bị chặn. Xem lý do chi tiết trước khi tiếp tục.')
+      if (needsAttention) {
+        const rows = (Array.isArray(result) ? result : [result]).flatMap(row => [row, ...(row?.bed_results || [])])
+        const messages = rows.flatMap(row => Object.values(row?.errors || {}).flatMap(value =>
+          (Array.isArray(value) ? value : [value]).flatMap(nested =>
+            typeof nested === 'string' ? [nested] : Object.values(nested || {}).flat())))
+        const reason = messages.find(message => typeof message === 'string' && message.trim())
+        toast.warning(reason || 'Có phòng hoặc khoản tính toán đang chờ/bị chặn. Xem lý do chi tiết trước khi tiếp tục.')
+      }
       else toast.success(response.data?.message || 'Đã ghi nhận thành công.')
     }
     return response
@@ -35,8 +42,9 @@ export const confirmMonthlyDraft = (room, token, reason) => write(`/billing-v2/r
 export const confirmBillingCheckpoint = (meter, payload) => write(`/billing-v2/meters/${meter}/checkpoints`, payload)
 export const confirmBillingPeriodBoundaries = (meter, payload, options) => write(`/billing-v2/meters/${meter}/period-boundaries`, payload, options)
 export const correctBillingPeriodBoundaries = (meter, payload) => write(`/billing-v2/meters/${meter}/period-boundaries/correct`, payload)
-export const confirmBillingCheckout = (contract, payload) => write(`/billing-v2/contracts/${contract}/checkout`, payload)
-export const recordBillingDeposit = (contract, payload) => write(`/billing-v2/contracts/${contract}/deposits`, payload)
-export const generateBillingV2 = (room, billingPeriod, usageStartAt, usageEndAt, meterPeriods = []) => write(`/billing-v2/rooms/${room}/generate`, { billing_period: billingPeriod, usage_start_at: usageStartAt, usage_end_at: usageEndAt, meter_periods: meterPeriods })
+export const confirmBillingCheckout = (contract, payload, options) => write(`/billing-v2/contracts/${contract}/checkout`, payload, options)
+export const recordBillingDeposit = (contract, payload, options) => write(`/billing-v2/contracts/${contract}/deposits`, payload, options)
 export const issueBillingV2 = invoice => write(`/billing-v2/invoices/${invoice}/issue`, {})
 export const confirmBillingSettlement = contract => write(`/billing-v2/contracts/${contract}/settlement-confirmation`, { confirm_no_held_deposit: true, reason: 'Chủ trọ xác nhận không có tiền cọc thực tế còn giữ; không tạo giao dịch mất cọc giả.' })
+
+export const generateBillingV2 = (room, billingPeriod, usageStartAt, usageEndAt, meterPeriods = []) => write(`/billing-v2/rooms/${room}/generate`, { billing_period: billingPeriod, usage_start_at: usageStartAt, usage_end_at: usageEndAt, meter_periods: meterPeriods })

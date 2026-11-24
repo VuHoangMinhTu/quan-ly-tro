@@ -12,10 +12,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Tests\ExercisesLegacyBillingCalculation;
 use Tests\TestCase;
 
 class BoardingHouseWithRoomsApiTest extends TestCase
 {
+    use ExercisesLegacyBillingCalculation;
     use RefreshDatabase;
 
     public function test_reused_house_id_cannot_adopt_legacy_rooms_in_either_creation_endpoint(): void
@@ -361,7 +363,7 @@ class BoardingHouseWithRoomsApiTest extends TestCase
             'contract_id' => $contract->id, 'invoice_code' => 'INV-101', 'billing_period' => '2026-10-01',
             'subtotal' => 0, 'discount_amount' => 0, 'total_amount' => 0, 'paid_amount' => 0, 'status' => 'DRAFT',
         ]);
-        $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+        $this->postLegacyCalculation($invoice->id)->assertOk();
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'RENT', 'amount' => 2500000]);
         $this->assertDatabaseHas('invoices', ['id' => $invoice->id, 'total_amount' => 2500000]);
         $this->assertDatabaseHas('rooms', ['id' => $room->id, 'monthly_rent' => null]);

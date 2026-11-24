@@ -96,7 +96,7 @@ class BillingV2Controller extends Controller
             ->whereIn('room_id', $roomIds)->where('is_active', true)->orderBy('id')->get();
         $meterIds = $meters->pluck('id');
         $latestCheckpoints = DB::table('utility_checkpoints')->whereIn('utility_meter_id', $meterIds)
-            ->where('kind', 'PERIOD_BOUNDARY')->orderByDesc('revision')->get()
+            ->whereIn('kind', ['PERIOD_BOUNDARY', 'CHECK_IN', 'CHECK_OUT']) /* BEHOUSE_LEDGER_HANDOVER_POINTS_20261124 */->orderByDesc('revision')->get()
             ->unique(fn ($point) => $point->utility_meter_id.':'.$point->scope_key)->values();
         $periods = DB::table('utility_billing_periods')->whereIn('utility_meter_id', $meterIds)
             ->where('billing_period', '>=', $from)->where('billing_period', '<', $until)->get();
@@ -108,7 +108,7 @@ class BillingV2Controller extends Controller
             ->select('invoice_obligations.room_id', 'invoice_obligations.billing_period', 'invoice_obligations.invoice_id', 'invoices.status')
             ->get();
         $tenants = Contract::query()->whereIn('room_id', $roomIds)->where('status', 'ACTIVE')
-            ->with('tenant:id,full_name')->get(['id', 'room_id', 'tenant_id', 'contract_code']);
+            ->with('tenant:id,full_name')->get(['id', 'room_id', 'tenant_id', 'contract_code', 'start_date', 'end_date']) /* BEHOUSE_LEDGER_CONTRACT_DATES_20261124 */;
 
         return ApiResponse::success([
             'year' => (int) $data['year'], 'boarding_house' => $house->only(['id', 'name']), 'rooms' => $rooms,
@@ -248,7 +248,14 @@ class BillingV2Controller extends Controller
     public function checkout(Request $request, int $id, BillingV2Evidence $evidence): JsonResponse
     {
         $contract = $this->contract($request, $id);
-        $data = $request->validate(['actual_ended_at' => ['required', 'date_format:Y-m-d H:i:s'], 'reason' => ['required', 'in:NORMAL_EXPIRY,MUTUAL_EARLY_END,TENANT_ABANDONMENT'], 'confirm_no_held_deposit' => ['sometimes', 'boolean'], 'readings' => ['present', 'array'], 'readings.*.utility_meter_id' => ['required', 'integer', 'distinct'], 'readings.*.reading_value' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999999999.99']]);
+        $data = $request->validate(['actual_ended_at' => ['required', 'date_format:Y-m-d H:i:s'], 'reason' => ['required', 'in:NORMAL_EXPIRY,MUTUAL_EARLY_END,TENANT_ABANDONMENT'], 'confirm_no_held_deposit' => ['sometimes', 'boolean'], 'readings' => ['present', 'array'], 'readings.*.utility_meter_id' => ['required', 'integer', 'distinct'], 'readings.*.reading_value' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999999999.99'],
+            'inspection' => ['required', 'array'],
+            'inspection.keys_status' => ['required', 'in:RETURNED,MISSING,UNKNOWN'],
+            'inspection.condition' => ['required', 'in:OK,ISSUES,NOT_INSPECTED'],
+            'inspection.notes' => ['nullable', 'string', 'max:2000']]);
+        if (isset($data['inspection']) && ($data['inspection']['keys_status'] !== 'RETURNED' || $data['inspection']['condition'] !== 'OK') && mb_strlen(trim($data['inspection']['notes'] ?? '')) < 5) {
+            throw ValidationException::withMessages(['inspection.notes' => 'Cần ghi chú ít nhất 5 ký tự khi chưa bàn giao đủ hoặc có vấn đề.']);
+        }
         $evidence->checkout($contract, $data, $request->user()->id);
 
         return ApiResponse::success(null, 'Xác nhận trả phòng thành công.');
@@ -266,7 +273,7 @@ class BillingV2Controller extends Controller
     public function deposit(Request $request, int $id, BillingV2Evidence $evidence): JsonResponse
     {
         $contract = $this->contract($request, $id);
-        $data = $request->validate(['event' => ['required', 'in:RECEIVED,REFUNDED'], 'amount' => ['required', 'integer', 'min:1', 'max:999999999999999'], 'request_key' => ['required', 'string', 'max:80', 'not_regex:/^CHECK_OUT:/'], 'occurred_at' => ['required', 'date_format:Y-m-d H:i:s']]);
+        $data = $request->validate(['event' => ['required', 'in:RECEIVED,REFUNDED,FORFEITED'], 'amount' => ['required', 'integer', 'min:1', 'max:999999999999999'], 'request_key' => ['required', 'string', 'max:80', 'not_regex:/^CHECK_OUT:/'], 'occurred_at' => ['required', 'date_format:Y-m-d H:i:s'], 'decision_reason' => ['required_if:event,FORFEITED', 'nullable', 'string', 'min:10', 'max:1000'], 'decision_confirmed' => ['required_if:event,FORFEITED', 'accepted']]);
 
         return ApiResponse::success(['id' => $evidence->deposit($contract, $data, $request->user()->id), 'held_amount' => $evidence->heldDeposit($contract)], 'Ghi nhận sổ cọc thành công.');
     }

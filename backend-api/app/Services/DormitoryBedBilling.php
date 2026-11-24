@@ -37,6 +37,17 @@ $this->check(
 );
 
 
+        // The end date is the boundary for starting a NEW rental cycle.
+        // A contract ending on Dec 2 covers Nov 2-Dec 2, not Dec 2-Jan 2.
+        $this->check(
+            ! $contract->end_date || $contract->end_date->toDateString() > $start->toDateString(),
+            'contract_expired',
+            'Hợp đồng '.($contract->contract_code ?: '#'.$contract->id)
+                .' kết thúc ngày '.($contract->end_date?->format('d/m/Y') ?? 'chưa xác định')
+                .', không đủ thời hạn cho kỳ thuê '.$start->format('d/m/Y').' - '.$end->format('d/m/Y')
+                .'. Vui lòng vào mục Hợp đồng để gia hạn đến ít nhất '.$end->format('d/m/Y')
+                .' hoặc bỏ qua kỳ thu này.'
+        );
         return [$start, $end];
     }
 

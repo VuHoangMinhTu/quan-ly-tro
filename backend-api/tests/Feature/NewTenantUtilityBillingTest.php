@@ -6,10 +6,12 @@ use App\Models\Contract;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\TestWith;
+use Tests\ExercisesLegacyBillingCalculation;
 use Tests\TestCase;
 
 class NewTenantUtilityBillingTest extends TestCase
 {
+    use ExercisesLegacyBillingCalculation;
     use RefreshDatabase;
 
     private function fixture(): array
@@ -25,6 +27,7 @@ class NewTenantUtilityBillingTest extends TestCase
         $old = Contract::factory()->create(['room_id' => $new->room_id, 'status' => 'ACTIVE', 'start_date' => '2026-09-01', 'end_date' => '2027-09-30']);
         $old->occupants()->create(['room_id' => $old->room_id, 'tenant_id' => $old->tenant_id, 'is_primary' => true, 'move_in_date' => '2026-09-01', 'status' => 'ACTIVE']);
         $old->utilityOpenings()->create(['utility_meter_id' => $meter->id, 'service_id' => $service->id, 'service_name' => 'Điện', 'opening_reading' => 100, 'reading_date' => '2026-09-01']);
+        config(['billing.v2_enabled' => false]);
         $this->putJson("/api/contracts/{$old->id}/status", ['status' => 'TERMINATED', 'move_out_date' => '2026-10-22'])->assertOk();
         $new->handoverReports()->create(['type' => 'CHECK_IN', 'status' => 'CONFIRMED', 'items' => [['name' => 'Đồ bàn giao', 'quantity' => 1]], 'confirmed_at' => now()]);
 
@@ -47,9 +50,9 @@ class NewTenantUtilityBillingTest extends TestCase
             ->assertJsonPath('data.0.latest_reading.reading_value', '100.00')
             ->assertJsonPath('data.0.current_reading.reading_value', '175.00')
             ->assertJsonPath(
-    'data.0.current_reading.source',
-    $agreed ? 'BILLING_V2_CHECKPOINT' : 'CONTRACT_HANDOVER'
-);
+                'data.0.current_reading.source',
+                $agreed ? 'BILLING_V2_CHECKPOINT' : 'CONTRACT_HANDOVER'
+            );
         $this->getJson("/api/rooms/{$new->room_id}/contract-context")->assertOk()
             ->assertJsonPath('data.utility_openings.0.opening_reading', '175.00')
             ->assertJsonPath('data.utility_openings.0.reading_date', '2026-10-23');
@@ -60,7 +63,7 @@ class NewTenantUtilityBillingTest extends TestCase
         $this->postJson("/api/rooms/{$new->room_id}/invoices", ['contract_id' => $new->id, 'billing_period' => '2026-10-01', 'status' => 'DRAFT'])->assertCreated();
         $invoice = $new->invoices()->firstOrFail();
 
-        $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+        $this->postLegacyCalculation($invoice->id)->assertOk();
 
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY', 'quantity' => 20, 'unit_price' => 3800, 'amount' => 76000]);
         $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $invoice->id, 'quantity' => 95]);
@@ -95,7 +98,7 @@ class NewTenantUtilityBillingTest extends TestCase
         $invoice->refresh()->recalculateTotals();
         $before = $invoice->fresh()->getAttributes();
 
-        $this->postJson("/api/invoices/{$invoice->id}/generate")->assertUnprocessable()->assertJsonValidationErrors('reading_date');
+        $this->postLegacyCalculation($invoice->id)->assertUnprocessable()->assertJsonValidationErrors('reading_date');
 
         $this->assertModelExists($item);
         $this->assertSame($before, $invoice->fresh()->getAttributes());

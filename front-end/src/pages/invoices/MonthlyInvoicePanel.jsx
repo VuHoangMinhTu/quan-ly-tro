@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { generateRoomMonthlyInvoice, getMonthlyBillingOptions } from '../../api/billingV2Api'
@@ -43,7 +43,6 @@ const isSharedMeterTerm = term => ['ELECTRICITY', 'WATER'].includes(term.service
 
 export default function MonthlyInvoicePanel({ houseId, roomId }) {
   const [month, setMonth] = useState(() => new Date().toLocaleDateString('sv-SE').slice(0, 7))
-  const [usageWindow, setUsageWindow] = useState(() => suggestedUsageWindow(new Date().toLocaleDateString('sv-SE').slice(0, 7)))
   const [approvals, setApprovals] = useState({})
   const [results, setResults] = useState(null)
   const [error, setError] = useState('')
@@ -51,12 +50,13 @@ export default function MonthlyInvoicePanel({ houseId, roomId }) {
   const lock = useRef(false)
   const client = useQueryClient()
   const period = `${month}-01`
-  const usageStartAt = `${usageWindow.start.replace('T', ' ')}:00`
-  const usageEndAt = `${usageWindow.end.replace('T', ' ')}:00`
   const options = useQuery({ queryKey: ['monthly-billing-options', houseId, period], queryFn: () => getMonthlyBillingOptions(houseId, period), enabled: Boolean(houseId && month) })
   const contracts = (options.data?.data?.data || []).filter(c => Number(c.room_id) === Number(roomId))
   const contractStart = contracts.find(c => c.start_date)?.start_date?.slice(0, 10)
-  useEffect(() => { if (contractStart && !results) setUsageWindow(roomUsageWindow(month, contractStart)) }, [contractStart, month])
+  // Rental window is independent from meter-specific confirmed ledger windows.
+  const usageWindow = roomUsageWindow(month, contractStart)
+  const usageStartAt = `${usageWindow.start.replace('T', ' ')}:00`
+  const usageEndAt = `${usageWindow.end.replace('T', ' ')}:00`
   const counts = summarizeMonthlyResults(results || [])
   const confirmedInputs = serializeConfirmations(contracts, approvals)
   const update = (id, key, value) => setApprovals(previous => ({ ...previous, [id]: { ...previous[id], [key]: value } }))
@@ -108,12 +108,14 @@ export default function MonthlyInvoicePanel({ houseId, roomId }) {
   return <section className="mt-5 space-y-4 rounded-xl border bg-white p-4" aria-label="Tạo hóa đơn tháng">
     <h3 className="font-semibold">Tạo hóa đơn tháng</h3>
     <p className="text-sm text-slate-600">Tổng hợp theo hợp đồng và dữ liệu đã xác nhận. Chỉ tạo bản nháp; chưa phát hành, thu tiền hoặc yêu cầu PayOS.</p>
-    <div className="grid gap-3 sm:grid-cols-3">
-      <label className="block text-sm">Tháng hóa đơn<input type="month" value={month} disabled={busy} onChange={e => { setMonth(e.target.value); setUsageWindow(suggestedUsageWindow(e.target.value)); setApprovals({}); setResults(null) }} className="mt-1 block min-h-11 w-full rounded border p-2" /></label>
-      <label className="block text-sm">Bắt đầu sử dụng · giờ Việt Nam<input type="datetime-local" value={usageWindow.start} disabled={busy} onChange={e => setUsageWindow(previous => ({ ...previous, start: e.target.value }))} className="mt-1 block min-h-11 w-full rounded border p-2" /></label>
-      <label className="block text-sm">Kết thúc sử dụng · giờ Việt Nam<input type="datetime-local" value={usageWindow.end} disabled={busy} onChange={e => setUsageWindow(previous => ({ ...previous, end: e.target.value }))} className="mt-1 block min-h-11 w-full rounded border p-2" /></label>
+    <div className="space-y-3">
+      <label className="block text-sm">Tháng hóa đơn<input type="month" value={month} disabled={busy} onChange={e => { setMonth(e.target.value); setApprovals({}); setResults(null) }} className="mt-1 block min-h-11 w-full rounded border p-2" /></label>
+      <div className="space-y-2 rounded-lg border border-teal-100 bg-teal-50/60 p-3 text-sm text-slate-800">
+        <p>Chu kỳ thuê dự kiến theo hợp đồng: <strong>{usageWindow.start.replace('T', ' ')} → {usageWindow.end.replace('T', ' ')}</strong></p>
+        <p>Điện nước được tính theo các mốc đã xác nhận riêng cho từng công tơ trong Sổ điện nước. Không nhập lại ngày chốt tại đây.</p>
+        <Link to="/utilities" className="inline-flex min-h-11 items-center font-semibold text-teal-800 underline underline-offset-4">Mở Sổ điện nước để kiểm tra mốc chốt</Link>
+      </div>
     </div>
-    <p className="text-xs text-slate-500">Tháng hóa đơn tách biệt với thời gian sử dụng. Mặc định theo ngày bắt đầu thuê của hợp đồng phòng này, nếu có. Bạn có thể điều chỉnh kỳ theo thỏa thuận; không tự thay kỳ công tơ đã xác nhận.</p>
     <details><summary className="cursor-pointer py-2 text-sm">Tiền giường kỳ lẻ và dịch vụ KTX thu thêm (tùy chọn); xác nhận kỳ phòng thường</summary>
       <p className="mb-3 text-sm text-slate-600">KTX mặc định chỉ thu giá giường trong hợp đồng, đã bao gồm điện, nước, internet và dịch vụ. Chỉ tích chọn thu thêm khi có thỏa thuận riêng. Phòng thường giữ quy tắc hiện tại.</p>
       {options.isError && <p role="alert">{getApiErrorMessage(options.error)}</p>}
@@ -148,7 +150,7 @@ export default function MonthlyInvoicePanel({ houseId, roomId }) {
       <p className="rounded bg-slate-100 p-3 text-sm" role="status">Tạo mới: {counts.CREATED} · Đã tồn tại: {counts.EXISTING} · Đang chờ: {counts.PENDING_FINAL_SETTLEMENT} · Bị chặn: {counts.BLOCKED} · Không có hợp đồng: {counts.NO_ELIGIBLE_CONTRACT} · Không thu mới: {counts.NO_NEW_RECEIVABLES}</p>
       <p className="text-sm text-slate-600">Chỉ xử lý phòng đang chọn, không tạo hóa đơn cho phòng khác.</p>
       {results.map(result => <article key={result.room_id} className="rounded border p-3"><h4 className="font-semibold">Phòng {result.room_code} — {labels[result.status] || result.status}</h4>{Object.values(result.errors || {}).flat().map((message, index) => <p key={index} className="mt-1 text-sm text-amber-800">{message}</p>)}
-        {['BLOCKED', 'PENDING_FINAL_SETTLEMENT'].includes(result.status) && <div className="mt-2 flex flex-wrap gap-3 text-sm"><Link to={`/rooms/${result.room_id}/billing-v2`} className="underline">Kiểm tra công tơ, mốc chốt và quyết toán</Link><Link to={`/rooms/${result.room_id}/contracts`} className="underline">Kiểm tra thỏa thuận hợp đồng</Link></div>}
+        {['BLOCKED', 'PENDING_FINAL_SETTLEMENT'].includes(result.status) && <div className="mt-2 flex flex-wrap gap-3 text-sm"><Link to="/utilities" className="underline">Kiểm tra mốc chốt trong Sổ điện nước</Link><Link to={`/rooms/${result.room_id}/contracts`} className="underline">Kiểm tra thỏa thuận hợp đồng</Link></div>}
         {(result.invoices || []).map(invoice => <div key={invoice.id} className="mt-3"><Link to={`/invoices/${invoice.id}`} className="underline">{invoice.invoice_code} · {formatCurrency(invoice.total_amount)} · {invoice.status === 'DRAFT' ? 'Nháp' : invoice.status}</Link><p className="text-xs text-slate-500">Kỳ {month} · Hợp đồng #{invoice.contract_id} · Xem hóa đơn để đối chiếu nguồn chứng cứ.</p><details><summary className="cursor-pointer py-2 text-sm">Chi tiết khoản thu</summary><ul className="space-y-1 text-sm">{invoice.items?.map((item, index) => <li key={item.id || index}>{item.description}: {formatCurrency(item.amount)} ({item.source === 'MANUAL' ? 'Thủ công' : (item.description.includes('đã xác nhận') || (item.type === 'RENT' && (invoice.monthly_confirmation?.rent_amount != null || invoice.confirmation?.rent_amount != null))) ? 'AUTO theo xác nhận' : 'AUTO'})</li>)}</ul></details></div>)}
         {(result.invoices || []).length > 0 && <MonthlyDraftUpdatePanel roomId={result.room_id} period={period} initialUsageStartAt={usageWindow.start} initialUsageEndAt={usageWindow.end} confirmations={confirmedInputs.filter(input => result.invoices.some(i => Number(i.contract_id) === Number(input.contract_id)))} onUpdated={invoices => setResults(previous => previous.map(row => row.room_id === result.room_id ? { ...row, invoices } : row))} />}
       </article>)}

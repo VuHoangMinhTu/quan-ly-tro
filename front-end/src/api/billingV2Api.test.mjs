@@ -39,6 +39,21 @@ test('confirmed deposit success emits one toast and preserves caller request key
   assert.equal(getToasts()[0].type, 'success')
 })
 
+test('deposit dialog handles uncertain retry and confirmed success inline without stale warning toasts', async () => {
+  let attempts = 0
+  const sent = []
+  const billing = await api(async config => {
+    sent.push(JSON.parse(config.data))
+    if (++attempts === 1) throw new axios.AxiosError('Network Error', 'ERR_NETWORK', config)
+    return { status: 200, data: { success: true }, config }
+  })
+  const payload = { event: 'RECEIVED', amount: 1000, request_key: 'retained-key', occurred_at: '2026-10-02 08:32:00' }
+  await assert.rejects(billing.recordBillingDeposit(8, payload, { quiet: true }), error => !!error.billingV2Message)
+  await billing.recordBillingDeposit(8, payload, { quiet: true })
+  assert.deepEqual(sent, [payload, payload])
+  assert.deepEqual(getToasts(), [])
+})
+
 test('422 tariff conflict remains actionable and does not become an uncertain success', async () => {
   const billing = await api(async config => { throw new axios.AxiosError('Request failed', 'ERR_BAD_REQUEST', config, null, { status: 422, data: { message: 'Các hợp đồng có bảng giá khác nhau.' }, config }) })
 

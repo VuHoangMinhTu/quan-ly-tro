@@ -129,6 +129,7 @@ export default function UtilityMeterDetailPage() {
 
   const readings = readingsQuery.data?.data?.data || []
   const unit = meter.service?.unit || ''
+  const legacyDorm = meter.room?.room_type === 'DORMITORY'
 
   return (
     <section className="bh-meter-screen bh-workspace min-w-0">
@@ -142,13 +143,15 @@ export default function UtilityMeterDetailPage() {
             Mã đồng hồ: {meter.meter_code || 'Chưa cập nhật'} · Chỉ số đầu: {formatQuantity(meter.initial_reading, unit)}
           </p>
         </div>
-        <button
+        {legacyDorm ? <button
           type="button"
           onClick={() => setEditingReading({})}
           className="min-h-11 shrink-0 rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white"
         >
-          Thêm chỉ số
-        </button>
+          Ghi chỉ số công tơ chung
+        </button> : meter.room?.room_type === 'PRIVATE_ROOM' && (
+          <Link to="/utilities" className="inline-flex min-h-11 items-center underline">Ghi / đính chính trong Sổ điện nước</Link>
+        )}
       </div>
 
       <ServicePricing service={meter.service} tiersQuery={tiersQuery} />
@@ -160,7 +163,7 @@ export default function UtilityMeterDetailPage() {
         <table className="min-w-[640px] w-full text-sm">
           <thead className="bg-slate-50">
             <tr>
-              {['Ngày ghi', 'Chỉ số công tơ hiện tại', 'Mức tiêu thụ', 'Ghi chú', ''].map((label) => (
+              {['Ngày ghi', 'Chỉ số công tơ hiện tại', 'Mức tiêu thụ', 'Ghi chú', ...(legacyDorm ? ['Thao tác'] : [])].map((label) => (
                 <th key={label} className="px-4 py-3 text-left font-medium text-slate-600">{label}</th>
               ))}
             </tr>
@@ -176,7 +179,7 @@ export default function UtilityMeterDetailPage() {
                   <td className="whitespace-nowrap px-4 py-3 font-medium">{formatQuantity(reading.reading_value, unit)}</td>
                   <td className="whitespace-nowrap px-4 py-3">{formatQuantity(consumption, unit)}</td>
                   <td className="max-w-64 break-words px-4 py-3 text-slate-600">{reading.note || '—'}</td>
-                  <td className="whitespace-nowrap px-4 py-3">
+                  {legacyDorm && <td className="whitespace-nowrap px-4 py-3">
                     <button type="button" onClick={() => setEditingReading(reading)} className="mr-2 min-h-11 px-2 text-slate-700 underline underline-offset-2">Sửa</button>
                     <button
                       type="button"
@@ -185,7 +188,7 @@ export default function UtilityMeterDetailPage() {
                     >
                       Xóa
                     </button>
-                  </td>
+                  </td>}
                 </tr>
               )
             })}
@@ -194,7 +197,7 @@ export default function UtilityMeterDetailPage() {
         {!readingsQuery.isPending && !readingsQuery.isError && readings.length === 0 && <p className="p-6 text-center text-slate-500">Chưa có chỉ số được ghi.</p>}
       </div>
 
-      {editingReading && (
+      {legacyDorm && editingReading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4" role="dialog" aria-modal="true" aria-label={editingReading.id ? 'Sửa chỉ số' : 'Thêm chỉ số'}>
           <div className="max-h-[90dvh] w-full min-w-0 max-w-md overflow-y-auto rounded-xl bg-white p-4 sm:p-6">
             <div className="mb-4 flex items-center justify-between gap-2">

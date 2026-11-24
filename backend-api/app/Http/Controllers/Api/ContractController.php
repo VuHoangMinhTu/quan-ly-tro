@@ -8,10 +8,12 @@ use App\Http\Requests\Contract\ChangeContractRoomRequest;
 use App\Http\Requests\Contract\ContractScheduleRequest;
 use App\Http\Requests\Contract\ContractStatusRequest;
 use App\Http\Requests\Contract\MoveOutContractOccupantRequest;
+use App\Http\Requests\Contract\RenewContractRequest;
 use App\Http\Requests\Contract\StoreContractRequest;
 use App\Http\Requests\Contract\UpdateContractRequest;
 use App\Services\BoardingHouseAccessService;
 use App\Services\ContractService;
+use App\Services\ContractRenewalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -56,6 +58,13 @@ class ContractController extends Controller
         $this->contracts->save($request->user(), $contract->room_id, $request->validated(), $id);
 
         return ApiResponse::success(null, 'Cập nhật hợp đồng thành công.');
+    }
+
+    public function renew(RenewContractRequest $request, int $id, ContractRenewalService $renewals): JsonResponse
+    {
+        $result = $renewals->renew($request->user(), $id, $request->validated());
+
+        return ApiResponse::success($result, 'Đã ghi nhận gia hạn hợp đồng. Vui lòng lưu chứng từ gia hạn đã thỏa thuận.');
     }
 
     public function status(ContractStatusRequest $request, int $id): JsonResponse

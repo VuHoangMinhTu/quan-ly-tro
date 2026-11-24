@@ -2,6 +2,7 @@
 
 use App\Models\Contract;
 use App\Models\Invoice;
+use App\Models\UtilityMeterPeriodBoundary;
 use App\Services\BillingV2Evidence;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Artisan;
@@ -11,7 +12,7 @@ use Illuminate\Support\Facades\Hash;
 require __DIR__.'/BillingV2MysqlBootstrap.php';
 $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
-if (config('database.default') !== 'mysql' || config('database.connections.mysql.database') !== 'beehouse_billing_v2_test' || config('database.connections.mysql.host') !== '127.0.0.1' || (string) config('database.connections.mysql.port') !== '13368') {
+if (config('database.default') !== 'mysql' || config('database.connections.mysql.database') !== 'beehouse_billing_v2_test' || config('database.connections.mysql.host') !== '127.0.0.1' || ! in_array((string) config('database.connections.mysql.port'), ['13368', '13369'], true)) {
     throw new RuntimeException('Isolated test database required.');
 }
 if (($argv[1] ?? '') === 'seed') {
@@ -23,6 +24,9 @@ if (($argv[1] ?? '') === 'seed') {
     $b = Contract::factory()->create(['room_id' => $room->id, 'status' => 'ACTIVE', 'start_date' => '2026-10-20']);
     foreach ([$a, $b] as $contract) {
         $contract->handoverReports()->create(['type' => 'CHECK_IN', 'status' => 'CONFIRMED', 'items' => [], 'confirmed_at' => now()]);
+    }
+    if (getenv('CONTRACT_EXIT_BROWSER') === '1') {
+        $b->occupants()->create(['room_id' => $room->id, 'tenant_id' => $b->tenant_id, 'is_primary' => true, 'status' => 'ACTIVE', 'move_in_date' => '2026-10-20']);
     }
     $service = $room->boardingHouse->services()->create(['name' => 'Điện giả lập', 'type' => 'ELECTRICITY', 'billing_method' => 'TIERED', 'base_price' => 0, 'unit' => 'kWh', 'is_active' => true]);
     $service->priceTiers()->createMany([['from_quantity' => 0, 'to_quantity' => 20, 'unit_price' => 2000, 'tier_order' => 1], ['from_quantity' => 20, 'to_quantity' => null, 'unit_price' => 4000, 'tier_order' => 2]]);
@@ -49,7 +53,38 @@ if (($argv[1] ?? '') === 'seed') {
     $evidence->checkpoint($meter, ['kind' => 'CHECK_IN', 'contract_id' => $a->id, 'observed_at' => '2026-10-01 00:00:00', 'reading_value' => 100], $user->id);
     $evidence->checkpoint($waterMeter, ['kind' => 'PERIOD_BOUNDARY', 'observed_at' => '2026-10-01 00:00:00', 'reading_value' => 20], $user->id);
     $evidence->checkpoint($waterMeter, ['kind' => 'CHECK_IN', 'contract_id' => $a->id, 'observed_at' => '2026-10-01 00:00:00', 'reading_value' => 20], $user->id);
+    if (getenv('UTILITY_LEDGER_BROWSER') === '1') {
+        DB::beginTransaction();
+        $house = $room->boardingHouse;
+        $house->update(['name' => 'BeeHouse – Nguyễn Văn An']);
+        foreach (range(101, 112) as $code) {
+            $sample = $house->rooms()->create(['room_code' => 'P'.$code, 'status' => 'AVAILABLE', 'monthly_rent' => 3000000]);
+            foreach ([$service, $waterService] as $utility) {
+                $sampleMeter = $sample->utilityMeters()->create(['service_id' => $utility->id, 'initial_reading' => 0]);
+                $previous = null;
+                foreach (range(5, 9) as $month) {
+                    $point = $evidence->checkpoint($sampleMeter, [
+                        'kind' => 'PERIOD_BOUNDARY',
+                        'observed_at' => sprintf('2026-%02d-01 00:00:00', $month),
+                        'reading_value' => $month * ($utility->type === 'WATER' ? 10 : 100),
+                    ], $user->id);
+                    if ($previous !== null) {
+                        UtilityMeterPeriodBoundary::create([
+                            'utility_meter_id' => $sampleMeter->id, 'billing_period' => sprintf('2026-%02d-01', $month - 1),
+                            'start_checkpoint_id' => $previous, 'end_checkpoint_id' => $point,
+                        ]);
+                    }
+                    $previous = $point;
+                }
+            }
+        }
+        DB::commit();
+    }
     echo json_encode(['user' => $user->id, 'house' => $room->boarding_house_id, 'room' => $room->id, 'ktxRoom' => $dormitory->id, 'a' => $a->id, 'b' => $b->id, 'meter' => $meter->id, 'waterMeter' => $waterMeter->id], JSON_THROW_ON_ERROR);
+} elseif (($argv[1] ?? '') === 'assert-checkout') {
+    $termination = DB::table('contract_terminations')->sole();
+    $settlement = DB::table('contract_settlements')->where('contract_id', $termination->contract_id)->sole();
+    echo json_encode(['actual_ended_at' => $termination->actual_ended_at, 'billing_period' => $settlement->billing_period], JSON_THROW_ON_ERROR);
 } elseif (($argv[1] ?? '') === 'assert-empty') {
     if (Invoice::count() !== 0 || DB::table('payments')->count() !== 0 || DB::table('payos_payment_requests')->count() !== 0) {
         throw new RuntimeException('Flag-off browser path created financial records.');

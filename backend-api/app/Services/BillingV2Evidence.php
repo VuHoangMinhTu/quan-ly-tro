@@ -210,18 +210,23 @@ class BillingV2Evidence
             Contract::query()->lockForUpdate()->findOrFail($contract->id);
             $existing = DB::table('contract_deposit_entries')->where('contract_id', $contract->id)->where('request_key', $data['request_key'])->first();
             if ($existing) {
-                $this->require($existing->event === $data['event'] && BigDecimal::of($existing->amount)->isEqualTo($data['amount']) && $existing->occurred_at === $data['occurred_at'], 'request_key', 'Khóa ghi cọc đã được dùng với dữ liệu khác.');
+                $this->require($existing->event === $data['event'] && BigDecimal::of($existing->amount)->isEqualTo($data['amount']) && $existing->occurred_at === $data['occurred_at'] && ($data['event'] !== 'FORFEITED' || $existing->decision_reason === ($data['decision_reason'] ?? null)), 'request_key', 'Khóa ghi cọc đã được dùng với dữ liệu khác.');
 
                 return $existing->id;
             }
-            $this->require($data['event'] !== 'FORFEITED' || DB::table('contract_terminations')->where('contract_id', $contract->id)->where('reason', 'TENANT_ABANDONMENT')->exists(), 'event', 'Chỉ mất cọc theo chính sách bỏ ngang đã xác nhận.');
+            $this->require($data['event'] !== 'FORFEITED' || DB::table('contract_terminations')->where('contract_id', $contract->id)->where('reason', 'TENANT_ABANDONMENT')->exists(), 'event', 'Chỉ ghi mất cọc sau kết thúc do bỏ ngang, có xác nhận thủ công.');
+            $this->require($data['event'] !== 'FORFEITED' || (($data['decision_confirmed'] ?? false) && mb_strlen(trim($data['decision_reason'] ?? '')) >= 10), 'decision_reason', 'Mất cọc cần lý do và xác nhận chủ trọ, không được tự động ghi.');
             $this->require($data['event'] === 'RECEIVED' || BigDecimal::of($data['amount'])->isLessThanOrEqualTo($this->heldDeposit($contract)), 'amount', 'Không thể hoàn/mất cọc vượt số tiền thực tế đang giữ.');
             $this->require($data['event'] !== 'RECEIVED' || ! DB::table('contract_terminations')->where('contract_id', $contract->id)->exists(), 'event', 'Hợp đồng đã quyết toán kết thúc; khoản cọc phát sinh cần đối soát riêng.');
             $latest = DB::table('contract_deposit_entries')->where('contract_id', $contract->id)->max('occurred_at');
             $this->require($latest === null || $data['occurred_at'] >= $latest, 'occurred_at', 'Thời điểm giao dịch không được trước giao dịch cọc đã ghi nhận.');
             $this->require($data['event'] !== 'RECEIVED' || BigDecimal::of($this->heldDeposit($contract))->plus($data['amount'])->isLessThanOrEqualTo('999999999999999'), 'amount', 'Số dư cọc vượt giới hạn sổ cọc.');
 
-            return DB::table('contract_deposit_entries')->insertGetId(['contract_id' => $contract->id, 'event' => $data['event'], 'amount' => $data['amount'], 'occurred_at' => $data['occurred_at'], 'request_key' => $data['request_key'], 'recorded_by' => $actor, 'created_at' => now()]);
+            $id = DB::table('contract_deposit_entries')->insertGetId(['contract_id' => $contract->id, 'event' => $data['event'], 'amount' => $data['amount'], 'occurred_at' => $data['occurred_at'], 'request_key' => $data['request_key'], 'decision_reason' => $data['decision_reason'] ?? null, 'recorded_by' => $actor, 'created_at' => now()]);
+            if ($data['event'] !== 'RECEIVED' && DB::table('contract_settlements')->where('contract_id', $contract->id)->exists()) {
+                DB::table('contract_settlements')->where('contract_id', $contract->id)->update(['deposit_status' => BigDecimal::of($this->heldDeposit($contract))->isZero() ? 'SETTLED_BY_OWNER' : 'PENDING_MANUAL_REVIEW', 'updated_at' => now()]);
+            }
+            return $id;
         }, 3);
     }
 
@@ -245,6 +250,9 @@ class BillingV2Evidence
             if ($existing) {
                 $this->require($existing->actual_ended_at === $data['actual_ended_at'] && $existing->reason === $data['reason'], 'reason', 'Kết thúc đã xác nhận; không tự sửa lý do/thời điểm lịch sử.');
                 $report = $contract->handoverReports()->where('type', 'CHECK_OUT')->firstOrFail();
+                if (isset($data['inspection']) && $report->inspection !== null) {
+                    $this->require($report->inspection === $data['inspection'], 'inspection', 'Biên bản bàn giao đã xác nhận với thông tin kiểm kê khác.');
+                }
                 $normalize = fn (array $readings) => collect($readings)->sortBy('utility_meter_id')->map(fn ($row) => [(int) $row['utility_meter_id'], (string) BigDecimal::of($row['reading_value'])->strippedOfTrailingZeros()])->values()->all();
                 $this->require($normalize($report->items) === $normalize($data['readings']), 'readings', 'Bàn giao đã xác nhận với chỉ số khác; cần quy trình đính chính riêng.');
 
@@ -265,17 +273,19 @@ class BillingV2Evidence
                 $this->require($in !== null && $in->observed_at <= $data['actual_ended_at'], 'readings', 'Thiếu CHECK_IN hợp lệ trước thời điểm trả phòng.');
                 $this->checkpoint($meter, ['kind' => 'CHECK_OUT', 'contract_id' => $contract->id, 'observed_at' => $data['actual_ended_at'], 'reading_value' => $row['reading_value']], $actor);
             }
-            $contract->handoverReports()->create(['type' => 'CHECK_OUT', 'status' => 'CONFIRMED', 'items' => $data['readings'], 'confirmed_at' => now()]);
+            $contract->handoverReports()->create(['type' => 'CHECK_OUT', 'status' => 'CONFIRMED', 'items' => $data['readings'], 'inspection' => $data['inspection'] ?? null, 'confirmed_at' => now()]);
             $heldBefore = $this->heldDeposit($contract);
-            if ($data['reason'] === 'TENANT_ABANDONMENT' && BigDecimal::of($this->heldDeposit($contract))->isPositive()) {
-                $this->deposit($contract, ['event' => 'FORFEITED', 'amount' => $this->heldDeposit($contract), 'request_key' => 'CHECK_OUT:'.$contract->id, 'occurred_at' => $data['actual_ended_at']], $actor);
-            }
+            // Never forfeit a deposit automatically. Money remains in the ledger until an
+            // explicit owner decision is recorded after checkout, with a reason.
             app(ContractSettlementPolicy::class)->record($contract, $data, $actor, $heldBefore);
             $date = substr($data['actual_ended_at'], 0, 10);
             $this->require(! $contract->occupants()->where('status', 'ACTIVE')->whereDate('move_in_date', '>', $date)->exists(), 'actual_ended_at', 'Ngày kết thúc trước lịch sử vào ở.');
             $contract->occupants()->where('status', 'ACTIVE')->update(['status' => 'MOVED_OUT', 'move_out_date' => $date]);
             $contract->update(['status' => $data['reason'] === 'NORMAL_EXPIRY' ? 'EXPIRED' : 'TERMINATED']);
-            $contract->room->update(['status' => $contract->room->roomTenants()->where('status', 'ACTIVE')->exists() ? 'RENTED' : 'AVAILABLE']);
+            $stillOccupied = $contract->room->roomTenants()->where('status', 'ACTIVE')->exists();
+            $ready = ($data['inspection']['keys_status'] === 'RETURNED' && $data['inspection']['condition'] === 'OK');
+            // MAINTENANCE means vacant but not yet ready; owner must inspect and reactivate explicitly.
+            $contract->room->update(['status' => $stillOccupied ? 'RENTED' : ($ready ? 'AVAILABLE' : 'MAINTENANCE')]);
         }, 3);
     }
 

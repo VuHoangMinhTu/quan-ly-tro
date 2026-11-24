@@ -217,6 +217,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::put('/contracts/{id}/services', [ContractServiceController::class, 'update']);
     Route::post('/contracts/{id}/service-adjustments', [ContractServiceController::class, 'adjust']);
     Route::post('/contracts/{id}/services/{termId}/stop', [ContractServiceController::class, 'stop']);
+    Route::post('/contracts/{id}/renewals', [ContractController::class, 'renew']);
     Route::put('/contracts/{id}', [ContractController::class, 'update']);
     Route::delete('/contracts/{id}', [ContractController::class, 'destroy']);
 

@@ -8,10 +8,12 @@ use App\Models\Service;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\TestWith;
+use Tests\ExercisesLegacyBillingCalculation;
 use Tests\TestCase;
 
 class ContractServiceTermsApiTest extends TestCase
 {
+    use ExercisesLegacyBillingCalculation;
     use RefreshDatabase;
 
     private function fixture(string $method = 'PER_UNIT', string $start = '2027-01-01'): array
@@ -100,8 +102,8 @@ class ContractServiceTermsApiTest extends TestCase
         $may = $this->invoice($contract, '2027-05-01');
         $june = $this->invoice($contract, '2027-06-01');
 
-        $this->postJson("/api/invoices/{$may->id}/generate")->assertOk();
-        $this->postJson("/api/invoices/{$june->id}/generate")->assertOk();
+        $this->postLegacyCalculation($may->id)->assertOk();
+        $this->postLegacyCalculation($june->id)->assertOk();
 
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $may->id, 'type' => 'ELECTRICITY', 'quantity' => 20, 'unit_price' => 4000, 'amount' => 80000]);
         $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $may->id, 'type' => 'SERVICE_TAX']);
@@ -109,7 +111,7 @@ class ContractServiceTermsApiTest extends TestCase
         $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $june->id, 'type' => 'SERVICE_TAX']);
         $juneItems = $june->items()->get()->toArray();
         $this->travelTo('2027-07-15');
-        $this->postJson("/api/invoices/{$may->id}/generate")->assertOk();
+        $this->postLegacyCalculation($may->id)->assertOk();
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $may->id, 'type' => 'ELECTRICITY', 'unit_price' => 4000]);
         $this->assertSame($juneItems, $june->items()->get()->toArray());
     }
@@ -121,7 +123,7 @@ class ContractServiceTermsApiTest extends TestCase
         $service->priceTiers()->update(['unit_price' => 9000]);
         $invoice = $this->invoice($contract, '2027-05-01');
 
-        $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+        $this->postLegacyCalculation($invoice->id)->assertOk();
 
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY', 'amount' => 60000]);
         $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'SERVICE_TAX']);
@@ -137,8 +139,8 @@ class ContractServiceTermsApiTest extends TestCase
         $may = $this->invoice($contract, '2027-05-01');
         $june = $this->invoice($contract, '2027-06-01');
 
-        $this->postJson("/api/invoices/{$may->id}/generate")->assertOk();
-        $this->postJson("/api/invoices/{$june->id}/generate")->assertOk();
+        $this->postLegacyCalculation($may->id)->assertOk();
+        $this->postLegacyCalculation($june->id)->assertOk();
 
         $this->assertSame($tiers, $original->fresh()->pricing_snapshot);
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $may->id, 'type' => 'ELECTRICITY', 'amount' => 60000]);
@@ -172,7 +174,7 @@ class ContractServiceTermsApiTest extends TestCase
 
         $this->assertDatabaseHas('contract_services', ['contract_id' => $contract->id, 'base_price' => 12345]);
         $invoice = $this->invoice($contract, '2027-05-01');
-        $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+        $this->postLegacyCalculation($invoice->id)->assertOk();
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY', 'amount' => 12345]);
         $other = Contract::factory()->create(['room_id' => $contract->room_id, 'tenant_id' => $contract->tenant_id]);
         $this->putJson("/api/contracts/{$other->id}/services", ['services' => []])->assertOk();
@@ -195,7 +197,7 @@ class ContractServiceTermsApiTest extends TestCase
 
         foreach (['2027-05-01' => false, '2027-06-01' => true, '2027-08-01' => true, '2027-09-01' => false, '2027-11-01' => true] as $month => $expected) {
             $invoice = $this->invoice($contract, $month);
-            $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+            $this->postLegacyCalculation($invoice->id)->assertOk();
             $this->assertSame($expected, $invoice->items()->where('type', 'INTERNET')->exists(), $month);
         }
     }
@@ -266,7 +268,7 @@ class ContractServiceTermsApiTest extends TestCase
         $this->activate($contract, $owner, $service);
         $invoice = $this->invoice($contract, '2027-01-01');
 
-        $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+        $this->postLegacyCalculation($invoice->id)->assertOk();
 
         $this->assertSame('2027-01-15', $contract->agreedServices()->sole()->effective_from->format('Y-m-d'));
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY', 'amount' => 4000]);
@@ -277,13 +279,13 @@ class ContractServiceTermsApiTest extends TestCase
         [$legacy, $owner, $service] = $this->fixture('FIXED');
         $invoice = $this->invoice($legacy, '2027-05-01');
         $this->getJson("/api/contracts/{$legacy->id}/services")->assertOk()->assertJsonPath('data.legacy_fallback', true);
-        $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+        $this->postLegacyCalculation($invoice->id)->assertOk();
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY', 'amount' => 4000]);
         $invoice->delete();
         $this->putJson("/api/contracts/{$legacy->id}", ['status' => 'ACTIVE', 'lessor_representative_user_id' => $owner->id, 'services' => []])->assertOk();
         $next = $this->invoice($legacy, '2027-06-01');
 
-        $this->postJson("/api/invoices/{$next->id}/generate")->assertOk();
+        $this->postLegacyCalculation($next->id)->assertOk();
 
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $next->id, 'type' => 'ELECTRICITY', 'amount' => 4000]);
         $this->getJson("/api/contracts/{$legacy->id}/services")->assertJsonPath('data.legacy_fallback', false);
@@ -297,7 +299,7 @@ class ContractServiceTermsApiTest extends TestCase
         $invoice = $this->invoice($contract, '2027-05-01');
         $manual = $invoice->items()->create(['type' => 'OTHER', 'description' => 'Thủ công', 'quantity' => 1, 'unit_price' => 100, 'amount' => 100, 'source' => 'MANUAL']);
 
-        $this->postJson("/api/invoices/{$invoice->id}/generate")->assertUnprocessable()->assertJsonValidationErrors('services');
+        $this->postLegacyCalculation($invoice->id)->assertUnprocessable()->assertJsonValidationErrors('services');
 
         $this->assertModelExists($manual);
         $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $invoice->id, 'source' => 'AUTO']);
@@ -309,12 +311,12 @@ class ContractServiceTermsApiTest extends TestCase
         $this->activate($contract, $owner, $service);
         $service->delete();
         $invoice = $this->invoice($contract, '2027-05-01');
-        $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+        $this->postLegacyCalculation($invoice->id)->assertOk();
         $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY']);
         $service->restore();
         $contract->agreedServices()->update(['service_id' => null]);
 
-        $this->postJson("/api/invoices/{$invoice->id}/generate")->assertUnprocessable()->assertJsonValidationErrors('service_id');
+        $this->postLegacyCalculation($invoice->id)->assertUnprocessable()->assertJsonValidationErrors('service_id');
 
         $this->assertDatabaseMissing('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY']);
     }
@@ -327,7 +329,7 @@ class ContractServiceTermsApiTest extends TestCase
         $service->update(['base_price' => 9000]);
         $invoice = $this->invoice($contract, '2027-05-01');
 
-        $this->postJson("/api/invoices/{$invoice->id}/generate")->assertOk();
+        $this->postLegacyCalculation($invoice->id)->assertOk();
 
         $this->assertDatabaseHas('invoice_items', ['invoice_id' => $invoice->id, 'type' => 'ELECTRICITY', 'quantity' => 1, 'unit_price' => 4000, 'amount' => 4000]);
     }

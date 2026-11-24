@@ -314,6 +314,9 @@ class ContractService
         if ($room->status === 'INACTIVE') {
             throw ValidationException::withMessages(['room_id' => 'Phòng đã ngừng sử dụng, không thể kích hoạt hợp đồng.']);
         }
+        if ($room->status === 'MAINTENANCE' && $room->room_type === 'PRIVATE_ROOM') {
+            throw ValidationException::withMessages(['room_id' => 'Phòng đang cần kiểm tra/bảo trì sau bàn giao. Chủ trọ phải đánh dấu phòng sẵn sàng trước khi kích hoạt hợp đồng mới.']);
+        }
         $errors = [];
         foreach (['start_date', 'monthly_rent', 'lessor_representative_user_id'] as $key) {
             if ($contract->{$key} === null) {
@@ -494,8 +497,8 @@ class ContractService
         if ($target === $contract->status) {
             return;
         }
-        if (DB::table('utility_checkpoints')->where('contract_id', $contract->id)->where('kind', 'CHECK_IN')->exists()) {
-            throw ValidationException::withMessages(['status' => 'Hợp đồng đã ghi mốc V2. Hãy xác nhận CHECK_OUT, lý do và thời điểm tại Quyết toán điện nước V2.']);
+        if ($this->requiresCheckout($contract)) {
+            throw ValidationException::withMessages(['status' => 'Hợp đồng cần xác nhận trả phòng theo Billing V2. Hãy dùng chức năng Bắt đầu trả phòng.']);
         }
         if ($contract->status !== 'ACTIVE' || ! in_array($target, ['EXPIRED', 'TERMINATED'], true)) {
             throw ValidationException::withMessages(['status' => 'Không thể chuyển trạng thái hợp đồng theo yêu cầu.']);
@@ -516,12 +519,25 @@ class ContractService
         $contract->status = $target;
     }
 
+    private function requiresCheckout(Contract $contract): bool
+    {
+        return (! $contract->is_demo && $contract->room->room_type === 'PRIVATE_ROOM' && config('billing.v2_enabled', false))
+            || DB::table('utility_checkpoints')->where('contract_id', $contract->id)->where('kind', 'CHECK_IN')->exists();
+    }
+
     public function detail(User $user, int $id): array
     {
         $contract = $this->find($user, $id)->load(['room.boardingHouse', 'bed', 'tenant', 'occupants.tenant', 'agreedServices', 'utilityOpenings', 'residenceDeclarations:id,contract_id,status', 'contractTemplate:id,name,version,template_key,is_active', 'document:id,contract_id,template_name,template_version,finalized_at']);
 
         return [...$contract->toArray(), 'is_legacy' => $contract->status !== 'DRAFT' && $contract->signing_snapshot === null,
             'operational_role' => $this->access->role($user, $contract->room->boardingHouse),
+            'requires_checkout' => $this->requiresCheckout($contract),
+            'actual_ended_at' => DB::table('contract_terminations')->where('contract_id', $contract->id)->value('actual_ended_at'),
+            'termination_reason' => DB::table('contract_terminations')->where('contract_id', $contract->id)->value('reason'),
+            'renewal_history' => $this->access->isOwner($user, $contract->room->boardingHouse)
+                ? DB::table('contract_renewals')->where('contract_id', $contract->id)
+                    ->orderByDesc('id')->get(['id', 'old_end_date', 'new_end_date', 'reason', 'extended_by', 'created_at'])->all()
+                : [],
             'active_occupants_count' => $contract->occupants->where('status', 'ACTIVE')->count()];
     }
 
