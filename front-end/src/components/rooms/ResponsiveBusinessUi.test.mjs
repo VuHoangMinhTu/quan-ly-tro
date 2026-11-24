@@ -1,3 +1,4 @@
+import { reviewableRoomContracts } from '../../utils/roomContractFlow.mjs'
 // BEEHOUSE_CI_PR6_TEST_FIX
 import { handleFormSubmit, notifyInvalidSubmit } from '../../notifications/formFeedback.js'
 import { privateRoomTypeLabel, roomTypeLabel } from '../../utils/roomTypes.js'
@@ -72,7 +73,7 @@ test('room amenities dialog and service section keep distinct room-scoped React 
     roomKeys, contractKeys, invoiceKeys, getApiErrorMessage: String,
     getRoom: () => {}, getContractsByRoom: () => {}, getInvoicesByRoom: () => {}, deleteRoom: () => {},
     Link, Pencil: Icon, Trash2: Icon, AmenityIcon: Icon,
-    RoomServicesSection: Services, RoomAmenitiesModal: Amenities,
+    RoomServicesSection: Services, RoomAmenitiesModal: Amenities, useEffect: () => {}, reviewableRoomContracts, RoomCheckoutCard: () => null,
     RoomOccupantsSection: Icon, RoomUtilitiesSection: Icon,
     ContractStatusBadge: Icon, InvoiceStatusBadge: Icon,
     formatArea: String, formatCurrency: String, formatDate: String,
