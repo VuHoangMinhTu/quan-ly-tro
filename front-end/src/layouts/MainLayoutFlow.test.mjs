@@ -13,7 +13,7 @@ async function harness(pathname = '/dashboard', owner = false) {
   const removedQueries = []
   const session = {}
   const endedSessions = []
-  const icons = ['Building2', 'CreditCard', 'FileText', 'Gauge', 'KeyRound', 'LayoutDashboard', 'LogOut', 'Menu', 'Receipt', 'UserRound', 'Users', 'X']
+  const icons = ['Building2', 'CreditCard', 'FileText', 'Gauge', 'KeyRound', 'LayoutDashboard', 'LogOut', 'DoorClosed', 'Grid2X2', 'Receipt', 'UserRound', 'Users', 'X']
   const source = (await readFile(new URL('./MainLayout.jsx', import.meta.url), 'utf8')).replace(/^import .*$/gm, '').replace('export default function ', 'function ')
   const bindings = {
     getSession: () => session,
@@ -42,19 +42,61 @@ async function harness(pathname = '/dashboard', owner = false) {
   const elements = (node) => Array.isArray(node) ? node.flatMap(elements) : !React.isValidElement(node) ? [] : typeof node.type === 'function' ? elements(node.type(node.props)) : [node, ...elements(node.props.children)]
   const render = () => { stateIndex = 0; return elements(Component()) }
   const button = (label) => render().find((node) => node.type === 'button' && node.props['aria-label'] === label)
-  return { render, button, mutations, navigation, removedQueries, endedSessions, settle: (...args) => mutationOptions.onSettled(...args) }
+  return { render, button, setPath: value => { pathname = value }, mutations, navigation, removedQueries, endedSessions, settle: (...args) => mutationOptions.onSettled(...args) }
 }
 
-test('drawer selection closes navigation and keeps the existing active room route', async () => {
+function activeTabs(layout) {
+  return layout.render().filter(node => node.props.className === 'bh-bottom-item' && node.props['data-active'] === true)
+}
+function assertActive(layout, index) {
+  const active = activeTabs(layout)
+  assert.equal(active.length, 1)
+  const nav = layout.render().find(node => node.props['aria-label'] === 'Điều hướng nhanh')
+  assert.equal(nav.props.style['--bh-active-index'], index)
+  assert.equal(active[0].props.href ?? 'more', ['/dashboard', '/boarding-houses', '/rooms', '/invoices', 'more'][index])
+}
+
+test('stable five tabs follow the route, including nested house, room and invoice routes', async () => {
   const layout = await harness('/rooms/42/edit')
-  layout.button('Mở menu').props.onClick()
-  assert.equal(layout.button('Mở menu').props['aria-expanded'], true)
-  const active = layout.render().filter((node) => node.type === 'a' && node.props['aria-current'] === 'page')
-  assert.deepEqual(active.map((node) => node.props.href), ['/rooms', '/rooms'])
-  const selectHouse = layout.render().find((node) => node.type === 'a' && node.props.href === '/boarding-houses' && typeof node.props.onClick === 'function')
-  selectHouse.props.onClick()
-  assert.equal(layout.button('Mở menu').props['aria-expanded'], false)
-  assert.deepEqual(layout.mutations, [])
+  const links = layout.render().filter(node => node.type === 'a' && node.props.className === 'bh-bottom-item')
+  assert.deepEqual(links.map(node => node.props.href), ['/dashboard', '/boarding-houses', '/rooms', '/invoices'])
+  assertActive(layout, 2)
+  for (const [path, index] of [['/dashboard', 0], ['/boarding-houses/new', 1], ['/boarding-houses/10/rooms/new', 2], ['/rooms/42/invoices/new', 3], ['/invoices/7/edit', 3], ['/rooms/42/contracts/new', 4], ['/utility-meters/7', 4], ['/tenants/1/edit', 4], ['/boarding-houses/10/services', 4], ['/residence-declarations/7', 4]]) {
+    layout.setPath(path)
+    assertActive(layout, index)
+  }
+})
+
+test('opening More selects only More; dismissing without navigation restores the previous route', async () => {
+  const layout = await harness('/rooms/42/edit')
+  const more = () => layout.button('Mở menu Khác')
+  assertActive(layout, 2)
+  more().props.onClick()
+  assert.equal(more().props['aria-expanded'], true)
+  assertActive(layout, 4)
+  layout.button('Đóng menu').props.onClick()
+  assert.equal(more().props['aria-expanded'], false)
+  assertActive(layout, 2)
+  more().props.onClick()
+  const selectUtility = layout.render().find(node => node.type === 'a' && node.props.href === '/utilities' && typeof node.props.onClick === 'function')
+  selectUtility.props.onClick()
+  layout.setPath('/utilities')
+  assert.equal(more().props['aria-expanded'], false)
+  assertActive(layout, 4)
+  assert.equal(more().props['aria-current'], 'true')
+  const utilityTile = layout.render().find(node => node.type === 'a' && node.props.href === '/utilities' && typeof node.props.onClick === 'function')
+  assert.equal(utilityTile.props['aria-current'], 'page')
+  layout.setPath('/boarding-houses/10')
+  assertActive(layout, 1)
+})
+
+test('More preserves existing owner-only contract templates', async () => {
+  const manager = await harness('/utilities')
+  assertActive(manager, 4)
+  assert.equal(manager.render().filter(node => node.type === 'a' && node.props.href === '/contract-templates').length, 0)
+  const owner = await harness('/contracts/7', true)
+  assertActive(owner, 4)
+  assert.equal(owner.render().filter(node => node.type === 'a' && node.props.href === '/contract-templates').length, 2)
 })
 
 test('account menu opens, preserves the password route and closes after selecting it', async () => {

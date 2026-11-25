@@ -141,7 +141,8 @@ test('edit values normalize string IDs and changing rooms resets amenity selecti
 })
 
 test('bulk create invalidates the current room list and returns to that list', async () => {
-  const rooms = [{ room_code: 'P001', area: null, monthly_rent: null, max_tenants: null }]
+  const rooms = [{ room_code: 'P001', floor_client_key: 'zero', area: null, monthly_rent: null, max_tenants: null }]
+  const floors = [{ client_key: 'zero', name: 'Tầng 0' }]
   const invalidated = []
   let navigation
   const RoomCreatePage = await loadComponent('../../pages/rooms/RoomCreatePage.jsx', {
@@ -151,10 +152,10 @@ test('bulk create invalidates the current room list and returns to that list', a
     useQueryClient: () => ({ invalidateQueries: async ({ queryKey }) => invalidated.push(queryKey) }),
     useQuery: ({ queryKey }) => ({ data: { data: { data: queryKey[0] === 'floors' ? [] : { name: 'Nhà trọ' } } } }),
     useMutation: ({ mutationFn }) => ({ mutateAsync: mutationFn }),
-    createRoomsBulk: async (id, payload, floorId) => {
+    createRoomsAcrossFloors: async (id, payload, floorDefinitions) => {
       assert.equal(id, '7')
       assert.deepEqual(payload, rooms)
-      assert.equal(floorId, null)
+      assert.deepEqual(floorDefinitions, floors)
       return { data: { message: 'Đã tạo phòng.' } }
     },
     getBoardingHouse: () => {}, getFloors: () => {},
@@ -163,9 +164,38 @@ test('bulk create invalidates the current room list and returns to that list', a
     DormRoomCreateForm: () => null,
     Link: ({ children }) => React.createElement('a', {}, children),
   })
-  await elements(RoomCreatePage()).find(node => node.type === 'form').props.onSubmit(rooms)
-  assert.deepEqual(invalidated, [roomKeys.byBoardingHouse('7')])
+  await elements(RoomCreatePage()).find(node => node.type === 'form').props.onSubmit(rooms, floors)
+  assert.deepEqual(invalidated, [roomKeys.byBoardingHouse('7'), ['floors', '7'], boardingHouseKeys.detail('7')])
   assert.deepEqual(navigation, ['/boarding-houses/7/rooms', { replace: true, state: { message: 'Đã tạo phòng.' } }])
+})
+
+test('multi-floor mode sends draft floor definitions with rooms and refreshes both lists', async () => {
+  const floors = [{ client_key: 'a', name: 'Tầng 1' }]
+  const rooms = [{ room_code: 'P101', floor_client_key: 'a' }]
+  const invalidated = []
+  const existing = [{ id: 3, name: 'Tầng 1' }]
+  let navigation
+  let submitted
+  const RoomCreatePage = await loadComponent('../../pages/rooms/RoomCreatePage.jsx', {
+    useState: initial => [initial, () => {}],
+    useParams: () => ({ boardingHouseId: '7' }),
+    useNavigate: () => (...args) => { navigation = args },
+    useQueryClient: () => ({ invalidateQueries: async ({ queryKey }) => invalidated.push(queryKey) }),
+    useQuery: ({ queryKey }) => ({ data: { data: { data: queryKey[0] === 'floors' ? existing : queryKey[0] === 'rooms' ? [] : { name: 'Nhà trọ' } } } }),
+    useMutation: ({ mutationFn }) => ({ mutateAsync: mutationFn }),
+    createRoomsAcrossFloors: async (...args) => { submitted = args; return { data: { message: 'Đã tạo phòng.' } } },
+    getBoardingHouse: () => {}, getFloors: () => {}, getRoomsByBoardingHouse: () => {},
+    boardingHouseKeys, roomKeys, getApiErrorMessage: String,
+    BulkRoomForm: props => React.createElement('form', props),
+    DormRoomCreateForm: () => null,
+    Link: ({ children }) => React.createElement('a', {}, children),
+  })
+  const form = elements(RoomCreatePage()).find(node => node.type === 'form')
+  assert.deepEqual(form.props.existingFloors, existing)
+  await form.props.onSubmit(rooms, floors)
+  assert.deepEqual(submitted, ['7', rooms, floors])
+  assert.deepEqual(invalidated, [roomKeys.byBoardingHouse('7'), ['floors', '7'], boardingHouseKeys.detail('7')])
+  assert.equal(navigation[0], '/boarding-houses/7/rooms')
 })
 
 test('blank room numeric fields submit null, while a zero rent stays zero', async () => {

@@ -2,12 +2,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { getApiErrorMessage } from '../api/getApiErrorMessage'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Building2, CreditCard, FileText, Gauge, KeyRound, LayoutDashboard, LogOut, Menu, Receipt, UserRound, Users, X } from 'lucide-react'
+import { Building2, CreditCard, FileText, Gauge, KeyRound, LayoutDashboard, LogOut, DoorClosed, Grid2X2, Receipt, UserRound, Users, X } from 'lucide-react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { logout } from '../api/authApi'
 import { APP_NAME } from '../utils/brand'
 import { endSession, getSession, isCurrentSession } from '../api/session'
 import beeHouseLogo from '../assets/logo_bee_mau.png'
+import '../styles/mobile-bottom-nav.css'
 
 const menus = [
   ['Dashboard', '/dashboard', LayoutDashboard, (p) => p === '/dashboard'],
@@ -29,15 +30,44 @@ function Brand() {
   </div>
 }
 
-function Navigation({ pathname, onNavigate, canManageTemplates = false }) {
-  return <nav aria-label="Điều hướng chính" className="bh-primary-nav mt-8">
-    {menus.filter(([, to]) => to !== '/contract-templates' || canManageTemplates).map(([name, to, Icon, matches]) => <Link
+const bottomRoutes = ['/dashboard', '/boarding-houses', '/rooms', '/invoices']
+const bottomLabels = { '/dashboard': 'Tổng quan', '/boarding-houses': 'Nhà trọ', '/rooms': 'Phòng', '/invoices': 'Hóa đơn' }
+const visibleMenus = canManageTemplates => menus.filter(([, to]) => to !== '/contract-templates' || canManageTemplates)
+
+// Keep tab order stable. Route, not a separate selected state, determines the active tab.
+function MobileBottomNav({ pathname, onNavigate, onOpenMore, drawerOpen }) {
+  const routeIndex = bottomRoutes.findIndex(to => menus.find(item => item[1] === to)[3](pathname))
+  const activeIndex = drawerOpen ? 4 : routeIndex === -1 ? 4 : routeIndex
+  return <nav aria-label="Điều hướng nhanh" className="bh-mobile-bottom-nav lg:hidden" style={{ '--bh-active-index': activeIndex }}>
+    <div className="bh-bottom-surface" aria-hidden="true">
+      <div className="bh-bottom-shape"><div className="bh-bottom-notch">
+        <svg viewBox="0 0 112 76" preserveAspectRatio="none" focusable="false"><path d="M0 0 C24 0 24 45 56 45 C88 45 88 0 112 0 V76 H0 Z" fill="white" /></svg>
+      </div></div>
+    </div>
+    <div className="bh-bottom-bubble" aria-hidden="true" />
+    {bottomRoutes.map((to, index) => {
+      const [, , DefaultIcon] = menus.find(item => item[1] === to)
+      const Icon = to === '/rooms' ? DoorClosed : DefaultIcon
+      const active = index === activeIndex
+      return <Link key={to} to={to} onClick={onNavigate} aria-current={active ? 'page' : undefined} data-active={active} className="bh-bottom-item">
+        <span className="bh-bottom-icon"><Icon size={24} aria-hidden="true" /></span><span className="bh-bottom-label">{bottomLabels[to]}</span>
+      </Link>
+    })}
+    <button type="button" aria-label="Mở menu Khác" aria-controls="mobile-navigation" aria-expanded={drawerOpen} aria-current={!drawerOpen && activeIndex === 4 ? 'true' : undefined} data-active={activeIndex === 4} onClick={onOpenMore} className="bh-bottom-item">
+      <span className="bh-bottom-icon"><Grid2X2 size={24} aria-hidden="true" /></span><span className="bh-bottom-label">Khác</span>
+    </button>
+  </nav>
+}
+
+function Navigation({ pathname, onNavigate, canManageTemplates = false, overflowOnly = false }) {
+  return <nav aria-label={overflowOnly ? "Các chức năng khác" : "Điều hướng chính"} className="bh-primary-nav mt-8">
+    {visibleMenus(canManageTemplates).filter(([, to]) => !overflowOnly || !bottomRoutes.includes(to)).map(([name, to, Icon, matches]) => <Link
       key={name}
       to={to}
       onClick={onNavigate}
       aria-current={matches(pathname) ? 'page' : undefined}
       className={'bh-nav-link mb-2 flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white lg:min-h-0 ' + (matches(pathname) ? 'bg-slate-700 font-semibold text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white')}
-    ><Icon size={18} aria-hidden="true" />{name}</Link>)}
+    >{overflowOnly ? <span className="bh-more-icon"><Icon size={21} aria-hidden="true" /></span> : <Icon size={18} aria-hidden="true" />}{name}</Link>)}
   </nav>
 }
 
@@ -65,6 +95,7 @@ export default function MainLayout() {
 
   useEffect(() => {
     const dialog = drawerRef.current
+    if (!dialog) return undefined
     if (drawerOpen && !dialog.open) dialog.showModal()
     if (!drawerOpen && dialog.open) dialog.close()
     if (!drawerOpen) return undefined
@@ -128,17 +159,16 @@ export default function MainLayout() {
     }} onClick={(event) => {
       const bounds = event.currentTarget.getBoundingClientRect()
       if (event.target === event.currentTarget && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)) setDrawerOpen(false)
-    }} className="mobile-navigation bh-mobile-navigation m-0 h-dvh max-h-none w-[min(300px,88vw)] max-w-none overflow-hidden border-0 bg-slate-900 p-0 text-white shadow-2xl lg:hidden">
-      <div className="flex h-full flex-col p-4 [padding-top:max(1rem,env(safe-area-inset-top))] [padding-bottom:max(1rem,env(safe-area-inset-bottom))]">
-        <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-4"><Brand /><button type="button" onClick={() => setDrawerOpen(false)} aria-label="Đóng menu" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-white"><X size={22} /></button></div>
-        <div className="min-h-0 flex-1 overflow-y-auto pt-1"><Navigation pathname={pathname} onNavigate={closeMenus} canManageTemplates={Boolean(me?.landlord)} /></div>
-        <p className="border-t border-white/10 pt-3 text-xs text-slate-400">BeeHouse · Quản lý nhà trọ</p>
+    }} className="mobile-navigation bh-mobile-navigation bh-more-sheet overflow-hidden border-0 p-0 lg:hidden">
+      <div className="bh-more-inner flex flex-col">
+        <div aria-hidden="true" className="mx-auto mb-3 h-1 w-10 shrink-0 rounded-full bg-slate-300" />
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 pb-3"><div><h2 className="text-lg font-bold">Khác</h2><p className="text-xs text-slate-500">Truy cập nhanh các chức năng</p></div><button type="button" onClick={() => setDrawerOpen(false)} aria-label="Đóng menu" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 focus-visible:ring-2 focus-visible:ring-teal-700"><X size={22} /></button></div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pt-2"><Navigation pathname={pathname} onNavigate={closeMenus} canManageTemplates={Boolean(me?.landlord)} overflowOnly /></div>
       </div>
     </dialog>
     <section className="min-w-0 flex-1">
       <header className="bh-topbar bh-mobile-topbar sticky top-0 z-30 flex min-h-16 items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-4 py-2 backdrop-blur-xl [padding-top:max(.5rem,env(safe-area-inset-top))] lg:static lg:min-h-0 lg:p-4">
         <div className="flex min-w-0 items-center gap-2 lg:hidden">
-          <button type="button" aria-label="Mở menu" aria-controls="mobile-navigation" aria-expanded={drawerOpen} onClick={() => { setUserMenuOpen(false); setDrawerOpen(true) }} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-teal-700"><Menu size={23} /></button>
           <Link to="/dashboard" onClick={closeMenus} className="flex min-h-11 min-w-0 items-center gap-2.5"><img src={beeHouseLogo} width="34" height="34" alt="" className="h-9 w-9 shrink-0 rounded-lg bg-white object-contain" /><span className="flex min-w-0 flex-col"><span className="truncate text-base font-bold leading-tight tracking-tight text-slate-900">{APP_NAME}</span><span className="bh-mobile-subtitle truncate text-[10px] font-medium leading-4 text-slate-500">Quản lý nhà trọ</span></span></Link>
         </div>
         <span className="hidden min-w-0 break-words lg:block">Xin chào, {userName}</span>
@@ -152,7 +182,8 @@ export default function MainLayout() {
           </div>}
         </div>
       </header>
-      <main id="app-main" tabIndex="-1" className="app-content min-w-0 p-4 [padding-bottom:max(1rem,env(safe-area-inset-bottom))] sm:p-5 lg:p-6"><Outlet /></main>
+      <main id="app-main" tabIndex="-1" className="app-content bh-mobile-nav-content min-w-0 p-4 [padding-bottom:max(1rem,env(safe-area-inset-bottom))] sm:p-5 lg:p-6"><Outlet /></main>
     </section>
+    <MobileBottomNav pathname={pathname} onNavigate={closeMenus} drawerOpen={drawerOpen} onOpenMore={() => { setUserMenuOpen(false); setDrawerOpen(open => !open) }} />
   </div>
 }

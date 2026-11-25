@@ -75,7 +75,21 @@ class RoomController extends Controller
             throw ValidationException::withMessages(['floor_id' => 'Tầng không thuộc nhà trọ này.']);
         }
 
-        DB::transaction(function () use ($boardingHouse, $rooms, $floorId): void {
+        $floors = $validated['floors'] ?? [];
+        $floorKeys = array_column($floors, 'client_key');
+        if ($floorId !== null && array_key_exists('floors', $validated)) {
+            throw ValidationException::withMessages(['floors' => 'Không kết hợp tầng chung với danh sách nhiều tầng.']);
+        }
+        foreach ($rooms as $index => $room) {
+            if (isset($room['floor_client_key']) && ! in_array($room['floor_client_key'], $floorKeys, true)) {
+                throw ValidationException::withMessages(["rooms.{$index}.floor_client_key" => 'Tầng không có trong danh sách tạo phòng.']);
+            }
+        }
+
+        $usedFloorKeys = array_column($rooms, 'floor_client_key');
+        $floors = array_values(array_filter($floors, fn ($floor) => in_array($floor['client_key'], $usedFloorKeys, true)));
+
+        DB::transaction(function () use ($boardingHouse, $rooms, $floorId, $floors): void {
             // Serialize batch additions to this house; no room is written if any code already exists.
             $boardingHouse->newQuery()->whereKey($boardingHouse->id)->lockForUpdate()->firstOrFail();
             $existingCodes = $boardingHouse->rooms()->pluck('room_code')
@@ -89,14 +103,35 @@ class RoomController extends Controller
                 }
             }
 
-            $nextSortOrder = (int) $boardingHouse->rooms()->where('floor_id', $floorId)->max('sort_order') + 1;
+            // Resolve floor names only within this house; existing floor metadata stays unchanged.
+            $floorIds = [];
+            if ($floors !== []) {
+                $knownFloors = $boardingHouse->floors()->get()->groupBy(fn ($floor) => Str::lower(trim($floor->name)));
+                $nextFloorOrder = (int) $boardingHouse->floors()->max('sort_order') + 1;
+                foreach ($floors as $index => $definition) {
+                    $matches = $knownFloors->get(Str::lower($definition['name']));
+                    if ($matches && $matches->count() > 1) {
+                        throw ValidationException::withMessages(["floors.{$index}.name" => 'Tên tầng không xác định duy nhất. Vui lòng đối soát.']);
+                    }
+                    $floor = $matches?->first() ?? $boardingHouse->floors()->create([
+                        'name' => $definition['name'],
+                        'sort_order' => $nextFloorOrder++,
+                    ]);
+                    $floorIds[$definition['client_key']] = $floor->id;
+                }
+            }
+
+            $nextSortOrders = [];
             foreach ($rooms as $room) {
+                $assignedFloorId = isset($room['floor_client_key']) ? $floorIds[$room['floor_client_key']] : $floorId;
+                $sortKey = $assignedFloorId ?? 'unassigned';
+                $nextSortOrders[$sortKey] ??= (int) $boardingHouse->rooms()->where('floor_id', $assignedFloorId)->max('sort_order') + 1;
                 $boardingHouse->rooms()->create([
                     'room_code' => $room['room_code'],
                     'room_name' => $room['room_name'] ?? null,
                     'description' => $room['description'] ?? null,
-                    'floor_id' => $floorId,
-                    'sort_order' => $nextSortOrder++,
+                    'floor_id' => $assignedFloorId,
+                    'sort_order' => $nextSortOrders[$sortKey]++,
                     'room_type' => $room['room_type'] ?? 'PRIVATE_ROOM',
                     'private_room_type' => $room['private_room_type'] ?? null,
                     'area' => $room['area'] ?? null,
