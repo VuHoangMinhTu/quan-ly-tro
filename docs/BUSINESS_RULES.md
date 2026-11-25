@@ -80,6 +80,28 @@ Nguồn đối chiếu ban đầu: nhánh `feature/contract-checkout-deposit-led
 - Cung cấp luồng gia hạn rõ ràng khi hợp đồng hết hạn, hiển thị nguyên nhân và trạng thái đúng. Không mặc định thay đổi ngày thuê hoặc ghi đè lịch sử chỉ để hợp đồng tiếp tục xuất hóa đơn.
 - Chi tiết cách nối mốc điện nước, công nợ, giá và cọc giữa hợp đồng cũ/mới: cần kiểm tra code và chốt nếu còn mâu thuẫn.
 
+## 4a. Tạo tầng và phòng hàng loạt
+### BR-ROOM-001 — Bổ sung phòng hàng loạt theo khoảng tầng trong nhà trọ hiện có
+**Trạng thái:** Chủ dự án đã chốt luồng ngày 25/11/2026. Bản vá đề xuất triển khai từ revision `e9d25e8`; chưa xác minh tích hợp trên máy local hoặc production.
+
+- Chỉ một chế độ **Tạo hàng loạt** trong nhà trọ hiện có. Section Tầng nhập Từ tầng – Đến tầng (bao gồm hai đầu); X → X là thêm tại một tầng. Không bổ sung chọn các tầng không liền nhau ở đợt này. Luồng tạo KTX kèm giường giữ riêng và không thay đổi.
+- Nhập số phòng **bổ sung** mỗi tầng, tiền tố tùy chọn và thông tin mặc định (giá thuê, diện tích, loại/phân loại, số người tối đa). Giá bỏ trống là chưa thiết lập, không phải 0. Giữ giới hạn tổng danh sách 200 phòng/lượt.
+- Mã tự sinh = tiền tố + số tầng + số thứ tự hai chữ số (01–99). Nếu có mã cùng mẫu, nối sau số thứ tự lớn nhất, không lấp khoảng trống, không ghi đè. Tính cả mã đã lưu và mã đang nháp, không phân biệt hoa thường; mã đã tồn tại trong nhà trọ ở tầng khác cũng phải được bảo lưu. Nếu vượt 99, báo lỗi và cho đổi tiền tố hoặc thêm thủ công; không tự đổi quy cách mã. Ví dụ tầng 2 có P201–P203, bổ sung 2 phòng → P204, P205.
+- Tầng chuẩn sinh theo tên `Tầng N` (N nguyên không âm). Dùng lại tầng cùng tên trong nhà trọ (trim, không phân biệt hoa thường), giữ metadata hiện có. Không suy đoán tầng có tên tùy chỉnh như `Trệt` tương đương Tầng 0; phần điều chỉnh tầng thủ công vẫn có thể dùng tên chính xác. Nếu tên không xác định duy nhất, báo lỗi.
+- Preview dùng cùng hàm sinh mã với thao tác sinh danh sách. Sinh danh sách chỉ thêm dữ liệu nháp; cho sửa mã, tầng, giá, diện tích, loại/phân loại và số người trước khi xác nhận. Tầng mới chỉ được tạo nếu có phòng sử dụng. Giữ luồng thủ công và trường hợp chưa phân tầng đã có.
+- Backend là nguồn quyết định cuối cùng: kiểm tra quyền theo nhà trọ, giới hạn, khóa tham chiếu tầng, mã trùng trong toàn nhà. Khóa nhà trọ trong transaction; tạo tầng/phòng cùng lúc, lỗi bất kỳ thì rollback toàn bộ. Nếu có người khác tạo cùng mã sau preview, từ chối cả batch; tải lại dữ liệu đối chiếu trước khi sinh lại. Không tự đổi mã đã được xác nhận. API cũ với `floor_id` chung giữ tương thích; không tự tạo giường, công tơ, hợp đồng, hóa đơn, không thay đổi phòng cũ.
+- Không yêu cầu migration mới. API bulk hiện tại chưa có idempotency key riêng: nếu mất kết nối, kiểm tra danh sách đã lưu trước khi thử lại; không tự động retry.
+
+**Kế hoạch triển khai:**
+1. Giữ quy tắc và xác định source gốc, kiểm tra trước khi sửa.
+2. Nâng cấp planner thuần + test mã nối tiếp, X→X, khoảng nhiều tầng, mã trùng, giới hạn và tên tầng mơ hồ.
+3. Gộp UI hiện có thành một chế độ bulk, giữ KTX và wizard tạo nhà trọ mới; hiển thị preview mã thực và bảng có thể chỉnh sửa.
+4. Mở rộng API bulk tương thích ngược, lưu floor/room atomically, kiểm tra ownership, rollback và thứ tự phòng; thêm feature test.
+5. Chạy test planner, test component, build/lint, Laravel feature tests trên SQLite cô lập, thử UI thật trên local. Chỉ cập nhật trạng thái kiểm thử sau khi có kết quả; không push/merge/deploy tự động.
+
+**Nguồn:** `front-end/src/pages/rooms/RoomCreatePage.jsx`, `front-end/src/components/boarding-houses/BulkRoomForm.jsx`, `front-end/src/utils/multiFloorRooms.mjs`, `front-end/src/api/roomApi.js`, `backend-api/app/Http/Requests/Room/StoreBulkRoomsRequest.php`, `backend-api/app/Http/Controllers/Api/RoomController.php`, `backend-api/tests/Feature/ExistingBoardingHouseBulkRoomsApiTest.php`.
+
+
 ## 5. Danh sách cần audit tiếp (chưa phải quy tắc mới)
 
 - Điều kiện backend ghi PERIOD_BOUNDARY theo trạng thái hợp đồng, phòng trống, kỳ lịch sử, kỳ lẻ, ngày ghi và mốc mở kỳ; UI chặn không có nghĩa backend đã chặn.

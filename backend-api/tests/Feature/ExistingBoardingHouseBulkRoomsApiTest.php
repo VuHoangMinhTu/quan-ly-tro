@@ -108,6 +108,75 @@ class ExistingBoardingHouseBulkRoomsApiTest extends TestCase
         }
     }
 
+    public function test_multi_floor_batch_reuses_existing_floor_and_preserves_order(): void
+    {
+        $landlord = $this->owner();
+        $house = $landlord->boardingHouses()->create(['name' => 'BeeHouse', 'address' => 'Dĩ An']);
+        $floor = $house->floors()->create(['name' => 'Tầng 1', 'sort_order' => 4]);
+        $house->rooms()->create(['room_code' => 'P100', 'floor_id' => $floor->id, 'sort_order' => 7, 'status' => 'AVAILABLE']);
+        $this->actingAsOwner($landlord)->postJson("/api/boarding-houses/{$house->id}/rooms/bulk", [
+            'floors' => [['client_key' => 'a', 'name' => 'tầng 1'], ['client_key' => 'b', 'name' => 'Tầng 2']],
+            'rooms' => [
+                ['room_code' => 'P101', 'floor_client_key' => 'a', 'monthly_rent' => 3500000],
+                ['room_code' => 'P201', 'floor_client_key' => 'b', 'monthly_rent' => null],
+                ['room_code' => 'P202', 'floor_client_key' => 'b', 'room_type' => 'DORMITORY'],
+            ],
+        ])->assertCreated();
+        $second = $house->floors()->where('name', 'Tầng 2')->firstOrFail();
+        $this->assertDatabaseCount('floors', 2);
+        $this->assertDatabaseHas('floors', ['id' => $floor->id, 'name' => 'Tầng 1', 'sort_order' => 4]);
+        $this->assertDatabaseHas('rooms', ['room_code' => 'P101', 'floor_id' => $floor->id, 'sort_order' => 8, 'monthly_rent' => 3500000]);
+        $this->assertDatabaseHas('rooms', ['room_code' => 'P201', 'floor_id' => $second->id, 'sort_order' => 1, 'monthly_rent' => null]);
+        $this->assertDatabaseHas('rooms', ['room_code' => 'P202', 'floor_id' => $second->id, 'sort_order' => 2, 'room_type' => 'DORMITORY']);
+    }
+
+    public function test_multi_floor_duplicate_code_or_unknown_key_creates_nothing(): void
+    {
+        $landlord = $this->owner();
+        $house = $landlord->boardingHouses()->create(['name' => 'BeeHouse', 'address' => 'Dĩ An']);
+        $house->rooms()->create(['room_code' => 'P101', 'status' => 'AVAILABLE']);
+        $url = "/api/boarding-houses/{$house->id}/rooms/bulk";
+        $payload = ['floors' => [['client_key' => 'a', 'name' => 'Tầng 1']], 'rooms' => [['room_code' => 'p101', 'floor_client_key' => 'a']]];
+        $this->actingAsOwner($landlord)->postJson($url, $payload)->assertUnprocessable()->assertJsonValidationErrors('rooms.0.room_code');
+        $payload['rooms'] = [['room_code' => 'P102', 'floor_client_key' => 'unknown']];
+        $this->postJson($url, $payload)->assertUnprocessable()->assertJsonValidationErrors('rooms.0.floor_client_key');
+        $this->assertDatabaseCount('floors', 0);
+        $this->assertDatabaseCount('rooms', 1);
+    }
+
+    public function test_multi_floor_room_failure_rolls_back_created_floors_too(): void
+    {
+        $landlord = $this->owner();
+        $house = $landlord->boardingHouses()->create(['name' => 'BeeHouse', 'address' => 'Dĩ An']);
+        Event::listen('eloquent.creating: '.Room::class, function (Room $room): void {
+            if ($room->room_code === 'P201') {
+                throw new RuntimeException('Simulated failure.');
+            }
+        });
+        try {
+            $this->actingAsOwner($landlord)->postJson("/api/boarding-houses/{$house->id}/rooms/bulk", [
+                'floors' => [['client_key' => 'a', 'name' => 'Tầng 1'], ['client_key' => 'b', 'name' => 'Tầng 2']],
+                'rooms' => [['room_code' => 'P101', 'floor_client_key' => 'a'], ['room_code' => 'P201', 'floor_client_key' => 'b']],
+            ])->assertStatus(500);
+            $this->assertDatabaseCount('floors', 0);
+            $this->assertDatabaseCount('rooms', 0);
+        } finally {
+            Event::forget('eloquent.creating: '.Room::class);
+        }
+    }
+
+    public function test_unused_floor_definitions_do_not_create_empty_floors(): void
+    {
+        $landlord = $this->owner();
+        $house = $landlord->boardingHouses()->create(['name' => 'BeeHouse', 'address' => 'Dĩ An']);
+        $this->actingAsOwner($landlord)->postJson("/api/boarding-houses/{$house->id}/rooms/bulk", [
+            'floors' => [['client_key' => 'one', 'name' => 'Tầng 1'], ['client_key' => 'two', 'name' => 'Tầng 2']],
+            'rooms' => [['room_code' => 'P101', 'floor_client_key' => 'one']],
+        ])->assertCreated();
+        $this->assertDatabaseCount('floors', 1);
+        $this->assertDatabaseMissing('floors', ['boarding_house_id' => $house->id, 'name' => 'Tầng 2']);
+    }
+
     private function owner(): Landlord
     {
         $user = User::factory()->create();

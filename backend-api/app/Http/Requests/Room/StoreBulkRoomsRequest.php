@@ -14,6 +14,15 @@ class StoreBulkRoomsRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        if (is_array($this->input('floors'))) {
+            $this->merge(['floors' => array_map(function ($floor) {
+                if (is_array($floor) && is_string($floor['name'] ?? null)) {
+                    $floor['name'] = trim($floor['name']);
+                }
+
+                return $floor;
+            }, $this->input('floors'))]);
+        }
         if (is_array($this->input('rooms'))) {
             $this->merge(['rooms' => array_map(function ($room) {
                 if (is_array($room) && is_string($room['room_code'] ?? null)) {
@@ -32,8 +41,13 @@ class StoreBulkRoomsRequest extends FormRequest
     {
         return [
             'floor_id' => ['nullable', 'integer'],
+            'floors' => ['sometimes', 'array', 'list', 'max:200'],
+            'floors.*' => ['required', 'array:client_key,name'],
+            'floors.*.client_key' => ['required', 'string', 'max:100', 'distinct:strict'],
+            'floors.*.name' => ['required', 'string', 'max:100', 'distinct:ignore_case'],
             'rooms' => ['required', 'array', 'list', 'min:1', 'max:200'],
-            'rooms.*' => ['required', 'array:room_code,room_type,private_room_type,room_name,area,monthly_rent,max_tenants,description'],
+            'rooms.*' => ['required', 'array:floor_client_key,room_code,room_type,private_room_type,room_name,area,monthly_rent,max_tenants,description'],
+            'rooms.*.floor_client_key' => ['nullable', 'string', 'max:100'],
             'rooms.*.room_code' => ['required', 'string', 'max:50', 'distinct:ignore_case'],
             'rooms.*.room_type' => ['sometimes', Rule::in(['PRIVATE_ROOM', 'DORMITORY'])],
             'rooms.*.private_room_type' => ['nullable', Rule::in(['STUDIO', 'LOFT', 'NO_LOFT', 'CLOSED_ROOM'])],

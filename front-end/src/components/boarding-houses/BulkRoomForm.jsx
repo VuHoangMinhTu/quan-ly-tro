@@ -6,6 +6,7 @@ import { applyApiFieldErrors, getApiErrorMessage } from '../../api/getApiErrorMe
 import { bulkRoomsSchema, emptyBulkRoom, generateRoomCodes, MAX_BULK_ROOMS } from '../../utils/roomOnboarding'
 import { PRIVATE_ROOM_TYPES, privateRoomTypeOptions, roomTypeOptions, ROOM_TYPES } from '../../utils/roomTypes'
 import MoneyInput from '../ui/MoneyInput'
+import { planMultiFloorRooms } from '../../utils/multiFloorRooms.mjs'
 
 const inputClass = 'min-h-11 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 sm:min-h-0 sm:text-sm'
 const buttonClass = 'min-h-11 w-full rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 sm:w-auto'
@@ -45,8 +46,11 @@ function TemporaryFloors({ form, defaultFloor, setDefaultFloor }) {
   </section>
 }
 
-export default function BulkRoomForm({ initialRooms, initialFloors, onBack, onSubmit, submitLabel }) {
+export default function BulkRoomForm({ initialRooms, initialFloors, existingFloors, existingRooms = [], onBack, onSubmit, submitLabel }) {
   const floorSetup = initialFloors !== undefined
+  const multiFloor = existingFloors !== undefined
+  const [multi, setMulti] = useState({ from: '1', to: '3', count: '3', prefix: 'P', rent: '', area: '', maxTenants: '' })
+  const changeMulti = (key, value) => setMulti(current => ({ ...current, [key]: value }))
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [generatorError, setGeneratorError] = useState('')
@@ -74,6 +78,25 @@ export default function BulkRoomForm({ initialRooms, initialFloors, onBack, onSu
     }
   }
 
+  const generateMultiple = () => {
+    setGeneratorError('')
+    try {
+      const plan = planMultiFloorRooms({ ...multi, draftFloors: form.getValues('floors') || [], existingFloors, draftRooms: form.getValues('rooms'), existingRooms, makeKey: () => crypto.randomUUID() })
+      const generated = plan.rooms.map(room => ({ ...emptyBulkRoom(room.room_code, defaultRoomType, defaultPrivateRoomType), ...room, monthly_rent: multi.rent, area: multi.area, max_tenants: multi.maxTenants }))
+      form.setValue('floors', plan.floors, { shouldDirty: true })
+      append(generated)
+    } catch (error) { setGeneratorError(error.message) }
+  }
+  let preview = null
+  let previewError = ''
+  if (multiFloor) {
+    try {
+      // The preview and the actual append use the same planner and draft.
+      let previewIndex = 0
+      preview = planMultiFloorRooms({ ...multi, draftFloors: floors, existingFloors, draftRooms: draftRooms || [], existingRooms, makeKey: () => 'preview-' + (++previewIndex) })
+    } catch (error) { previewError = error.message }
+  }
+
   const changeRowType = (index, roomType) => {
     form.setValue(`rooms.${index}.room_type`, roomType, { shouldDirty: true, shouldValidate: true })
     form.setValue(`rooms.${index}.private_room_type`, roomType === ROOM_TYPES.DORMITORY ? null : defaultPrivateRoomType, { shouldDirty: true, shouldValidate: true })
@@ -82,7 +105,8 @@ export default function BulkRoomForm({ initialRooms, initialFloors, onBack, onSu
   const submit = async ({ rooms, floors }) => {
     setSubmitError('')
     try {
-      await onSubmit(rooms, floors?.map((floor, sort_order) => ({ ...floor, sort_order })))
+      const usedFloors = multiFloor ? (floors || []).filter(floor => rooms.some(room => room.floor_client_key === floor.client_key)) : floors
+      await onSubmit(rooms, usedFloors?.map((floor, sort_order) => ({ ...floor, sort_order })))
     } catch (error) {
       const applied = applyApiFieldErrors(error, form.setError, (field) => field === 'rooms' || field === 'floors' || field.startsWith('rooms.') || field.startsWith('floors.') ? field : null)
       if (!applied) setSubmitError(error.creationOutcomeUnknown ? error.message : getApiErrorMessage(error))
@@ -96,22 +120,45 @@ export default function BulkRoomForm({ initialRooms, initialFloors, onBack, onSu
   return <form noValidate onSubmit={handleFormSubmit(form, submit)} className="space-y-5 rounded-xl bg-white p-4 shadow-sm sm:p-6">
     <div><h3 className="text-lg font-semibold">Tạo phòng</h3><p className="mt-1 text-sm text-slate-600">Chỉ cần mã phòng. Diện tích, giá thuê và số người tối đa có thể bổ sung sau. Để trống giá thuê là chưa thiết lập, không phải giá 0.</p></div>
     <fieldset disabled={isSubmitting} className="min-w-0 space-y-5">
-      {floorSetup && <TemporaryFloors form={form} defaultFloor={defaultFloor} setDefaultFloor={setDefaultFloor} />}
+      {floorSetup && !multiFloor && <TemporaryFloors form={form} defaultFloor={defaultFloor} setDefaultFloor={setDefaultFloor} />}
+      {multiFloor && <section className="space-y-3 rounded-lg border border-slate-200 p-4">
+        <h4 className="text-sm font-semibold">Tầng</h4>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="text-sm font-medium">Từ tầng *<input inputMode="numeric" value={multi.from} onChange={e => changeMulti('from', e.target.value)} className={inputClass} /></label>
+          <label className="text-sm font-medium">Đến tầng *<input inputMode="numeric" value={multi.to} onChange={e => changeMulti('to', e.target.value)} className={inputClass} /></label>
+        </div>
+        <p className="text-xs text-slate-500">Muốn thêm phòng ở một tầng, nhập cùng một số cho cả hai ô. Tầng cùng tên được dùng lại; tầng chưa có chỉ tạo khi xác nhận lưu.</p>
+      </section>}
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-        <h4 className="text-sm font-semibold">Tạo nhanh mã phòng</h4>
+        <h4 className="text-sm font-semibold">{multiFloor ? 'Tạo nhanh phòng hàng loạt' : 'Tạo nhanh mã phòng'}</h4>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label className="text-sm">Loại phòng mặc định<select value={defaultRoomType} onChange={(event) => setDefaultRoomType(event.target.value)} className={inputClass}>{roomTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           {defaultRoomType === ROOM_TYPES.PRIVATE_ROOM && <label className="text-sm">Phân loại mặc định<select value={defaultPrivateRoomType} onChange={(event) => setDefaultPrivateRoomType(event.target.value)} className={inputClass}>{privateRoomTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}
-          {floorSetup && <label className="text-sm">Tầng mặc định<select value={defaultFloor} onChange={event => setDefaultFloor(event.target.value)} className={inputClass}><option value="">Chưa phân tầng</option>{floors.map((floor, index) => <option key={floor.client_key} value={floor.client_key}>{floor.name || `Tầng chưa đặt tên ${index + 1}`}</option>)}</select></label>}
+          {floorSetup && <label className="text-sm">{multiFloor ? 'Tầng cho phòng thêm thủ công' : 'Tầng mặc định'}<select value={defaultFloor} onChange={event => setDefaultFloor(event.target.value)} className={inputClass}><option value="">Chưa phân tầng</option>{floors.map((floor, index) => <option key={floor.client_key} value={floor.client_key}>{floor.name || `Tầng chưa đặt tên ${index + 1}`}</option>)}</select></label>}
         </div>
-        <div className="mt-3 grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
+        {multiFloor ? <>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="text-sm">Số phòng bổ sung mỗi tầng *<input inputMode="numeric" value={multi.count} onChange={e => changeMulti('count', e.target.value)} className={inputClass} /></label>
+            <label className="text-sm">Tiền tố mã phòng<input value={multi.prefix} onChange={e => changeMulti('prefix', e.target.value)} className={inputClass} /></label>
+            <label className="text-sm">Giá thuê mặc định/tháng<MoneyInput value={multi.rent} onChange={v => changeMulti('rent', v)} placeholder="Chưa thiết lập" className={inputClass} /></label>
+            <label className="text-sm">Diện tích mặc định (m²)<input type="number" min="0" step="0.01" value={multi.area} onChange={e => changeMulti('area', e.target.value)} className={inputClass} /></label>
+            <label className="text-sm">Số người tối đa<input type="number" min="1" step="1" value={multi.maxTenants} onChange={e => changeMulti('maxTenants', e.target.value)} className={inputClass} /></label>
+          </div>
+          <div className="mt-3 rounded-lg border border-teal-100 bg-teal-50 p-3 text-sm text-teal-900">
+            {preview ? <><strong>Dự kiến bổ sung: {preview.rooms.length} phòng</strong>
+              <p className="mt-1 break-words">Mẫu mã: {preview.rooms.slice(0, 9).map(room => room.room_code).join(', ')}{preview.rooms.length > 9 ? '…' : ''}</p>
+              <p className="mt-1 text-xs">Số thứ tự nối tiếp mã lớn nhất cùng tiền tố và số tầng, không lấp mã trống ở giữa.</p></> : <p role="alert" className="text-red-700">{previewError}</p>}
+          </div>
+          <button type="button" disabled={!preview} onClick={generateMultiple} className="mt-3 min-h-11 w-full rounded-lg bg-teal-700 px-4 text-sm font-semibold text-white sm:w-auto">Sinh danh sách tầng và phòng</button>
+        </> : <div className="mt-3 grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
           <div className="min-w-0 flex-1"><label htmlFor="bulk-from" className="mb-1 block text-sm">Từ</label><input id="bulk-from" inputMode="numeric" value={from} onChange={(event) => setFrom(event.target.value)} placeholder="101" className={inputClass} /></div>
           <div className="min-w-0 flex-1"><label htmlFor="bulk-to" className="mb-1 block text-sm">Đến</label><input id="bulk-to" inputMode="numeric" value={to} onChange={(event) => setTo(event.target.value)} placeholder="110" className={inputClass} /></div>
           <button type="button" onClick={generate} className={buttonClass}>Sinh mã phòng</button>
-        </div>
+        </div>}
         {generatorError && <p role="alert" className="mt-2 text-sm text-red-600">{generatorError}</p>}
         <p className="mt-2 text-xs text-slate-500">Dòng mới nhận loại mặc định; bạn có thể đổi từng phòng sau khi sinh. Tối đa {MAX_BULK_ROOMS} phòng mỗi lần.</p>
       </div>
+      {multiFloor && <details className="rounded-lg border border-slate-200 p-3"><summary className="cursor-pointer text-sm font-medium">Điều chỉnh tầng thủ công (tùy chọn)</summary><div className="mt-3"><TemporaryFloors form={form} defaultFloor={defaultFloor} setDefaultFloor={setDefaultFloor} /></div></details>}
       <h4 className="text-sm font-semibold">Danh sách phòng đã sinh</h4>
       <div className="md:overflow-x-auto md:rounded-lg md:border md:border-slate-200">
         <table className={'block w-full text-sm md:table ' + (floorSetup ? 'md:min-w-[1200px]' : 'md:min-w-[700px]')}>
